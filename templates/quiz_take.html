@@ -1,0 +1,330 @@
+{% extends 'base.html' %}
+
+{% block title %}Take Quiz - {{ quiz.title }}{% endblock %}
+
+{% block content %}
+<div class="quiz-container">
+    <!-- Quiz Header -->
+    <div class="quiz-header">
+        <div class="quiz-header-content">
+            <h2>{{ quiz.title }}</h2>
+            <div class="quiz-meta">
+                <span class="quiz-info">{{ questions|length }} Questions</span>
+                <span class="quiz-info">{{ questions|length }} Points</span>
+            </div>
+        </div>
+        {% if quiz.time_limit > 0 %}
+        <div class="timer-box">
+            <span class="timer-label">Time Remaining</span>
+            <span id="timer" class="timer-display">{{ quiz.time_limit }}:00</span>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Quiz Instructions -->
+    <div class="quiz-instructions">
+        <p><strong>Instructions:</strong> Choose the best answer for each question. Click "Submit Quiz" when you're done.</p>
+    </div>
+
+    <!-- Quiz Form -->
+    <form id="quizForm" action="{{ url_for('submit_quiz', quiz_id=quiz.id) }}" method="POST">
+        <div class="quiz-questions">
+            {% for q in questions %}
+            <div class="quiz-question">
+                <div class="question-number">{{ loop.index }}</div>
+                <div class="question-content">
+                    <p class="question-text">{{ q.question_text }}</p>
+
+                    {% if q.question_type == 'multiple_choice' %}
+                    <div class="options-grid">
+                        {% set options = q.options | parse_json if q.options else [] %}
+                        {% for option in options %}
+                        <label class="option-label option-selectable">
+                            <input type="radio" name="q_{{ q.id }}" value="{{ ['A', 'B', 'C', 'D'][loop.index0] }}" required>
+                            <span class="option-letter">{{ ['A', 'B', 'C', 'D'][loop.index0] }}</span>
+                            <span class="option-text">{{ option }}</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+
+                    {% elif q.question_type == 'true_false' %}
+                    <div class="options-grid tf-options">
+                        <label class="option-label option-selectable">
+                            <input type="radio" name="q_{{ q.id }}" value="True" required>
+                            <span class="option-letter">A</span>
+                            <span class="option-text">True</span>
+                        </label>
+                        <label class="option-label option-selectable">
+                            <input type="radio" name="q_{{ q.id }}" value="False" required>
+                            <span class="option-letter">B</span>
+                            <span class="option-text">False</span>
+                        </label>
+                    </div>
+
+                    {% elif q.question_type == 'fill_in_blank' %}
+                    <div class="fill-blank-input">
+                        <input type="text" name="q_{{ q.id }}" placeholder="Type your answer here" required class="fill-input">
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <button type="submit" class="btn btn-submit">Submit Quiz</button>
+    </form>
+</div>
+
+<style>
+.quiz-container {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.quiz-header {
+    background: linear-gradient(135deg, #8B5CF6, #7C3AED);
+    color: white;
+    padding: 25px 30px;
+    border-radius: 12px;
+    margin-bottom: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.quiz-header h2 {
+    margin: 0 0 10px 0;
+    font-size: 1.4rem;
+}
+
+.quiz-meta {
+    display: flex;
+    gap: 15px;
+}
+
+.quiz-info {
+    background: rgba(255,255,255,0.2);
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+}
+
+.timer-box {
+    background: #EF4444;
+    padding: 15px 25px;
+    border-radius: 10px;
+    text-align: center;
+}
+
+.timer-label {
+    display: block;
+    font-size: 0.75rem;
+    opacity: 0.9;
+    margin-bottom: 5px;
+}
+
+.timer-display {
+    font-size: 1.8rem;
+    font-weight: bold;
+    font-family: monospace;
+}
+
+.quiz-instructions {
+    background: #FEF3C7;
+    border-left: 4px solid #F59E0B;
+    padding: 15px 20px;
+    margin-bottom: 25px;
+    border-radius: 0 8px 8px 0;
+}
+
+.quiz-instructions p {
+    margin: 0;
+    color: #92400E;
+}
+
+.quiz-questions {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.quiz-question {
+    background: white;
+    border: 1px solid #E5E7EB;
+    border-radius: 12px;
+    padding: 20px;
+    display: flex;
+    gap: 20px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.question-number {
+    background: #8B5CF6;
+    color: white;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 1.1rem;
+    flex-shrink: 0;
+}
+
+.question-content {
+    flex: 1;
+}
+
+.question-text {
+    font-size: 1.05rem;
+    color: #1F2937;
+    margin-bottom: 15px;
+    line-height: 1.5;
+}
+
+.options-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.option-label {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 15px;
+    background: #F9FAFB;
+    border: 2px solid #E5E7EB;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.option-label input[type="radio"] {
+    display: none;
+}
+
+.option-selectable:hover {
+    border-color: #8B5CF6;
+    background: #F5F3FF;
+}
+
+.option-label input[type="radio"]:checked + .option-letter {
+    background: #10B981;
+}
+
+.option-label input[type="radio"]:checked ~ .option-text {
+    color: #10B981;
+    font-weight: 600;
+}
+
+.option-label:has(input[type="radio"]:checked) {
+    border-color: #10B981;
+    background: #F0FDF4;
+}
+
+.option-letter {
+    background: #8B5CF6;
+    color: white;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 0.9rem;
+    transition: background 0.2s;
+}
+
+.option-text {
+    color: #374151;
+    font-size: 0.95rem;
+    transition: all 0.2s;
+}
+
+.tf-options {
+    flex-direction: row;
+    gap: 15px;
+}
+
+.tf-options .option-label {
+    flex: 1;
+    justify-content: center;
+}
+
+.fill-blank-input {
+    margin-top: 10px;
+}
+
+.fill-input {
+    width: 100%;
+    max-width: 400px;
+    padding: 12px 15px;
+    border: 2px solid #E5E7EB;
+    border-radius: 8px;
+    font-size: 1rem;
+    transition: border-color 0.2s;
+}
+
+.fill-input:focus {
+    outline: none;
+    border-color: #8B5CF6;
+}
+
+.btn-submit {
+    display: block;
+    width: 100%;
+    max-width: 400px;
+    margin: 30px auto 0;
+    padding: 15px 30px;
+    background: #10B981;
+    color: white;
+    border: none;
+    border-radius: 10px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.btn-submit:hover {
+    background: #059669;
+}
+</style>
+
+{% if quiz.time_limit > 0 %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    let timeLeft = {{ quiz.time_limit }} * 60;
+    const timerDisplay = document.getElementById('timer');
+    const quizForm = document.getElementById('quizForm');
+
+    const timer = setInterval(function() {
+        const minutes = Math.floor(timeLeft / 60);
+        const seconds = timeLeft % 60;
+        timerDisplay.textContent = minutes + ':' + (seconds < 10 ? '0' : '') + seconds;
+
+        if (timeLeft <= 60) {
+            timerDisplay.style.animation = 'pulse 1s infinite';
+        }
+
+        if (timeLeft <= 0) {
+            clearInterval(timer);
+            alert('Time is up! Your quiz will be submitted automatically.');
+            quizForm.submit();
+        }
+        timeLeft--;
+    }, 1000);
+});
+</script>
+<style>
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+</style>
+{% endif %}
+{% endblock %}

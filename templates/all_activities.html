@@ -1,0 +1,156 @@
+{% extends 'base.html' %}
+
+{% block title %}All Activities - {{ subject.name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <span class="schedule-badge">{{ subject.day }} {{ subject.time_schedule }}</span>
+        <h1>All Activities</h1>
+        <p class="section-info">{{ subject.name }} - {{ subject.section }}</p>
+    </div>
+    <a href="{{ url_for('subject_detail', id=subject.id) }}" class="btn btn-secondary">Back to Sessions</a>
+</div>
+
+{% for item in sessions_data %}
+<div class="session-block">
+    <div class="session-header">
+        <h2>Session {{ item.session.session_number }}: {{ item.session.title }}</h2>
+    </div>
+
+    {% if item.activities %}
+        {% for activity in item.activities %}
+        <div class="activity-card">
+            <div class="activity-header">
+                <span class="activity-number">Activity {{ activity.activity_number }}</span>
+                <div class="flex gap-10">
+                    {% if activity.file_path %}
+                    <a href="{{ url_for('view_activity_pdf', activity_id=activity.id) }}" target="_blank" class="btn-file">
+                        View Activities
+                    </a>
+                    {% endif %}
+                    <span class="activity-points">{{ activity.points }} points</span>
+                </div>
+            </div>
+            <h3 class="activity-title">{{ activity.title }}</h3>
+            <div class="activity-instructions">
+                {{ activity.instructions }}
+            </div>
+        </div>
+        {% endfor %}
+    {% else %}
+        <p class="no-activities">No activities for this session yet.</p>
+    {% endif %}
+</div>
+{% endfor %}
+
+<style>
+.schedule-badge {
+    background: #0EA5E9;
+    color: white;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    display: inline-block;
+    margin-bottom: 10px;
+}
+
+.section-info {
+    color: #6B7280;
+    font-size: 0.95rem;
+    margin-top: 5px;
+}
+
+.session-block {
+    margin-bottom: 40px;
+    border: 2px solid #E0F2FE;
+    border-radius: 12px;
+    padding: 20px;
+    background: #FAFEFF;
+}
+
+.session-header {
+    background: #0EA5E9;
+    color: white;
+    padding: 15px 20px;
+    margin: -20px -20px 20px -20px;
+    border-radius: 10px 10px 0 0;
+}
+
+.session-header h2 {
+    margin: 0;
+    font-size: 1.2rem;
+}
+
+.activity-card {
+    background: white;
+    border: 1px solid #E0F2FE;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 15px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.activity-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.activity-number {
+    background: #10B981;
+    color: white;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-weight: 600;
+    font-size: 0.85rem;
+}
+
+.activity-points {
+    background: #FEF3C7;
+    color: #D97706;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-weight: 600;
+    font-size: 0.85rem;
+}
+
+.btn-file {
+    background: #10B981;
+    color: white;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-weight: 600;
+    font-size: 0.85rem;
+    text-decoration: none;
+    transition: background 0.2s;
+}
+
+.btn-file:hover {
+    background: #059669;
+}
+
+.activity-title {
+    color: #1F2937;
+    font-size: 1.1rem;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #E0F2FE;
+}
+
+.activity-instructions {
+    color: #374151;
+    font-size: 0.95rem;
+    line-height: 1.6;
+    white-space: pre-wrap;
+}
+
+.no-activities {
+    color: #6B7280;
+    text-align: center;
+    padding: 20px;
+}
+</style>
+{% endblock %}

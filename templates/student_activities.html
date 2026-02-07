@@ -1,0 +1,51 @@
+{% extends 'base.html' %}
+
+{% block title %}Activities - Classroom LMS{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>{{ session.subject_code }} - Session {{ session.session_number }}</h1>
+    <a href="{{ url_for('student_subject', subject_id=session.subject_id) }}" class="btn btn-secondary">Back to Subject</a>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <span class="card-title">Activities</span>
+    </div>
+
+    {% if activities %}
+    {% for activity in activities %}
+    <div class="question-card">
+        <h4>Activity {{ activity.activity_number }}: {{ activity.title }}</h4>
+        <p>{{ activity.instructions }}</p>
+        <p><strong>Points:</strong> {{ activity.points }}</p>
+
+        {% if activity.id in submissions %}
+        <div class="mt-20" style="background: #D1FAE5; padding: 15px; border-radius: 6px;">
+            <p><strong>Your Submission:</strong></p>
+            <p>{{ submissions[activity.id].content }}</p>
+            {% if submissions[activity.id].score is not none %}
+            <p><strong>Score:</strong> {{ submissions[activity.id].score }}/{{ activity.points }}</p>
+            {% if submissions[activity.id].feedback %}
+            <p><strong>Feedback:</strong> {{ submissions[activity.id].feedback }}</p>
+            {% endif %}
+            {% else %}
+            <p><em>Not yet graded</em></p>
+            {% endif %}
+        </div>
+        {% else %}
+        <form action="{{ url_for('submit_activity', activity_id=activity.id) }}" method="POST" class="mt-20">
+            <div class="form-group">
+                <label>Your Submission</label>
+                <textarea name="content" rows="4" required placeholder="Enter your answer here..."></textarea>
+            </div>
+            <button type="submit" class="btn">Submit Activity</button>
+        </form>
+        {% endif %}
+    </div>
+    {% endfor %}
+    {% else %}
+    <p class="text-center">No activities for this session yet.</p>
+    {% endif %}
+</div>
+{% endblock %}

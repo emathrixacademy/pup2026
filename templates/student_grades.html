@@ -1,0 +1,280 @@
+{% extends 'base.html' %}
+
+{% block title %}Student Grades - Classroom LMS{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Grades: {{ student.full_name }}</h1>
+    {% if current_user.role == 'instructor' %}
+    <a href="{{ url_for('grades') }}" class="btn btn-secondary">Back to Grade Book</a>
+    {% endif %}
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <span class="card-title">Student Info</span>
+    </div>
+    <p><strong>Student ID:</strong> {{ student.student_id }}</p>
+    <p><strong>Section:</strong> {{ student.section }}</p>
+</div>
+
+<div class="card mt-20">
+    <div class="card-header">
+        <span class="card-title">Grades by Subject</span>
+    </div>
+
+    {% for g in grades %}
+    <div class="grade-subject-card {% if g.subject.code == 'COMP012' %}comp012-grade{% endif %}">
+        <h3>{{ g.subject.code }} - {{ g.subject.name }}</h3>
+        <p class="section-label">{{ g.subject.section }}</p>
+
+        <div class="grade-breakdown">
+            {% if g.subject.code == 'COMP012' %}
+            <!-- COMP012 Network Administration Grade Breakdown -->
+            <div class="grade-row">
+                <span class="grade-label">Activities (25%)</span>
+                <span class="grade-value">{{ "%.1f"|format(g.activity_avg) }}%</span>
+                <span class="grade-contrib">{{ "%.1f"|format(g.activity_avg * 0.25) }}</span>
+            </div>
+            <div class="grade-row">
+                <span class="grade-label">Quizzes (10%)</span>
+                <span class="grade-value">{{ "%.1f"|format(g.quiz_avg) }}%</span>
+                <span class="grade-contrib">{{ "%.1f"|format(g.quiz_avg * 0.10) }}</span>
+            </div>
+            <div class="grade-row">
+                <span class="grade-label">Midterm Exam (15%)</span>
+                <span class="grade-value">{{ "%.1f"|format(g.midterm) }}%</span>
+                <span class="grade-contrib">{{ "%.1f"|format(g.midterm * 0.15) }}</span>
+            </div>
+            <div class="grade-row">
+                <span class="grade-label">Final Exam (15%)</span>
+                <span class="grade-value">{{ "%.1f"|format(g.final) }}%</span>
+                <span class="grade-contrib">{{ "%.1f"|format(g.final * 0.15) }}</span>
+            </div>
+            <div class="grade-row final-project-row">
+                <span class="grade-label">Final Project (35%)</span>
+                <span class="grade-value">{{ "%.1f"|format(g.final_project) }}%</span>
+                <span class="grade-contrib">{{ "%.1f"|format(g.final_project * 0.35) }}</span>
+            </div>
+            {% else %}
+            <!-- Default Grade Breakdown -->
+            <div class="grade-row">
+                <span class="grade-label">Quizzes (20%)</span>
+                <span class="grade-value">{{ "%.1f"|format(g.quiz_avg) }}%</span>
+                <span class="grade-contrib">{{ "%.1f"|format(g.quiz_avg * 0.20) }}</span>
+            </div>
+            <div class="grade-row">
+                <span class="grade-label">Activities (40%)</span>
+                <span class="grade-value">{{ "%.1f"|format(g.activity_avg) }}%</span>
+                <span class="grade-contrib">{{ "%.1f"|format(g.activity_avg * 0.40) }}</span>
+            </div>
+            <div class="grade-row">
+                <span class="grade-label">Midterm Exam (20%)</span>
+                <span class="grade-value">{{ "%.1f"|format(g.midterm) }}%</span>
+                <span class="grade-contrib">{{ "%.1f"|format(g.midterm * 0.20) }}</span>
+            </div>
+            <div class="grade-row">
+                <span class="grade-label">Final Exam (20%)</span>
+                <span class="grade-value">{{ "%.1f"|format(g.final) }}%</span>
+                <span class="grade-contrib">{{ "%.1f"|format(g.final * 0.20) }}</span>
+            </div>
+            {% endif %}
+
+            <div class="grade-row grade-total">
+                <span class="grade-label">Weighted Average</span>
+                <span class="grade-value weighted-grade {% if g.weighted >= 75 %}passing{% else %}failing{% endif %}">
+                    {{ "%.2f"|format(g.weighted) }}%
+                </span>
+                <span class="grade-contrib pup-grade">{{ "%.2f"|format(g.pup_grade) }}</span>
+            </div>
+        </div>
+
+        <div class="grade-status {% if g.weighted >= 75 %}status-passed{% else %}status-failed{% endif %}">
+            {% if g.weighted >= 75 %}
+                <span class="status-icon">&#10003;</span> PASSED
+            {% else %}
+                <span class="status-icon">&#10007;</span> FAILED
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<div class="card mt-20">
+    <div class="card-header">
+        <span class="card-title">PUP Transmutation Table</span>
+    </div>
+    <div class="transmutation-table">
+        <table>
+            <thead>
+                <tr>
+                    <th>Percentage</th>
+                    <th>Grade</th>
+                    <th>Description</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr><td>97 - 100</td><td>1.00</td><td>Excellent</td></tr>
+                <tr><td>94 - 96</td><td>1.25</td><td>Excellent</td></tr>
+                <tr><td>91 - 93</td><td>1.50</td><td>Very Good</td></tr>
+                <tr><td>88 - 90</td><td>1.75</td><td>Very Good</td></tr>
+                <tr><td>85 - 87</td><td>2.00</td><td>Good</td></tr>
+                <tr><td>82 - 84</td><td>2.25</td><td>Good</td></tr>
+                <tr><td>79 - 81</td><td>2.50</td><td>Satisfactory</td></tr>
+                <tr><td>76 - 78</td><td>2.75</td><td>Satisfactory</td></tr>
+                <tr><td>75</td><td>3.00</td><td>Passing</td></tr>
+                <tr class="failing"><td>Below 75</td><td>5.00</td><td>Failed</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<style>
+.grade-subject-card {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.grade-subject-card h3 {
+    margin: 0 0 5px 0;
+    color: #1e293b;
+    font-size: 1.1rem;
+}
+
+.grade-subject-card .section-label {
+    color: #64748b;
+    font-size: 0.9rem;
+    margin-bottom: 15px;
+}
+
+.comp012-grade {
+    background: linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%);
+    border: 1px solid #A7F3D0;
+}
+
+.comp012-grade h3 {
+    color: #047857;
+}
+
+.grade-breakdown {
+    background: white;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 15px;
+}
+
+.grade-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.grade-row:last-child {
+    border-bottom: none;
+}
+
+.grade-label {
+    font-weight: 500;
+    color: #475569;
+    flex: 1;
+}
+
+.grade-value {
+    width: 80px;
+    text-align: right;
+    font-weight: 600;
+    color: #1e293b;
+}
+
+.grade-contrib {
+    width: 60px;
+    text-align: right;
+    color: #64748b;
+    font-size: 0.9rem;
+}
+
+.final-project-row {
+    background: #fef3c7;
+    margin: 0 -15px;
+    padding: 8px 15px;
+}
+
+.grade-total {
+    background: #f1f5f9;
+    margin: 10px -15px -15px;
+    padding: 12px 15px;
+    border-radius: 0 0 8px 8px;
+    font-weight: 600;
+}
+
+.weighted-grade {
+    font-size: 1.1rem;
+}
+
+.weighted-grade.passing {
+    color: #059669;
+}
+
+.weighted-grade.failing {
+    color: #dc2626;
+}
+
+.pup-grade {
+    background: #3b82f6;
+    color: white;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-weight: 600;
+    width: auto;
+}
+
+.grade-status {
+    text-align: center;
+    padding: 10px;
+    border-radius: 8px;
+    font-weight: 700;
+    font-size: 0.9rem;
+}
+
+.status-passed {
+    background: #dcfce7;
+    color: #16a34a;
+}
+
+.status-failed {
+    background: #fee2e2;
+    color: #dc2626;
+}
+
+.status-icon {
+    margin-right: 5px;
+}
+
+.transmutation-table table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.transmutation-table th,
+.transmutation-table td {
+    padding: 10px;
+    text-align: center;
+    border: 1px solid #e2e8f0;
+}
+
+.transmutation-table th {
+    background: #f1f5f9;
+    font-weight: 600;
+}
+
+.transmutation-table tr.failing {
+    background: #fee2e2;
+    color: #dc2626;
+}
+</style>
+{% endblock %}

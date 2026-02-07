@@ -1,0 +1,67 @@
+{% extends 'base.html' %}
+
+{% block title %}Grade Book - Classroom LMS{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Grade Book</h1>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <span class="card-title">All Students</span>
+    </div>
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>Student ID</th>
+                    <th>Full Name</th>
+                    <th>Section</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for student in students %}
+                <tr>
+                    <td>{{ student.student_id }}</td>
+                    <td>{{ student.full_name }}</td>
+                    <td>{{ student.section }}</td>
+                    <td>
+                        <a href="{{ url_for('student_grades', student_id=student.id) }}" class="btn btn-sm btn-teal">View Grades</a>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="4" class="text-center">No students enrolled yet.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card mt-20">
+    <div class="card-header">
+        <span class="card-title">Grade Weights</span>
+    </div>
+    <ul class="session-list">
+        <li class="session-item">
+            <span>Quizzes</span>
+            <strong>20%</strong>
+        </li>
+        <li class="session-item">
+            <span>Activities</span>
+            <strong>40%</strong>
+        </li>
+        <li class="session-item">
+            <span>Midterm Exam</span>
+            <strong>20%</strong>
+        </li>
+        <li class="session-item">
+            <span>Final Exam</span>
+            <strong>20%</strong>
+        </li>
+    </ul>
+</div>
+{% endblock %}

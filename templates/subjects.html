@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+
+{% block title %}Subjects - Classroom LMS{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>My Classes</h1>
+</div>
+
+<div class="dashboard-grid">
+    {% for subject in subjects %}
+    <div class="subject-card">
+        <div class="schedule-badge">{{ subject.day }} {{ subject.time_schedule }}</div>
+        <h3>{{ subject.name }}</h3>
+        <p class="section-info">{{ subject.section }}</p>
+        <div class="flex gap-10 mt-20">
+            <a href="{{ url_for('subject_detail', id=subject.id) }}" class="btn btn-sm btn-sky">View Sessions</a>
+            <a href="{{ url_for('subject_exams', subject_id=subject.id) }}" class="btn btn-sm btn-rose">Exams</a>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<style>
+.schedule-badge {
+    background: #0EA5E9;
+    color: white;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    display: inline-block;
+    margin-bottom: 10px;
+}
+
+.section-info {
+    color: #6B7280;
+    font-size: 0.9rem;
+    margin-top: 5px;
+}
+</style>
+{% endblock %}

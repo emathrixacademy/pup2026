@@ -1,0 +1,438 @@
+{% extends 'base.html' %}
+
+{% block title %}Quiz - {{ quiz.title if quiz else 'No Quiz' }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>{{ session.title }}</h1>
+        <p class="section-info">Session {{ session.session_number }} Quiz</p>
+    </div>
+    <a href="{{ url_for('subject_detail', id=session.subject_id) }}" class="btn btn-secondary">Back to Sessions</a>
+</div>
+
+{% if not quiz %}
+{% if current_user.role == 'instructor' %}
+<div class="card">
+    <div class="card-header">
+        <span class="card-title">Create Quiz</span>
+    </div>
+    <form action="{{ url_for('create_quiz', session_id=session.id) }}" method="POST">
+        <div class="form-group">
+            <label>Quiz Title</label>
+            <input type="text" name="title" required placeholder="e.g., Session {{ session.session_number }} Quiz">
+        </div>
+        <div class="form-group">
+            <label>Time Limit (minutes, 0 for no limit)</label>
+            <input type="number" name="time_limit" value="15" min="0">
+        </div>
+        <button type="submit" class="btn btn-violet">Create Quiz</button>
+    </form>
+</div>
+{% else %}
+<div class="card">
+    <p class="text-center">No quiz available for this session yet.</p>
+</div>
+{% endif %}
+{% else %}
+
+<!-- Quiz Header -->
+<div class="quiz-container">
+    <div class="quiz-header">
+        <h2>{{ quiz.title }}</h2>
+        <div class="quiz-meta">
+            <span class="quiz-info">{{ questions|length }} Questions</span>
+            <span class="quiz-info">{{ questions|length }} Points</span>
+            {% if quiz.time_limit > 0 %}
+            <span class="quiz-info time-limit">Time Limit: {{ quiz.time_limit }} minutes</span>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Quiz Instructions -->
+    <div class="quiz-instructions">
+        <p><strong>Instructions:</strong> Choose the best answer for each question. For fill-in-the-blank questions, write your answer in the space provided.</p>
+    </div>
+
+    <!-- Questions -->
+    <div class="quiz-questions">
+        {% for q in questions %}
+        <div class="quiz-question">
+            <div class="question-number">{{ loop.index }}</div>
+            <div class="question-content">
+                <p class="question-text">{{ q.question_text }}</p>
+
+                {% if q.question_type == 'multiple_choice' %}
+                <div class="options-grid">
+                    {% set options = q.options | parse_json if q.options else [] %}
+                    {% for option in options %}
+                    <label class="option-label">
+                        <span class="option-letter">{{ ['A', 'B', 'C', 'D'][loop.index0] }}</span>
+                        <span class="option-text">{{ option }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+
+                {% elif q.question_type == 'true_false' %}
+                <div class="options-grid tf-options">
+                    <label class="option-label">
+                        <span class="option-letter">A</span>
+                        <span class="option-text">True</span>
+                    </label>
+                    <label class="option-label">
+                        <span class="option-letter">B</span>
+                        <span class="option-text">False</span>
+                    </label>
+                </div>
+
+                {% elif q.question_type == 'fill_in_blank' %}
+                <div class="fill-blank">
+                    <span class="blank-line">____________________</span>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Answer Key Section (Instructor Only) -->
+    {% if current_user.role == 'instructor' %}
+    <div class="answer-key-section">
+        <h3 class="answer-key-title">ANSWER KEY</h3>
+        <table class="answer-key-table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Answer</th>
+                    <th>Explanation</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for q in questions %}
+                <tr>
+                    <td class="q-num">{{ loop.index }}</td>
+                    <td class="q-answer">{{ q.correct_answer }}</td>
+                    <td class="q-explain">
+                        {% if q.question_type == 'multiple_choice' %}
+                            {% set options = q.options | parse_json if q.options else [] %}
+                            {% set answer_idx = {'A': 0, 'B': 1, 'C': 2, 'D': 3}.get(q.correct_answer, -1) %}
+                            {% if answer_idx >= 0 and answer_idx < options|length %}
+                                {{ options[answer_idx] }}
+                            {% endif %}
+                        {% elif q.question_type == 'true_false' %}
+                            {{ q.correct_answer }}
+                        {% else %}
+                            {{ q.correct_answer }}
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Add Question Form (Instructor Only) -->
+    <div class="card mt-30">
+        <div class="card-header">
+            <span class="card-title">Add New Question</span>
+        </div>
+        <form action="{{ url_for('add_quiz_question', quiz_id=quiz.id) }}" method="POST" class="add-question-form">
+            <div class="form-group">
+                <label>Question Text</label>
+                <textarea name="question_text" rows="2" required></textarea>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Question Type</label>
+                    <select name="question_type" id="questionType" onchange="toggleOptionsField()">
+                        <option value="multiple_choice">Multiple Choice</option>
+                        <option value="true_false">True/False</option>
+                        <option value="fill_in_blank">Fill in the Blank</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Points</label>
+                    <input type="number" name="points" value="1" min="1">
+                </div>
+            </div>
+            <div class="form-group" id="optionsGroup">
+                <label>Options (one per line)</label>
+                <textarea name="options" rows="4" placeholder="Option A&#10;Option B&#10;Option C&#10;Option D"></textarea>
+            </div>
+            <div class="form-group">
+                <label>Correct Answer (A, B, C, D for multiple choice; True/False for T/F)</label>
+                <input type="text" name="correct_answer" required placeholder="e.g., B">
+            </div>
+            <button type="submit" class="btn btn-violet">Add Question</button>
+        </form>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
+<style>
+.quiz-container {
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+.quiz-header {
+    background: linear-gradient(135deg, #8B5CF6, #7C3AED);
+    color: white;
+    padding: 30px;
+    border-radius: 12px;
+    margin-bottom: 20px;
+}
+
+.quiz-header h2 {
+    margin: 0 0 15px 0;
+    font-size: 1.5rem;
+}
+
+.quiz-meta {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+
+.quiz-info {
+    background: rgba(255,255,255,0.2);
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 0.9rem;
+}
+
+.time-limit {
+    background: #EF4444;
+}
+
+.quiz-instructions {
+    background: #FEF3C7;
+    border-left: 4px solid #F59E0B;
+    padding: 15px 20px;
+    margin-bottom: 25px;
+    border-radius: 0 8px 8px 0;
+}
+
+.quiz-instructions p {
+    margin: 0;
+    color: #92400E;
+}
+
+.quiz-questions {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.quiz-question {
+    background: white;
+    border: 1px solid #E5E7EB;
+    border-radius: 12px;
+    padding: 20px;
+    display: flex;
+    gap: 20px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.question-number {
+    background: #8B5CF6;
+    color: white;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 1.1rem;
+    flex-shrink: 0;
+}
+
+.question-content {
+    flex: 1;
+}
+
+.question-text {
+    font-size: 1.05rem;
+    color: #1F2937;
+    margin-bottom: 15px;
+    line-height: 1.5;
+}
+
+.options-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.option-label {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 15px;
+    background: #F9FAFB;
+    border: 2px solid #E5E7EB;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.option-label:hover {
+    border-color: #8B5CF6;
+    background: #F5F3FF;
+}
+
+.option-letter {
+    background: #8B5CF6;
+    color: white;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 0.9rem;
+}
+
+.option-text {
+    color: #374151;
+    font-size: 0.95rem;
+}
+
+.tf-options {
+    flex-direction: row;
+    gap: 15px;
+}
+
+.tf-options .option-label {
+    flex: 1;
+    justify-content: center;
+}
+
+.fill-blank {
+    padding: 15px 0;
+}
+
+.blank-line {
+    display: inline-block;
+    border-bottom: 2px solid #374151;
+    min-width: 200px;
+    color: transparent;
+}
+
+/* Answer Key Styles */
+.answer-key-section {
+    margin-top: 40px;
+    background: #F0FDF4;
+    border: 2px solid #10B981;
+    border-radius: 12px;
+    padding: 25px;
+}
+
+.answer-key-title {
+    color: #059669;
+    margin: 0 0 20px 0;
+    text-align: center;
+    font-size: 1.3rem;
+    letter-spacing: 2px;
+}
+
+.answer-key-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.answer-key-table th {
+    background: #10B981;
+    color: white;
+    padding: 12px 15px;
+    text-align: left;
+    font-weight: 600;
+}
+
+.answer-key-table th:first-child {
+    border-radius: 8px 0 0 0;
+    width: 60px;
+    text-align: center;
+}
+
+.answer-key-table th:nth-child(2) {
+    width: 100px;
+    text-align: center;
+}
+
+.answer-key-table th:last-child {
+    border-radius: 0 8px 0 0;
+}
+
+.answer-key-table td {
+    padding: 12px 15px;
+    border-bottom: 1px solid #D1FAE5;
+}
+
+.answer-key-table tr:last-child td {
+    border-bottom: none;
+}
+
+.answer-key-table tr:nth-child(even) {
+    background: #ECFDF5;
+}
+
+.q-num {
+    text-align: center;
+    font-weight: 600;
+    color: #059669;
+}
+
+.q-answer {
+    text-align: center;
+    font-weight: bold;
+    color: #059669;
+    font-size: 1.1rem;
+}
+
+.q-explain {
+    color: #374151;
+    font-size: 0.9rem;
+}
+
+.mt-30 {
+    margin-top: 30px;
+}
+
+.form-row {
+    display: flex;
+    gap: 20px;
+}
+
+.form-row .form-group {
+    flex: 1;
+}
+
+.add-question-form {
+    padding: 20px;
+}
+
+.section-info {
+    color: #6B7280;
+    font-size: 0.95rem;
+    margin-top: 5px;
+}
+</style>
+
+<script>
+function toggleOptionsField() {
+    const type = document.getElementById('questionType').value;
+    const optionsGroup = document.getElementById('optionsGroup');
+    if (type === 'fill_in_blank') {
+        optionsGroup.style.display = 'none';
+    } else if (type === 'true_false') {
+        optionsGroup.style.display = 'none';
+    } else {
+        optionsGroup.style.display = 'block';
+    }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,73 @@
+{% extends 'base.html' %}
+
+{% block title %}Take Exam - Classroom LMS{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>{{ exam.title }}</h1>
+    {% if exam.time_limit > 0 %}
+    <div class="stat-card" style="padding: 10px 20px;">
+        <span>Time Remaining: </span>
+        <span id="timer" style="font-weight: bold; color: #EF4444;">{{ exam.time_limit }}:00</span>
+    </div>
+    {% endif %}
+</div>
+
+<div class="card">
+    <p><strong>Exam Type:</strong> {{ exam.exam_type|capitalize }}</p>
+    <p><strong>Total Points:</strong> {{ exam.total_points }}</p>
+</div>
+
+<form id="examForm" action="{{ url_for('submit_exam', exam_id=exam.id) }}" method="POST">
+    {% for q in questions %}
+    <div class="question-card">
+        <h4>Question {{ loop.index }} ({{ q.points }} pts)</h4>
+        <p>{{ q.question_text }}</p>
+
+        {% if q.question_type == 'multiple_choice' %}
+        <ul class="options-list">
+            {% for option in q.options.split(',') %}
+            <li>
+                <label>
+                    <input type="radio" name="q_{{ q.id }}" value="{{ option.strip() }}" required>
+                    {{ option.strip() }}
+                </label>
+            </li>
+            {% endfor %}
+        </ul>
+
+        {% elif q.question_type == 'true_false' %}
+        <ul class="options-list">
+            <li>
+                <label>
+                    <input type="radio" name="q_{{ q.id }}" value="True" required>
+                    True
+                </label>
+            </li>
+            <li>
+                <label>
+                    <input type="radio" name="q_{{ q.id }}" value="False" required>
+                    False
+                </label>
+            </li>
+        </ul>
+
+        {% elif q.question_type == 'short_answer' %}
+        <div class="form-group">
+            <input type="text" name="q_{{ q.id }}" placeholder="Your answer" required>
+        </div>
+        {% endif %}
+    </div>
+    {% endfor %}
+
+    <button type="submit" class="btn btn-full mt-20">Submit Exam</button>
+</form>
+
+{% if exam.time_limit > 0 %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    startTimer({{ exam.time_limit }}, 'timer');
+});
+</script>
+{% endif %}
+{% endblock %}

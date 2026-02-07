@@ -1,0 +1,218 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard - Classroom LMS{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Instructor Dashboard</h1>
+</div>
+
+<div class="dashboard-grid">
+    <div class="stat-card">
+        <h3>{{ student_count }}</h3>
+        <p>Total Students</p>
+    </div>
+    <div class="stat-card">
+        <h3>{{ subjects|length }}</h3>
+        <p>Classes</p>
+    </div>
+    <div class="stat-card">
+        <h3>{{ subjects|length * 16 }}</h3>
+        <p>Total Sessions</p>
+    </div>
+</div>
+
+<h2 class="mt-20">My Classes</h2>
+<div class="dashboard-grid">
+    {% for subject in subjects %}
+    {% set color_class = 'color-blue' %}
+    {% if subject.code == 'COMP019' %}
+        {% set color_class = 'color-sky' %}
+    {% elif subject.code == 'COMP012' %}
+        {% set color_class = 'color-emerald' %}
+    {% elif subject.code == 'CNS' %}
+        {% set color_class = 'color-violet' %}
+    {% elif subject.code == 'ES' %}
+        {% set color_class = 'color-amber' %}
+    {% endif %}
+    <div class="subject-card {{ color_class }}">
+        <div class="schedule-badge">{{ subject.day }} {{ subject.time_schedule }}</div>
+        <h3>{{ subject.name }}</h3>
+        <p class="section-info">{{ subject.section }}</p>
+        <div class="flex gap-10 mt-20 flex-wrap">
+            <a href="{{ url_for('all_activities', subject_id=subject.id) }}" class="btn btn-sm btn-primary">All Activities</a>
+            <a href="{{ url_for('subject_detail', id=subject.id) }}" class="btn btn-sm btn-light">Sessions</a>
+            <a href="{{ url_for('subject_exams', subject_id=subject.id) }}" class="btn btn-sm btn-light">Exams</a>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<style>
+/* Subject Card Base Styles */
+.subject-card {
+    border-radius: 12px;
+    padding: 20px;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.subject-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+}
+
+.subject-card h3 {
+    margin: 10px 0 5px 0;
+    font-size: 1.1rem;
+}
+
+/* Sky Blue - Applications Development */
+.color-sky {
+    background: linear-gradient(135deg, #F0F9FF 0%, #E0F2FE 100%);
+    border: 1px solid #BAE6FD;
+}
+
+.color-sky .schedule-badge {
+    background: #0EA5E9;
+    color: white;
+}
+
+.color-sky h3 {
+    color: #0369A1;
+}
+
+.color-sky .btn-primary {
+    background: #0EA5E9;
+    color: white;
+}
+
+.color-sky .btn-primary:hover {
+    background: #0284C7;
+}
+
+.color-sky .btn-light {
+    background: white;
+    color: #0369A1;
+    border: 1px solid #BAE6FD;
+}
+
+/* Emerald Green - Network Administration */
+.color-emerald {
+    background: linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%);
+    border: 1px solid #A7F3D0;
+}
+
+.color-emerald .schedule-badge {
+    background: #10B981;
+    color: white;
+}
+
+.color-emerald h3 {
+    color: #047857;
+}
+
+.color-emerald .btn-primary {
+    background: #10B981;
+    color: white;
+}
+
+.color-emerald .btn-primary:hover {
+    background: #059669;
+}
+
+.color-emerald .btn-light {
+    background: white;
+    color: #047857;
+    border: 1px solid #A7F3D0;
+}
+
+/* Violet Purple - Computer Networks and Security */
+.color-violet {
+    background: linear-gradient(135deg, #F5F3FF 0%, #EDE9FE 100%);
+    border: 1px solid #DDD6FE;
+}
+
+.color-violet .schedule-badge {
+    background: #8B5CF6;
+    color: white;
+}
+
+.color-violet h3 {
+    color: #6D28D9;
+}
+
+.color-violet .btn-primary {
+    background: #8B5CF6;
+    color: white;
+}
+
+.color-violet .btn-primary:hover {
+    background: #7C3AED;
+}
+
+.color-violet .btn-light {
+    background: white;
+    color: #6D28D9;
+    border: 1px solid #DDD6FE;
+}
+
+/* Amber Orange - Embedded Systems */
+.color-amber {
+    background: linear-gradient(135deg, #FFFBEB 0%, #FEF3C7 100%);
+    border: 1px solid #FDE68A;
+}
+
+.color-amber .schedule-badge {
+    background: #F59E0B;
+    color: white;
+}
+
+.color-amber h3 {
+    color: #B45309;
+}
+
+.color-amber .btn-primary {
+    background: #F59E0B;
+    color: white;
+}
+
+.color-amber .btn-primary:hover {
+    background: #D97706;
+}
+
+.color-amber .btn-light {
+    background: white;
+    color: #B45309;
+    border: 1px solid #FDE68A;
+}
+
+/* Badge and Button Styles */
+.schedule-badge {
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    display: inline-block;
+    margin-bottom: 8px;
+}
+
+.section-info {
+    color: #6B7280;
+    font-size: 0.9rem;
+    margin-top: 5px;
+}
+
+.btn-sm {
+    padding: 6px 14px;
+    font-size: 0.85rem;
+    border-radius: 6px;
+    text-decoration: none;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.btn-light:hover {
+    opacity: 0.9;
+}
+</style>
+{% endblock %}

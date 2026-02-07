@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+
+{% block title %}Student Dashboard - Classroom LMS{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Welcome, {{ current_user.full_name }}!</h1>
+</div>
+
+<div class="card">
+    <p><strong>Student ID:</strong> {{ current_user.student_id }}</p>
+    <p><strong>Section:</strong> {{ current_user.section }}</p>
+</div>
+
+<h2 class="mt-20">Available Subjects</h2>
+<div class="dashboard-grid">
+    {% for subject in subjects %}
+    <div class="subject-card">
+        <h3>{{ subject.code }}</h3>
+        <p><strong>{{ subject.name }}</strong></p>
+        <p>{{ subject.description }}</p>
+        <a href="{{ url_for('student_subject', subject_id=subject.id) }}" class="btn btn-sm mt-20">View Subject</a>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

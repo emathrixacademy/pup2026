@@ -1,0 +1,65 @@
+{% extends 'base.html' %}
+
+{% block title %}Submissions - Classroom LMS{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>{{ activity.title }} - Submissions</h1>
+    <a href="javascript:history.back()" class="btn btn-secondary">Back</a>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <span class="card-title">Student Submissions ({{ submissions|length }})</span>
+    </div>
+
+    {% if submissions %}
+    {% for submission in submissions %}
+    <div class="question-card">
+        <div class="flex justify-between items-center">
+            <div>
+                <strong>{{ submission.full_name }}</strong> ({{ submission.sid }})
+                <br><small>Submitted: {{ submission.submitted_at }}</small>
+            </div>
+            <div>
+                {% if submission.score is not none %}
+                <span class="grade-display">{{ submission.score }}/{{ activity.points }}</span>
+                {% else %}
+                <span>Not graded</span>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="mt-20">
+            <strong>Submission:</strong>
+            <p>{{ submission.content }}</p>
+        </div>
+
+        {% if submission.feedback %}
+        <div class="mt-20">
+            <strong>Feedback:</strong>
+            <p>{{ submission.feedback }}</p>
+        </div>
+        {% endif %}
+
+        <form action="{{ url_for('grade_activity', activity_id=activity.id) }}" method="POST" class="mt-20">
+            <input type="hidden" name="submission_id" value="{{ submission.id }}">
+            <div class="flex gap-10">
+                <div class="form-group" style="flex: 1;">
+                    <label>Score (out of {{ activity.points }})</label>
+                    <input type="number" name="score" value="{{ submission.score or '' }}" min="0" max="{{ activity.points }}" required>
+                </div>
+                <div class="form-group" style="flex: 2;">
+                    <label>Feedback</label>
+                    <input type="text" name="feedback" value="{{ submission.feedback or '' }}">
+                </div>
+            </div>
+            <button type="submit" class="btn">Save Grade</button>
+        </form>
+    </div>
+    {% endfor %}
+    {% else %}
+    <p class="text-center">No submissions yet.</p>
+    {% endif %}
+</div>
+{% endblock %}

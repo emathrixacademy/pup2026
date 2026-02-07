@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ subject.name }} - {{ subject.section }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <span class="schedule-badge">{{ subject.day }} {{ subject.time_schedule }}</span>
+        <h1>{{ subject.name }}</h1>
+        <p class="section-info">{{ subject.section }}</p>
+    </div>
+    <div class="flex gap-10">
+        <a href="{{ url_for('all_activities', subject_id=subject.id) }}" class="btn btn-emerald">View All Activities</a>
+        <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">Back to Classes</a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <span class="card-title">Sessions (16)</span>
+    </div>
+    <ul class="session-list">
+        {% for session in sessions %}
+        <li class="session-item">
+            <div>
+                <strong>Session {{ session.session_number }}</strong>
+                <span> - {{ session.title }}</span>
+            </div>
+            <div class="flex gap-10">
+                <a href="{{ url_for('session_lesson', session_id=session.id) }}" class="btn btn-sm btn-emerald">View Lesson</a>
+                <a href="{{ url_for('session_quiz', session_id=session.id) }}" class="btn btn-sm btn-violet">Quiz</a>
+            </div>
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+
+<style>
+.schedule-badge {
+    background: #0EA5E9;
+    color: white;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    display: inline-block;
+    margin-bottom: 10px;
+}
+
+.section-info {
+    color: #6B7280;
+    font-size: 0.95rem;
+    margin-top: 5px;
+}
+
+</style>
+{% endblock %}
