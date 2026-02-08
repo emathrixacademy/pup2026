@@ -1,0 +1,132 @@
+{% extends 'base.html' %}
+
+{% block title %}Manage Enrollments - {{ student.full_name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1><i class="fas fa-book-reader"></i> Manage Enrollments</h1>
+        <p>Select subjects for {{ student.full_name }} ({{ student.student_id }})</p>
+    </div>
+    <a href="{{ url_for('students') }}" class="btn btn-secondary">
+        <i class="fas fa-arrow-left"></i> Back to Students
+    </a>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3><i class="fas fa-user-graduate"></i> {{ student.full_name }}</h3>
+        <span class="badge badge-active">{{ student.section or 'No Section' }}</span>
+    </div>
+    <div class="card-body">
+        <form method="POST">
+            <p style="margin-bottom: 1rem; color: var(--text-gray);">
+                <i class="fas fa-info-circle"></i> Check the subjects this student should be enrolled in:
+            </p>
+
+            <div class="enrollment-grid">
+                {% for subject in subjects %}
+                <label class="enrollment-card {% if subject.id in enrolled_ids %}enrolled{% endif %}">
+                    <input type="checkbox" name="subjects" value="{{ subject.id }}"
+                           {% if subject.id in enrolled_ids %}checked{% endif %}>
+                    <div class="enrollment-card-content">
+                        <div class="enrollment-code">{{ subject.code }}</div>
+                        <div class="enrollment-name">{{ subject.name }}</div>
+                        <div class="enrollment-meta">
+                            <i class="fas fa-users"></i> {{ subject.section }}
+                        </div>
+                        <div class="enrollment-schedule">
+                            <i class="fas fa-clock"></i> {{ subject.day }} {{ subject.time_schedule }}
+                        </div>
+                    </div>
+                    <div class="enrollment-check">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                </label>
+                {% endfor %}
+            </div>
+
+            <div class="flex gap-1" style="margin-top: 2rem;">
+                <a href="{{ url_for('students') }}" class="btn btn-secondary" style="flex: 1;">
+                    <i class="fas fa-times"></i> Cancel
+                </a>
+                <button type="submit" class="btn btn-success" style="flex: 1;">
+                    <i class="fas fa-save"></i> Save Enrollments
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+.enrollment-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1rem;
+}
+
+.enrollment-card {
+    display: flex;
+    align-items: flex-start;
+    padding: 1rem;
+    border: 2px solid var(--border-color);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background: white;
+    position: relative;
+}
+
+.enrollment-card:hover {
+    border-color: var(--primary-blue-light);
+    box-shadow: 0 4px 12px rgba(14, 165, 233, 0.15);
+}
+
+.enrollment-card.enrolled,
+.enrollment-card:has(input:checked) {
+    border-color: var(--success-green);
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.05) 0%, rgba(16, 185, 129, 0.1) 100%);
+}
+
+.enrollment-card input[type="checkbox"] {
+    display: none;
+}
+
+.enrollment-card-content {
+    flex: 1;
+}
+
+.enrollment-code {
+    font-weight: 700;
+    font-size: 1.1rem;
+    color: var(--primary-blue);
+    margin-bottom: 0.25rem;
+}
+
+.enrollment-name {
+    font-weight: 500;
+    color: var(--text-dark);
+    margin-bottom: 0.5rem;
+}
+
+.enrollment-meta,
+.enrollment-schedule {
+    font-size: 0.85rem;
+    color: var(--text-gray);
+    margin-bottom: 0.25rem;
+}
+
+.enrollment-check {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    font-size: 1.5rem;
+    color: var(--border-color);
+    transition: all 0.2s;
+}
+
+.enrollment-card:has(input:checked) .enrollment-check {
+    color: var(--success-green);
+}
+</style>
+{% endblock %}

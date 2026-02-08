@@ -1,0 +1,583 @@
+{% extends 'base.html' %}
+
+{% block title %}Session {{ session.session_number }}: {{ session.title }}{% endblock %}
+
+{% block content %}
+<div class="lesson-wrapper">
+    <!-- Progress Bar -->
+    <div class="progress-container">
+        <div class="progress-bar" id="progressBar"></div>
+        <span class="progress-text"><span id="currentSlide">1</span> / <span id="totalSlides">8</span></span>
+    </div>
+
+    <!-- Slide Container -->
+    <div class="slides-container" id="slidesContainer">
+
+        <!-- SLIDE 1: Title Slide -->
+        <div class="slide active" data-slide="1">
+            <div class="slide-bg-animated"></div>
+            <div class="floating-symbols">
+                <span class="symbol" style="--delay: 0s; --x: 10%; --y: 20%;">IoT</span>
+                <span class="symbol" style="--delay: 0.5s; --x: 80%; --y: 15%;">ESP32</span>
+                <span class="symbol" style="--delay: 1s; --x: 15%; --y: 70%;">Arduino</span>
+                <span class="symbol" style="--delay: 1.5s; --x: 75%; --y: 65%;">GPIO</span>
+                <span class="symbol" style="--delay: 2s; --x: 50%; --y: 30%;">MCU</span>
+                <span class="symbol" style="--delay: 2.5s; --x: 85%; --y: 45%;">WiFi</span>
+            </div>
+            <div class="title-content">
+                <div class="course-badge">ES - Session {{ session.session_number }}</div>
+                <h1 class="main-title typewriter">Introduction to</h1>
+                <h1 class="main-title typewriter delay">Embedded Systems & IoT Boards</h1>
+                <p class="subtitle fade-in-delayed">"Building the Future, One Microcontroller at a Time"</p>
+                <button class="start-btn pulse" onclick="nextSlide()">
+                    <span class="play-icon">&#9654;</span> Start Learning
+                </button>
+            </div>
+        </div>
+
+        <!-- SLIDE 2: Learning Objectives -->
+        <div class="slide" data-slide="2">
+            <div class="slide-header">
+                <div class="lightbulb-icon glow-animation">&#127919;</div>
+                <h2>LEARNING OBJECTIVES</h2>
+            </div>
+            <div class="objectives-container">
+                <div class="objective-card" style="--delay: 0.2s">
+                    <div class="obj-number">1</div>
+                    <div class="obj-icon">&#128187;</div>
+                    <div class="obj-content">
+                        <span class="key-term">EMBEDDED SYSTEMS</span>
+                        <p>Define embedded systems and their characteristics</p>
+                    </div>
+                    <div class="obj-check">&#10003;</div>
+                </div>
+                <div class="objective-card" style="--delay: 0.5s">
+                    <div class="obj-number">2</div>
+                    <div class="obj-icon">&#128421;</div>
+                    <div class="obj-content">
+                        <span class="key-term">IoT BOARDS</span>
+                        <p>Identify different types of IoT development boards</p>
+                    </div>
+                    <div class="obj-check">&#10003;</div>
+                </div>
+                <div class="objective-card" style="--delay: 0.8s">
+                    <div class="obj-number">3</div>
+                    <div class="obj-icon">&#9889;</div>
+                    <div class="obj-content">
+                        <span class="key-term">COMPARE PLATFORMS</span>
+                        <p>Compare Arduino, ESP32, and Raspberry Pi platforms</p>
+                    </div>
+                    <div class="obj-check">&#10003;</div>
+                </div>
+                <div class="objective-card" style="--delay: 1.1s">
+                    <div class="obj-number">4</div>
+                    <div class="obj-icon">&#128736;</div>
+                    <div class="obj-content">
+                        <span class="key-term">ARDUINO IDE</span>
+                        <p>Set up the Arduino IDE development environment</p>
+                    </div>
+                    <div class="obj-check">&#10003;</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SLIDE 3: What is an Embedded System? -->
+        <div class="slide" data-slide="3">
+            <h2 class="slide-title">&#128187; What is an <span class="key-term">EMBEDDED SYSTEM</span>?</h2>
+            <div class="definition-box large">
+                <div class="def-icon">&#128273;</div>
+                <div class="def-content">
+                    <strong>Definition</strong>
+                    <p>A computer system designed for <strong>specific dedicated functions</strong> within a larger system, with real-time computing constraints.</p>
+                </div>
+            </div>
+            <div class="characteristics-grid">
+                <div class="char-card">
+                    <div class="char-icon">&#9201;</div>
+                    <h3>Real-Time</h3>
+                    <p>Must respond within strict time limits</p>
+                </div>
+                <div class="char-card">
+                    <div class="char-icon">&#128296;</div>
+                    <h3>Dedicated</h3>
+                    <p>Designed for specific tasks</p>
+                </div>
+                <div class="char-card">
+                    <div class="char-icon">&#128190;</div>
+                    <h3>Resource Constrained</h3>
+                    <p>Limited memory and processing power</p>
+                </div>
+                <div class="char-card">
+                    <div class="char-icon">&#128161;</div>
+                    <h3>Low Power</h3>
+                    <p>Often battery-powered devices</p>
+                </div>
+            </div>
+            <div class="examples-box">
+                <h4>&#128204; Examples:</h4>
+                <div class="examples-list">
+                    <span class="example-tag">Washing Machines</span>
+                    <span class="example-tag">ATMs</span>
+                    <span class="example-tag">Smart Watches</span>
+                    <span class="example-tag">Traffic Lights</span>
+                    <span class="example-tag">Medical Devices</span>
+                    <span class="example-tag">Automotive Systems</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- SLIDE 4: IoT Development Boards Comparison -->
+        <div class="slide" data-slide="4">
+            <h2 class="slide-title">&#128421; IoT Development Boards Comparison</h2>
+            <div class="board-comparison">
+                <table class="comparison-table">
+                    <thead>
+                        <tr>
+                            <th>Feature</th>
+                            <th class="arduino-col">Arduino Uno</th>
+                            <th class="esp-col">ESP32</th>
+                            <th class="pi-col">Raspberry Pi Pico</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Processor</td>
+                            <td>ATmega328P (8-bit)</td>
+                            <td>Xtensa 32-bit</td>
+                            <td>ARM Cortex-M0+</td>
+                        </tr>
+                        <tr>
+                            <td>Clock Speed</td>
+                            <td>16 MHz</td>
+                            <td>240 MHz</td>
+                            <td>133 MHz</td>
+                        </tr>
+                        <tr>
+                            <td>RAM</td>
+                            <td>2 KB</td>
+                            <td>520 KB</td>
+                            <td>264 KB</td>
+                        </tr>
+                        <tr>
+                            <td>Flash</td>
+                            <td>32 KB</td>
+                            <td>4 MB</td>
+                            <td>2 MB</td>
+                        </tr>
+                        <tr>
+                            <td>WiFi</td>
+                            <td class="no">&#10060; No</td>
+                            <td class="yes">&#9989; Yes</td>
+                            <td class="no">&#10060; No*</td>
+                        </tr>
+                        <tr>
+                            <td>Bluetooth</td>
+                            <td class="no">&#10060; No</td>
+                            <td class="yes">&#9989; Yes</td>
+                            <td class="no">&#10060; No*</td>
+                        </tr>
+                        <tr>
+                            <td>GPIO Pins</td>
+                            <td>14 digital, 6 analog</td>
+                            <td>34 GPIO</td>
+                            <td>26 GPIO</td>
+                        </tr>
+                        <tr>
+                            <td>Price Range</td>
+                            <td>&#8369;250-500</td>
+                            <td>&#8369;300-600</td>
+                            <td>&#8369;200-400</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="note-box">
+                <p>* Pico W variant has WiFi and Bluetooth support</p>
+            </div>
+        </div>
+
+        <!-- SLIDE 5: Arduino Architecture -->
+        <div class="slide" data-slide="5">
+            <h2 class="slide-title">&#9889; Arduino Architecture</h2>
+            <div class="architecture-diagram">
+                <div class="arch-component main">
+                    <div class="comp-icon">&#128187;</div>
+                    <h3>MCU (ATmega328P)</h3>
+                    <p>The brain of Arduino</p>
+                </div>
+                <div class="arch-row">
+                    <div class="arch-component">
+                        <div class="comp-icon">&#128268;</div>
+                        <h3>Digital I/O</h3>
+                        <p>14 pins (0-13)</p>
+                    </div>
+                    <div class="arch-component">
+                        <div class="comp-icon">&#128200;</div>
+                        <h3>Analog Input</h3>
+                        <p>6 pins (A0-A5)</p>
+                    </div>
+                    <div class="arch-component">
+                        <div class="comp-icon">&#9889;</div>
+                        <h3>Power</h3>
+                        <p>5V / 3.3V</p>
+                    </div>
+                </div>
+                <div class="arch-row">
+                    <div class="arch-component">
+                        <div class="comp-icon">&#128268;</div>
+                        <h3>USB Interface</h3>
+                        <p>Programming & Power</p>
+                    </div>
+                    <div class="arch-component">
+                        <div class="comp-icon">&#128260;</div>
+                        <h3>Reset Button</h3>
+                        <p>Restart program</p>
+                    </div>
+                    <div class="arch-component">
+                        <div class="comp-icon">&#128161;</div>
+                        <h3>Built-in LED</h3>
+                        <p>Pin 13</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SLIDE 6: Arduino IDE Setup -->
+        <div class="slide" data-slide="6">
+            <h2 class="slide-title">&#128736; Development Environment Setup</h2>
+            <div class="setup-steps">
+                <div class="setup-step">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <div class="step-icon">&#128190;</div>
+                        <div class="step-info">
+                            <strong>Download Arduino IDE</strong>
+                            <code>arduino.cc/en/software</code>
+                            <p>Install the latest version for your OS</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="setup-step">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <div class="step-icon">&#128268;</div>
+                        <div class="step-info">
+                            <strong>Connect Your Board</strong>
+                            <p>Use USB cable to connect Arduino to computer</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="setup-step">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <div class="step-icon">&#9881;</div>
+                        <div class="step-info">
+                            <strong>Configure Board Manager</strong>
+                            <p>Tools → Board → Select "Arduino Uno"</p>
+                            <p>Tools → Port → Select your COM port</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="setup-step">
+                    <div class="step-number">4</div>
+                    <div class="step-content">
+                        <div class="step-icon">&#128640;</div>
+                        <div class="step-info">
+                            <strong>Upload First Program</strong>
+                            <p>File → Examples → 01.Basics → Blink</p>
+                            <p>Click Upload button (→)</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SLIDE 7: Blink Program -->
+        <div class="slide" data-slide="7">
+            <h2 class="slide-title">&#128161; Your First Program: Blink LED</h2>
+            <div class="code-window">
+                <div class="code-header">
+                    <span class="code-title">Blink.ino</span>
+                </div>
+                <pre class="code-body">
+<span class="comment">// The setup function runs once when Arduino starts</span>
+<span class="keyword">void</span> <span class="function">setup</span>() {
+  <span class="function">pinMode</span>(<span class="number">LED_BUILTIN</span>, <span class="constant">OUTPUT</span>);
+}
+
+<span class="comment">// The loop function runs continuously</span>
+<span class="keyword">void</span> <span class="function">loop</span>() {
+  <span class="function">digitalWrite</span>(<span class="number">LED_BUILTIN</span>, <span class="constant">HIGH</span>);  <span class="comment">// Turn ON</span>
+  <span class="function">delay</span>(<span class="number">1000</span>);                       <span class="comment">// Wait 1 second</span>
+  <span class="function">digitalWrite</span>(<span class="number">LED_BUILTIN</span>, <span class="constant">LOW</span>);   <span class="comment">// Turn OFF</span>
+  <span class="function">delay</span>(<span class="number">1000</span>);                       <span class="comment">// Wait 1 second</span>
+}
+                </pre>
+            </div>
+            <div class="code-explanation">
+                <div class="explain-item">
+                    <span class="func-name">setup()</span>
+                    <span class="func-desc">Runs once at startup - initialize pins here</span>
+                </div>
+                <div class="explain-item">
+                    <span class="func-name">loop()</span>
+                    <span class="func-desc">Runs continuously - main program logic</span>
+                </div>
+                <div class="explain-item">
+                    <span class="func-name">delay(1000)</span>
+                    <span class="func-desc">Pause for 1000 milliseconds (1 second)</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- SLIDE 8: Summary -->
+        <div class="slide" data-slide="8">
+            <h2 class="slide-title">&#128221; KEY TAKEAWAYS</h2>
+            <div class="takeaways-grid">
+                <div class="takeaway-card"><span class="takeaway-icon">&#128187;</span><span class="key-term">EMBEDDED</span><p>Dedicated, Real-time</p></div>
+                <div class="takeaway-card"><span class="takeaway-icon">&#9889;</span><span class="key-term">ARDUINO</span><p>ATmega328P, 16MHz</p></div>
+                <div class="takeaway-card"><span class="takeaway-icon">&#128225;</span><span class="key-term">ESP32</span><p>WiFi + Bluetooth</p></div>
+                <div class="takeaway-card"><span class="takeaway-icon">&#128736;</span><span class="key-term">IDE</span><p>setup() + loop()</p></div>
+                <div class="takeaway-card"><span class="takeaway-icon">&#128161;</span><span class="key-term">GPIO</span><p>General Purpose I/O</p></div>
+            </div>
+            <div class="next-session-box">
+                <span class="next-icon">&#128640;</span>
+                <div class="next-content">
+                    <strong>NEXT: Electronic Components and Circuit Basics</strong>
+                    <p>Resistors, LEDs, Ohm's Law, and Breadboards</p>
+                </div>
+            </div>
+            <div class="activities-preview">
+                <h4>&#128203; TODAY'S ACTIVITY:</h4>
+                <ol>
+                    <li>Board Identification and IDE Setup (100 points)</li>
+                </ol>
+            </div>
+            <div class="completion-badge">
+                <span>&#127881;</span> Great job! You're ready for Embedded Systems! <span>&#127881;</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation -->
+    <div class="slide-navigation">
+        <button class="nav-btn prev-btn" onclick="prevSlide()" id="prevBtn">&#10094; Previous</button>
+        <div class="slide-dots" id="slideDots"></div>
+        <button class="nav-btn next-btn" onclick="nextSlide()" id="nextBtn">Next &#10095;</button>
+    </div>
+
+    <a href="{{ url_for('subject_detail', id=session.subject_id) }}" class="back-to-sessions">&#8592; Back to Sessions</a>
+</div>
+
+<style>
+:root {
+    --primary: #8B5CF6;
+    --primary-dark: #7C3AED;
+    --primary-light: #EDE9FE;
+    --accent-purple: #8B5CF6;
+    --accent-blue: #3B82F6;
+    --accent-cyan: #06B6D4;
+    --accent-orange: #F59E0B;
+    --dark: #1E293B;
+    --white: #FFFFFF;
+    --gray-100: #F1F5F9;
+    --gray-200: #E2E8F0;
+    --gray-500: #64748B;
+}
+
+.lesson-wrapper { max-width: 1100px; margin: 0 auto; padding: 20px; }
+
+/* Progress Bar */
+.progress-container { position: fixed; top: 60px; left: 0; right: 0; height: 4px; background: var(--gray-200); z-index: 100; }
+.progress-bar { height: 100%; background: linear-gradient(90deg, var(--primary), var(--accent-blue)); width: 12.5%; transition: width 0.3s; }
+.progress-text { position: absolute; right: 20px; top: 8px; font-size: 0.85rem; color: var(--gray-500); background: var(--white); padding: 2px 8px; border-radius: 10px; }
+
+/* Slides */
+.slides-container { min-height: 600px; position: relative; margin-top: 30px; }
+.slide { display: none; animation: fadeIn 0.5s; padding: 30px; background: var(--white); border-radius: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.1); min-height: 550px; }
+.slide.active { display: block; }
+
+/* Title Slide */
+.slide[data-slide="1"] { background: linear-gradient(135deg, #8B5CF6 0%, #7C3AED 50%, #6D28D9 100%); background-size: 200% 200%; animation: gradientMove 8s ease infinite; position: relative; overflow: hidden; text-align: center; color: var(--white); }
+.slide[data-slide="1"].active { display: flex; flex-direction: column; justify-content: center; align-items: center; }
+@keyframes gradientMove { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+
+.floating-symbols { position: absolute; width: 100%; height: 100%; pointer-events: none; }
+.symbol { position: absolute; font-family: monospace; font-size: 1.5rem; color: rgba(255,255,255,0.3); left: var(--x); top: var(--y); animation: float 3s ease-in-out infinite; animation-delay: var(--delay); }
+@keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-20px); } }
+
+.course-badge { background: rgba(255,255,255,0.2); padding: 8px 20px; border-radius: 30px; font-size: 0.9rem; margin-bottom: 30px; }
+.main-title { font-size: 2.5rem; margin: 5px 0; text-shadow: 2px 2px 10px rgba(0,0,0,0.2); }
+.subtitle { font-size: 1.2rem; margin-top: 20px; opacity: 0; animation: fadeIn 1s ease forwards 2s; }
+.start-btn { margin-top: 40px; padding: 15px 40px; font-size: 1.1rem; background: var(--white); color: var(--primary); border: none; border-radius: 50px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 10px; animation: pulse 2s infinite; }
+@keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+
+/* Headers */
+.slide-header { text-align: center; margin-bottom: 30px; }
+.lightbulb-icon { font-size: 3rem; animation: glow 2s infinite; }
+@keyframes glow { 0%, 100% { text-shadow: 0 0 10px rgba(139, 92, 246, 0.5); } 50% { text-shadow: 0 0 30px rgba(139, 92, 246, 0.8); } }
+.slide-title { text-align: center; font-size: 1.8rem; margin-bottom: 25px; color: var(--dark); }
+
+/* Objectives */
+.objectives-container { display: flex; flex-direction: column; gap: 15px; max-width: 700px; margin: 0 auto; }
+.objective-card { display: flex; align-items: center; gap: 15px; background: var(--gray-100); padding: 18px; border-radius: 12px; opacity: 0; transform: translateX(-30px); animation: slideInLeft 0.5s ease forwards; animation-delay: var(--delay); }
+@keyframes slideInLeft { to { opacity: 1; transform: translateX(0); } }
+.obj-number { width: 36px; height: 36px; background: linear-gradient(135deg, var(--primary), var(--accent-blue)); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; }
+.obj-icon { font-size: 1.8rem; }
+.obj-content { flex: 1; }
+.obj-content p { margin: 5px 0 0; color: var(--gray-500); }
+.obj-check { color: var(--primary); font-size: 1.5rem; font-weight: bold; }
+
+/* Key Terms */
+.key-term { background: linear-gradient(135deg, var(--primary), var(--accent-blue)); color: white; padding: 4px 12px; border-radius: 6px; font-weight: bold; display: inline-block; font-size: 0.9rem; }
+
+/* Definition Box */
+.definition-box { background: var(--primary-light); border-left: 4px solid var(--primary); padding: 20px 25px; border-radius: 0 12px 12px 0; display: flex; gap: 15px; align-items: flex-start; margin-bottom: 25px; }
+.definition-box.large { font-size: 1.1rem; }
+.def-icon { font-size: 2rem; }
+.def-content strong { color: var(--primary-dark); font-size: 1.2rem; }
+.def-content p { margin-top: 8px; line-height: 1.6; }
+
+/* Characteristics Grid */
+.characteristics-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin: 25px 0; }
+.char-card { background: var(--gray-100); padding: 20px; border-radius: 12px; text-align: center; transition: transform 0.3s; border: 2px solid transparent; }
+.char-card:hover { transform: translateY(-5px); border-color: var(--primary); }
+.char-icon { font-size: 2rem; margin-bottom: 10px; }
+.char-card h3 { color: var(--primary-dark); font-size: 1rem; margin-bottom: 8px; }
+.char-card p { color: var(--gray-500); font-size: 0.85rem; }
+
+/* Examples Box */
+.examples-box { background: var(--gray-100); padding: 20px; border-radius: 12px; }
+.examples-box h4 { margin-bottom: 12px; color: var(--dark); }
+.examples-list { display: flex; flex-wrap: wrap; gap: 10px; }
+.example-tag { background: var(--primary); color: white; padding: 6px 14px; border-radius: 20px; font-size: 0.85rem; }
+
+/* Comparison Table */
+.comparison-table { width: 100%; border-collapse: collapse; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+.comparison-table th { padding: 15px; text-align: center; color: white; }
+.comparison-table th:first-child { background: var(--dark); }
+.arduino-col { background: #00979D; }
+.esp-col { background: #E7352C; }
+.pi-col { background: #C51A4A; }
+.comparison-table td { padding: 12px 15px; border-bottom: 1px solid var(--gray-200); text-align: center; }
+.comparison-table tr:hover { background: var(--gray-100); }
+.comparison-table .yes { color: #10B981; font-weight: bold; }
+.comparison-table .no { color: #EF4444; }
+.note-box { background: var(--gray-100); padding: 10px 15px; border-radius: 8px; margin-top: 15px; font-size: 0.9rem; color: var(--gray-500); }
+
+/* Architecture Diagram */
+.architecture-diagram { display: flex; flex-direction: column; gap: 20px; align-items: center; }
+.arch-component { background: var(--gray-100); padding: 20px; border-radius: 12px; text-align: center; border: 2px solid transparent; transition: all 0.3s; }
+.arch-component:hover { border-color: var(--primary); transform: translateY(-3px); }
+.arch-component.main { background: linear-gradient(135deg, var(--primary), var(--accent-blue)); color: white; width: 300px; }
+.arch-row { display: flex; gap: 20px; justify-content: center; flex-wrap: wrap; }
+.arch-row .arch-component { width: 200px; }
+.comp-icon { font-size: 2rem; margin-bottom: 8px; }
+.arch-component h3 { font-size: 1rem; margin-bottom: 5px; }
+.arch-component p { font-size: 0.85rem; opacity: 0.8; }
+
+/* Setup Steps */
+.setup-steps { display: flex; flex-direction: column; gap: 18px; }
+.setup-step { display: flex; align-items: flex-start; gap: 20px; background: var(--gray-100); padding: 20px; border-radius: 12px; border-left: 4px solid var(--primary); }
+.step-number { width: 40px; height: 40px; background: linear-gradient(135deg, var(--primary), var(--accent-blue)); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 1.2rem; flex-shrink: 0; }
+.step-content { display: flex; gap: 15px; flex: 1; }
+.step-icon { font-size: 2rem; }
+.step-info { flex: 1; }
+.step-info strong { display: block; color: var(--dark); margin-bottom: 5px; }
+.step-info code { display: inline-block; background: var(--dark); color: var(--primary); padding: 4px 10px; border-radius: 4px; font-size: 0.85rem; margin: 5px 0; }
+.step-info p { color: var(--gray-500); font-size: 0.9rem; margin: 3px 0; }
+
+/* Code Window */
+.code-window { background: #1E1E1E; border-radius: 12px; overflow: hidden; max-width: 700px; margin: 0 auto 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.3); }
+.code-header { background: #323232; padding: 10px 15px; color: #888; font-size: 0.85rem; }
+.code-body { padding: 20px; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.9rem; color: #D4D4D4; white-space: pre; overflow-x: auto; }
+.code-body .comment { color: #6A9955; }
+.code-body .keyword { color: #569CD6; }
+.code-body .function { color: #DCDCAA; }
+.code-body .number { color: #B5CEA8; }
+.code-body .constant { color: #4FC1FF; }
+
+.code-explanation { display: flex; flex-direction: column; gap: 10px; max-width: 700px; margin: 0 auto; }
+.explain-item { display: flex; gap: 15px; background: var(--gray-100); padding: 12px 15px; border-radius: 8px; align-items: center; }
+.func-name { background: var(--primary); color: white; padding: 4px 10px; border-radius: 4px; font-family: monospace; font-weight: bold; }
+.func-desc { color: var(--gray-500); font-size: 0.9rem; }
+
+/* Summary */
+.takeaways-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 20px; }
+.takeaway-card { background: var(--gray-100); border-radius: 10px; padding: 15px; text-align: center; transition: transform 0.3s; }
+.takeaway-card:hover { transform: translateY(-5px); }
+.takeaway-icon { font-size: 1.8rem; display: block; margin-bottom: 8px; }
+.takeaway-card p { margin: 8px 0 0; color: var(--gray-500); font-size: 0.8rem; }
+.next-session-box { background: linear-gradient(135deg, var(--primary), var(--accent-blue)); color: white; border-radius: 12px; padding: 18px; display: flex; gap: 15px; align-items: center; margin-bottom: 15px; }
+.next-icon { font-size: 2rem; }
+.next-content strong { font-size: 1rem; }
+.next-content p { margin: 4px 0 0; opacity: 0.9; font-size: 0.85rem; }
+.activities-preview { background: var(--gray-100); border-radius: 10px; padding: 15px; margin-bottom: 15px; }
+.activities-preview h4 { margin: 0 0 8px; font-size: 0.95rem; }
+.activities-preview ol { margin: 0; padding-left: 22px; font-size: 0.9rem; }
+.completion-badge { text-align: center; padding: 15px; background: linear-gradient(135deg, var(--primary-light), #DDD6FE); border-radius: 50px; font-size: 1.1rem; font-weight: bold; color: var(--primary-dark); }
+
+/* Navigation */
+.slide-navigation { display: flex; justify-content: space-between; align-items: center; margin-top: 25px; padding: 18px; background: var(--gray-100); border-radius: 12px; }
+.nav-btn { padding: 10px 22px; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; transition: all 0.3s; font-size: 0.95rem; }
+.prev-btn { background: var(--gray-200); color: var(--dark); }
+.next-btn { background: var(--primary); color: white; }
+.nav-btn:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+.nav-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+.slide-dots { display: flex; gap: 6px; }
+.slide-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--gray-200); cursor: pointer; transition: all 0.3s; }
+.slide-dot.active { background: var(--primary); transform: scale(1.2); }
+.back-to-sessions { display: inline-block; margin-top: 18px; color: var(--gray-500); text-decoration: none; font-weight: 500; }
+.back-to-sessions:hover { color: var(--primary); }
+
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+@media (max-width: 768px) {
+    .main-title { font-size: 1.6rem; }
+    .characteristics-grid { grid-template-columns: repeat(2, 1fr); }
+    .arch-row { flex-direction: column; align-items: center; }
+}
+</style>
+
+<script>
+let currentSlide = 1;
+const totalSlides = 8;
+
+document.addEventListener('DOMContentLoaded', function() {
+    createDots();
+    updateNavigation();
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); nextSlide(); }
+        else if (e.key === 'ArrowLeft') { e.preventDefault(); prevSlide(); }
+    });
+});
+
+function createDots() {
+    const dotsContainer = document.getElementById('slideDots');
+    for (let i = 1; i <= totalSlides; i++) {
+        const dot = document.createElement('div');
+        dot.className = 'slide-dot' + (i === 1 ? ' active' : '');
+        dot.onclick = () => goToSlide(i);
+        dotsContainer.appendChild(dot);
+    }
+}
+
+function updateNavigation() {
+    document.getElementById('currentSlide').textContent = currentSlide;
+    document.getElementById('prevBtn').disabled = currentSlide === 1;
+    document.getElementById('nextBtn').disabled = currentSlide === totalSlides;
+    document.getElementById('progressBar').style.width = (currentSlide / totalSlides * 100) + '%';
+    document.querySelectorAll('.slide-dot').forEach((dot, i) => dot.classList.toggle('active', i + 1 === currentSlide));
+}
+
+function goToSlide(n) {
+    document.querySelectorAll('.slide').forEach(s => s.classList.remove('active'));
+    currentSlide = n;
+    document.querySelector(`[data-slide="${n}"]`).classList.add('active');
+    updateNavigation();
+}
+
+function nextSlide() { if (currentSlide < totalSlides) goToSlide(currentSlide + 1); }
+function prevSlide() { if (currentSlide > 1) goToSlide(currentSlide - 1); }
+</script>
+{% endblock %}

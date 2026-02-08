@@ -1,76 +1,135 @@
 {% extends 'base.html' %}
 
-{% block title %}{{ subject.code }} - Classroom LMS{% endblock %}
+{% block title %}{{ subject.code }} - Sangrenes LMS Portal{% endblock %}
 
 {% block content %}
 <div class="page-header">
-    <h1>{{ subject.code }} - {{ subject.name }}</h1>
-    <a href="{{ url_for('student_dashboard') }}" class="btn btn-secondary">Back to Dashboard</a>
+    <div>
+        <span class="schedule-badge"><i class="fas fa-clock"></i> {{ subject.day }} {{ subject.time_schedule }}</span>
+        <h1><i class="fas fa-book"></i> {{ subject.code }} - {{ subject.name }}</h1>
+        <p class="section-info">{{ subject.section }}</p>
+    </div>
+    <a href="{{ url_for('student_dashboard') }}" class="btn btn-secondary">
+        <i class="fas fa-arrow-left"></i> Back to Dashboard
+    </a>
+</div>
+
+<!-- Sessions & Activities -->
+<div class="card">
+    <div class="card-header">
+        <h3><i class="fas fa-list"></i> Available Sessions</h3>
+        <span class="badge badge-active">{{ sessions|length }} sessions visible</span>
+    </div>
+    <div class="card-body" style="padding: 0;">
+        {% if sessions %}
+        <ul class="session-list" style="padding: 1rem;">
+            {% for session in sessions %}
+            <li class="session-item">
+                <div class="session-info">
+                    <div class="session-number">{{ session.session_number }}</div>
+                    <div>
+                        <div class="session-title">{{ session.title }}</div>
+                        <div class="session-meta">
+                            <i class="fas fa-book-reader"></i> Lesson & Activities
+                        </div>
+                    </div>
+                </div>
+                <div class="session-actions">
+                    <a href="{{ url_for('session_lesson', session_id=session.id) }}" class="btn btn-sm btn-success">
+                        <i class="fas fa-play-circle"></i> Lesson
+                    </a>
+                    <a href="{{ url_for('student_session_activities', session_id=session.id) }}" class="btn btn-sm btn-primary">
+                        <i class="fas fa-tasks"></i> Activities
+                    </a>
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <div class="empty-state">
+            <i class="fas fa-eye-slash"></i>
+            <p>No sessions are currently available. Check back later.</p>
+        </div>
+        {% endif %}
+    </div>
 </div>
 
 <!-- Available Quizzes -->
 <div class="card">
     <div class="card-header">
-        <span class="card-title">Available Quizzes</span>
+        <h3><i class="fas fa-question-circle"></i> Available Quizzes</h3>
     </div>
-    {% if quizzes %}
-    <ul class="session-list">
-        {% for quiz in quizzes %}
-        <li class="session-item">
-            <div>
-                <strong>Session {{ quiz.session_number }}: {{ quiz.title }}</strong>
-                {% if quiz.time_limit > 0 %}
-                <small>({{ quiz.time_limit }} min)</small>
-                {% endif %}
-            </div>
-            <a href="{{ url_for('take_quiz', quiz_id=quiz.id) }}" class="btn btn-sm">Take Quiz</a>
-        </li>
-        {% endfor %}
-    </ul>
-    {% else %}
-    <p class="text-center">No quizzes available yet.</p>
-    {% endif %}
+    <div class="card-body" style="padding: 0;">
+        {% if quizzes %}
+        <ul class="session-list" style="padding: 1rem;">
+            {% for quiz in quizzes %}
+            <li class="session-item">
+                <div class="session-info">
+                    <div class="session-number" style="background: #8B5CF6;">{{ quiz.session_number }}</div>
+                    <div>
+                        <div class="session-title">{{ quiz.title }}</div>
+                        <div class="session-meta">
+                            {% if quiz.time_limit > 0 %}
+                            <i class="fas fa-clock"></i> {{ quiz.time_limit }} minutes
+                            {% else %}
+                            <i class="fas fa-infinity"></i> No time limit
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                <a href="{{ url_for('take_quiz', quiz_id=quiz.id) }}" class="btn btn-sm btn-violet">
+                    <i class="fas fa-play"></i> Take Quiz
+                </a>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <div class="empty-state" style="padding: 2rem;">
+            <i class="fas fa-question-circle" style="font-size: 2rem;"></i>
+            <p>No quizzes available yet.</p>
+        </div>
+        {% endif %}
+    </div>
 </div>
 
 <!-- Available Exams -->
-<div class="card mt-20">
+<div class="card">
     <div class="card-header">
-        <span class="card-title">Available Exams</span>
+        <h3><i class="fas fa-file-alt"></i> Available Exams</h3>
     </div>
-    {% if exams %}
-    <ul class="session-list">
-        {% for exam in exams %}
-        <li class="session-item">
-            <div>
-                <strong>{{ exam.exam_type|capitalize }}: {{ exam.title }}</strong>
-                {% if exam.time_limit > 0 %}
-                <small>({{ exam.time_limit }} min)</small>
-                {% endif %}
-            </div>
-            <a href="{{ url_for('take_exam', exam_id=exam.id) }}" class="btn btn-sm">Take Exam</a>
-        </li>
-        {% endfor %}
-    </ul>
-    {% else %}
-    <p class="text-center">No exams available yet.</p>
-    {% endif %}
-</div>
-
-<!-- Sessions & Activities -->
-<div class="card mt-20">
-    <div class="card-header">
-        <span class="card-title">Sessions & Activities</span>
+    <div class="card-body" style="padding: 0;">
+        {% if exams %}
+        <ul class="session-list" style="padding: 1rem;">
+            {% for exam in exams %}
+            <li class="session-item">
+                <div class="session-info">
+                    <div class="session-number" style="background: {% if exam.exam_type == 'midterm' %}#F59E0B{% else %}#EF4444{% endif %};">
+                        {% if exam.exam_type == 'midterm' %}M{% else %}F{% endif %}
+                    </div>
+                    <div>
+                        <div class="session-title">{{ exam.title }}</div>
+                        <div class="session-meta">
+                            <span class="badge {% if exam.exam_type == 'midterm' %}badge-pending{% else %}badge-hidden{% endif %}">
+                                {{ exam.exam_type|capitalize }} Exam
+                            </span>
+                            {% if exam.time_limit > 0 %}
+                            | <i class="fas fa-clock"></i> {{ exam.time_limit }} minutes
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                <a href="{{ url_for('take_exam', exam_id=exam.id) }}" class="btn btn-sm btn-warning">
+                    <i class="fas fa-edit"></i> Take Exam
+                </a>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <div class="empty-state" style="padding: 2rem;">
+            <i class="fas fa-file-alt" style="font-size: 2rem;"></i>
+            <p>No exams available yet.</p>
+        </div>
+        {% endif %}
     </div>
-    <ul class="session-list">
-        {% for session in sessions %}
-        <li class="session-item">
-            <div>
-                <strong>Session {{ session.session_number }}</strong>
-                <span> - {{ session.title }}</span>
-            </div>
-            <a href="{{ url_for('student_session_activities', session_id=session.id) }}" class="btn btn-sm">View Activities</a>
-        </li>
-        {% endfor %}
-    </ul>
 </div>
 {% endblock %}

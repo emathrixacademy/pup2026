@@ -1,280 +1,585 @@
 {% extends 'base.html' %}
 
-{% block title %}Student Grades - Classroom LMS{% endblock %}
+{% block title %}My Grades - Sangrenes LMS Portal{% endblock %}
 
 {% block content %}
 <div class="page-header">
-    <h1>Grades: {{ student.full_name }}</h1>
+    <div>
+        <h1><i class="fas fa-chart-line"></i> {% if current_user.role == 'instructor' %}Grades: {{ student.full_name }}{% else %}My Grades{% endif %}</h1>
+        <p class="page-subtitle">View your academic performance across enrolled subjects</p>
+    </div>
     {% if current_user.role == 'instructor' %}
-    <a href="{{ url_for('grades') }}" class="btn btn-secondary">Back to Grade Book</a>
+    <a href="{{ url_for('grades') }}" class="btn btn-secondary">
+        <i class="fas fa-arrow-left"></i> Back to Grade Book
+    </a>
     {% endif %}
 </div>
 
-<div class="card">
-    <div class="card-header">
-        <span class="card-title">Student Info</span>
+<!-- Student Info Card -->
+<div class="student-profile-card">
+    <div class="student-avatar">
+        <img src="{{ url_for('static', filename='uploads/photos/' + (student.photo or 'default.png')) }}"
+             alt="Profile"
+             onerror="this.src='https://ui-avatars.com/api/?name={{ student.full_name }}&background=6366F1&color=fff&size=100'">
     </div>
-    <p><strong>Student ID:</strong> {{ student.student_id }}</p>
-    <p><strong>Section:</strong> {{ student.section }}</p>
+    <div class="student-details">
+        <h2>{{ student.full_name }}</h2>
+        <div class="student-meta">
+            <span><i class="fas fa-id-badge"></i> {{ student.student_id or 'N/A' }}</span>
+            <span><i class="fas fa-users"></i> {{ student.section or 'N/A' }}</span>
+        </div>
+    </div>
 </div>
 
-<div class="card mt-20">
-    <div class="card-header">
-        <span class="card-title">Grades by Subject</span>
+{% if grades %}
+{% for g in grades %}
+{% set subject_color = 'blue' %}
+{% if 'COMP019' in g.subject.code %}
+    {% set subject_color = 'emerald' %}
+{% elif 'COMP012' in g.subject.code %}
+    {% set subject_color = 'violet' %}
+{% elif 'CNS' in g.subject.code %}
+    {% set subject_color = 'amber' %}
+{% elif 'ES' in g.subject.code %}
+    {% set subject_color = 'rose' %}
+{% endif %}
+
+<div class="grades-card {{ subject_color }}">
+    <div class="grades-card-header">
+        <div class="subject-header-info">
+            <i class="fas fa-book-open"></i>
+            <div>
+                <h3>{{ g.subject.code }} - {{ g.subject.name }}</h3>
+            </div>
+        </div>
+        <span class="section-badge">{{ g.subject.section }}</span>
     </div>
 
-    {% for g in grades %}
-    <div class="grade-subject-card {% if g.subject.code == 'COMP012' %}comp012-grade{% endif %}">
-        <h3>{{ g.subject.code }} - {{ g.subject.name }}</h3>
-        <p class="section-label">{{ g.subject.section }}</p>
-
-        <div class="grade-breakdown">
-            {% if g.subject.code == 'COMP012' %}
-            <!-- COMP012 Network Administration Grade Breakdown -->
-            <div class="grade-row">
-                <span class="grade-label">Activities (25%)</span>
-                <span class="grade-value">{{ "%.1f"|format(g.activity_avg) }}%</span>
-                <span class="grade-contrib">{{ "%.1f"|format(g.activity_avg * 0.25) }}</span>
+    <div class="grades-card-body">
+        <!-- Activities Table -->
+        <div class="grades-section">
+            <div class="section-header activities">
+                <i class="fas fa-tasks"></i> ACTIVITIES (12)
             </div>
-            <div class="grade-row">
-                <span class="grade-label">Quizzes (10%)</span>
-                <span class="grade-value">{{ "%.1f"|format(g.quiz_avg) }}%</span>
-                <span class="grade-contrib">{{ "%.1f"|format(g.quiz_avg * 0.10) }}</span>
-            </div>
-            <div class="grade-row">
-                <span class="grade-label">Midterm Exam (15%)</span>
-                <span class="grade-value">{{ "%.1f"|format(g.midterm) }}%</span>
-                <span class="grade-contrib">{{ "%.1f"|format(g.midterm * 0.15) }}</span>
-            </div>
-            <div class="grade-row">
-                <span class="grade-label">Final Exam (15%)</span>
-                <span class="grade-value">{{ "%.1f"|format(g.final) }}%</span>
-                <span class="grade-contrib">{{ "%.1f"|format(g.final * 0.15) }}</span>
-            </div>
-            <div class="grade-row final-project-row">
-                <span class="grade-label">Final Project (35%)</span>
-                <span class="grade-value">{{ "%.1f"|format(g.final_project) }}%</span>
-                <span class="grade-contrib">{{ "%.1f"|format(g.final_project * 0.35) }}</span>
-            </div>
-            {% else %}
-            <!-- Default Grade Breakdown -->
-            <div class="grade-row">
-                <span class="grade-label">Quizzes (20%)</span>
-                <span class="grade-value">{{ "%.1f"|format(g.quiz_avg) }}%</span>
-                <span class="grade-contrib">{{ "%.1f"|format(g.quiz_avg * 0.20) }}</span>
-            </div>
-            <div class="grade-row">
-                <span class="grade-label">Activities (40%)</span>
-                <span class="grade-value">{{ "%.1f"|format(g.activity_avg) }}%</span>
-                <span class="grade-contrib">{{ "%.1f"|format(g.activity_avg * 0.40) }}</span>
-            </div>
-            <div class="grade-row">
-                <span class="grade-label">Midterm Exam (20%)</span>
-                <span class="grade-value">{{ "%.1f"|format(g.midterm) }}%</span>
-                <span class="grade-contrib">{{ "%.1f"|format(g.midterm * 0.20) }}</span>
-            </div>
-            <div class="grade-row">
-                <span class="grade-label">Final Exam (20%)</span>
-                <span class="grade-value">{{ "%.1f"|format(g.final) }}%</span>
-                <span class="grade-contrib">{{ "%.1f"|format(g.final * 0.20) }}</span>
-            </div>
-            {% endif %}
-
-            <div class="grade-row grade-total">
-                <span class="grade-label">Weighted Average</span>
-                <span class="grade-value weighted-grade {% if g.weighted >= 75 %}passing{% else %}failing{% endif %}">
-                    {{ "%.2f"|format(g.weighted) }}%
-                </span>
-                <span class="grade-contrib pup-grade">{{ "%.2f"|format(g.pup_grade) }}</span>
+            <div class="scores-table-wrapper">
+                <table class="scores-table">
+                    <thead>
+                        <tr>
+                            <th class="label-col">COMPONENT</th>
+                            {% for i in range(1, 13) %}
+                            <th>A{{ i }}</th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td class="label-col"><i class="fas fa-check-square"></i> Score</td>
+                            {% for activity in g.activity_scores %}
+                            <td>
+                                {% if activity.score is not none %}
+                                    <span class="score-pill">{{ "%.0f"|format(activity.score) }}</span>
+                                {% elif activity.pending %}
+                                    <span class="score-pending"><i class="fas fa-clock"></i></span>
+                                {% else %}
+                                    <span class="score-empty">-</span>
+                                {% endif %}
+                            </td>
+                            {% endfor %}
+                        </tr>
+                    </tbody>
+                </table>
             </div>
         </div>
 
-        <div class="grade-status {% if g.weighted >= 75 %}status-passed{% else %}status-failed{% endif %}">
-            {% if g.weighted >= 75 %}
-                <span class="status-icon">&#10003;</span> PASSED
-            {% else %}
-                <span class="status-icon">&#10007;</span> FAILED
-            {% endif %}
+        <!-- Quizzes Table -->
+        <div class="grades-section">
+            <div class="section-header quizzes">
+                <i class="fas fa-question-circle"></i> QUIZZES (12)
+            </div>
+            <div class="scores-table-wrapper">
+                <table class="scores-table">
+                    <thead>
+                        <tr>
+                            <th class="label-col">COMPONENT</th>
+                            {% for i in range(1, 13) %}
+                            <th>Q{{ i }}</th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td class="label-col"><i class="fas fa-pen"></i> Score</td>
+                            {% for quiz in g.quiz_scores %}
+                            <td>
+                                {% if quiz.score is not none %}
+                                    <span class="score-pill quiz">{{ "%.0f"|format(quiz.score) }}</span>
+                                {% elif quiz.pending %}
+                                    <span class="score-pending"><i class="fas fa-clock"></i></span>
+                                {% else %}
+                                    <span class="score-empty">-</span>
+                                {% endif %}
+                            </td>
+                            {% endfor %}
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Major Exams Table -->
+        <div class="grades-section">
+            <div class="section-header exams">
+                <i class="fas fa-file-alt"></i> MAJOR EXAMS
+            </div>
+            <div class="scores-table-wrapper">
+                <table class="scores-table exams-table">
+                    <thead>
+                        <tr>
+                            <th class="label-col">COMPONENT</th>
+                            <th>MIDTERM EXAM</th>
+                            <th>FINAL PROJECT</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td class="label-col"><i class="fas fa-award"></i> Score</td>
+                            <td class="exam-cell">
+                                {% if g.midterm is not none %}
+                                    <span class="score-pill exam">{{ "%.1f"|format(g.midterm) }}%</span>
+                                {% elif g.midterm_pending %}
+                                    <span class="score-pending"><i class="fas fa-clock"></i> Pending</span>
+                                {% else %}
+                                    <span class="score-na">Not yet taken</span>
+                                {% endif %}
+                            </td>
+                            <td class="exam-cell">
+                                {% if g.final_project is not none %}
+                                    <span class="score-pill exam">{{ "%.1f"|format(g.final_project) }}%</span>
+                                {% elif g.final_project_pending %}
+                                    <span class="score-pending"><i class="fas fa-clock"></i> Pending</span>
+                                {% else %}
+                                    <span class="score-na">Not yet taken</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Summary Section -->
+        <div class="grades-summary">
+            <div class="summary-stats">
+                <div class="stat-item">
+                    <span class="stat-label">Quiz Average</span>
+                    <span class="stat-value">{{ "%.1f"|format(g.quiz_avg) }}%</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Activity Average</span>
+                    <span class="stat-value">{{ "%.1f"|format(g.activity_avg) }}%</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Weighted Average</span>
+                    <span class="stat-value {% if g.weighted >= 75 %}passing{% else %}failing{% endif %}">{{ "%.2f"|format(g.weighted) }}%</span>
+                </div>
+            </div>
+            <div class="final-grade">
+                <div class="pup-grade">
+                    <span class="grade-label">PUP Grade</span>
+                    <span class="grade-value {% if g.pup_grade <= 3.0 %}pass{% else %}fail{% endif %}">{{ "%.2f"|format(g.pup_grade) }}</span>
+                </div>
+                <div class="pass-status {% if g.weighted >= 75 %}passed{% else %}failed{% endif %}">
+                    {% if g.weighted >= 75 %}
+                    <i class="fas fa-check-circle"></i> PASSED
+                    {% else %}
+                    <i class="fas fa-times-circle"></i> FAILED
+                    {% endif %}
+                </div>
+            </div>
         </div>
     </div>
-    {% endfor %}
 </div>
+{% endfor %}
 
-<div class="card mt-20">
-    <div class="card-header">
-        <span class="card-title">PUP Transmutation Table</span>
+{% else %}
+<div class="empty-grades">
+    <div class="empty-icon">
+        <i class="fas fa-chart-bar"></i>
     </div>
-    <div class="transmutation-table">
-        <table>
-            <thead>
-                <tr>
-                    <th>Percentage</th>
-                    <th>Grade</th>
-                    <th>Description</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr><td>97 - 100</td><td>1.00</td><td>Excellent</td></tr>
-                <tr><td>94 - 96</td><td>1.25</td><td>Excellent</td></tr>
-                <tr><td>91 - 93</td><td>1.50</td><td>Very Good</td></tr>
-                <tr><td>88 - 90</td><td>1.75</td><td>Very Good</td></tr>
-                <tr><td>85 - 87</td><td>2.00</td><td>Good</td></tr>
-                <tr><td>82 - 84</td><td>2.25</td><td>Good</td></tr>
-                <tr><td>79 - 81</td><td>2.50</td><td>Satisfactory</td></tr>
-                <tr><td>76 - 78</td><td>2.75</td><td>Satisfactory</td></tr>
-                <tr><td>75</td><td>3.00</td><td>Passing</td></tr>
-                <tr class="failing"><td>Below 75</td><td>5.00</td><td>Failed</td></tr>
-            </tbody>
-        </table>
-    </div>
+    <h3>No Grades Available</h3>
+    <p>You are not enrolled in any subjects yet, or no grades have been recorded.</p>
 </div>
+{% endif %}
 
 <style>
-.grade-subject-card {
-    background: #f8fafc;
-    border: 1px solid #e2e8f0;
-    border-radius: 12px;
-    padding: 20px;
-    margin-bottom: 20px;
+.page-subtitle {
+    color: #64748B;
+    font-size: 0.95rem;
+    margin-top: 4px;
 }
 
-.grade-subject-card h3 {
-    margin: 0 0 5px 0;
-    color: #1e293b;
-    font-size: 1.1rem;
-}
-
-.grade-subject-card .section-label {
-    color: #64748b;
-    font-size: 0.9rem;
-    margin-bottom: 15px;
-}
-
-.comp012-grade {
-    background: linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%);
-    border: 1px solid #A7F3D0;
-}
-
-.comp012-grade h3 {
-    color: #047857;
-}
-
-.grade-breakdown {
+/* Student Profile Card */
+.student-profile-card {
+    display: flex;
+    align-items: center;
+    gap: 20px;
     background: white;
-    border-radius: 8px;
-    padding: 15px;
-    margin-bottom: 15px;
+    padding: 24px;
+    border-radius: 16px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    margin-bottom: 24px;
 }
 
-.grade-row {
+.student-avatar img {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 4px solid #6366F1;
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+}
+
+.student-details h2 {
+    margin: 0 0 8px 0;
+    font-size: 1.35rem;
+    color: #1E293B;
+}
+
+.student-meta {
+    display: flex;
+    gap: 20px;
+    color: #64748B;
+    font-size: 0.9rem;
+}
+
+.student-meta span {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* Grades Card */
+.grades-card {
+    background: white;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    margin-bottom: 24px;
+    border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+/* Color Variants for Header */
+.grades-card.emerald .grades-card-header { background: linear-gradient(135deg, #10B981, #059669); }
+.grades-card.violet .grades-card-header { background: linear-gradient(135deg, #8B5CF6, #7C3AED); }
+.grades-card.amber .grades-card-header { background: linear-gradient(135deg, #F59E0B, #D97706); }
+.grades-card.rose .grades-card-header { background: linear-gradient(135deg, #F43F5E, #E11D48); }
+.grades-card.blue .grades-card-header { background: linear-gradient(135deg, #0EA5E9, #0284C7); }
+
+.grades-card-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 8px 0;
-    border-bottom: 1px solid #f1f5f9;
+    padding: 18px 24px;
+    color: white;
 }
 
-.grade-row:last-child {
+.subject-header-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.subject-header-info i {
+    font-size: 1.5rem;
+    opacity: 0.9;
+}
+
+.subject-header-info h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.section-badge {
+    background: rgba(255, 255, 255, 0.2);
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    backdrop-filter: blur(10px);
+}
+
+.grades-card-body {
+    padding: 0;
+}
+
+/* Grades Sections */
+.grades-section {
+    border-bottom: 1px solid #E2E8F0;
+}
+
+.grades-section:last-of-type {
     border-bottom: none;
 }
 
-.grade-label {
-    font-weight: 500;
-    color: #475569;
-    flex: 1;
-}
-
-.grade-value {
-    width: 80px;
-    text-align: right;
-    font-weight: 600;
-    color: #1e293b;
-}
-
-.grade-contrib {
-    width: 60px;
-    text-align: right;
-    color: #64748b;
-    font-size: 0.9rem;
-}
-
-.final-project-row {
-    background: #fef3c7;
-    margin: 0 -15px;
-    padding: 8px 15px;
-}
-
-.grade-total {
-    background: #f1f5f9;
-    margin: 10px -15px -15px;
-    padding: 12px 15px;
-    border-radius: 0 0 8px 8px;
-    font-weight: 600;
-}
-
-.weighted-grade {
-    font-size: 1.1rem;
-}
-
-.weighted-grade.passing {
-    color: #059669;
-}
-
-.weighted-grade.failing {
-    color: #dc2626;
-}
-
-.pup-grade {
-    background: #3b82f6;
-    color: white;
-    padding: 4px 10px;
-    border-radius: 20px;
-    font-weight: 600;
-    width: auto;
-}
-
-.grade-status {
-    text-align: center;
-    padding: 10px;
-    border-radius: 8px;
+.section-header {
+    padding: 12px 20px;
+    font-size: 0.85rem;
     font-weight: 700;
-    font-size: 0.9rem;
+    color: white;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    letter-spacing: 0.5px;
 }
 
-.status-passed {
-    background: #dcfce7;
-    color: #16a34a;
+.section-header.activities { background: linear-gradient(90deg, #0EA5E9, #38BDF8); }
+.section-header.quizzes { background: linear-gradient(90deg, #8B5CF6, #A78BFA); }
+.section-header.exams { background: linear-gradient(90deg, #F59E0B, #FBBF24); }
+
+/* Scores Table */
+.scores-table-wrapper {
+    overflow-x: auto;
 }
 
-.status-failed {
-    background: #fee2e2;
-    color: #dc2626;
-}
-
-.status-icon {
-    margin-right: 5px;
-}
-
-.transmutation-table table {
+.scores-table {
     width: 100%;
     border-collapse: collapse;
 }
 
-.transmutation-table th,
-.transmutation-table td {
-    padding: 10px;
+.scores-table th,
+.scores-table td {
+    padding: 12px 8px;
     text-align: center;
-    border: 1px solid #e2e8f0;
+    font-size: 0.85rem;
 }
 
-.transmutation-table th {
-    background: #f1f5f9;
+.scores-table th {
+    background: #F8FAFC;
+    color: #475569;
     font-weight: 600;
+    border-bottom: 2px solid #E2E8F0;
 }
 
-.transmutation-table tr.failing {
-    background: #fee2e2;
-    color: #dc2626;
+.scores-table td {
+    border-bottom: 1px solid #F1F5F9;
+}
+
+.scores-table .label-col {
+    text-align: left;
+    padding-left: 20px;
+    font-weight: 500;
+    color: #1E293B;
+    width: 120px;
+}
+
+.scores-table .label-col i {
+    margin-right: 6px;
+    color: #64748B;
+}
+
+.exams-table th:not(.label-col),
+.exams-table td:not(.label-col) {
+    width: 35%;
+}
+
+.exam-cell {
+    background: #FFFBEB;
+}
+
+/* Score Pills */
+.score-pill {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-weight: 600;
+    font-size: 0.8rem;
+    background: linear-gradient(135deg, #10B981, #059669);
+    color: white;
+}
+
+.score-pill.quiz {
+    background: linear-gradient(135deg, #8B5CF6, #7C3AED);
+}
+
+.score-pill.exam {
+    padding: 6px 14px;
+    font-size: 0.9rem;
+    background: linear-gradient(135deg, #F59E0B, #D97706);
+}
+
+.score-pending {
+    color: #F59E0B;
+}
+
+.score-empty {
+    color: #CBD5E1;
+}
+
+.score-na {
+    color: #94A3B8;
+    font-style: italic;
+    font-size: 0.8rem;
+}
+
+/* Summary Section */
+.grades-summary {
+    background: linear-gradient(135deg, #1E293B, #334155);
+    padding: 20px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 20px;
+}
+
+.summary-stats {
+    display: flex;
+    gap: 32px;
+    flex-wrap: wrap;
+}
+
+.stat-item {
+    text-align: center;
+    color: white;
+}
+
+.stat-label {
+    display: block;
+    font-size: 0.75rem;
+    color: #94A3B8;
+    margin-bottom: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.stat-value {
+    font-size: 1.25rem;
+    font-weight: 700;
+}
+
+.stat-value.passing { color: #34D399; }
+.stat-value.failing { color: #F87171; }
+
+.final-grade {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.pup-grade {
+    text-align: center;
+    background: rgba(255, 255, 255, 0.1);
+    padding: 12px 20px;
+    border-radius: 12px;
+}
+
+.grade-label {
+    display: block;
+    font-size: 0.7rem;
+    color: #94A3B8;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+}
+
+.grade-value {
+    font-size: 1.5rem;
+    font-weight: 800;
+    display: block;
+}
+
+.grade-value.pass { color: #34D399; }
+.grade-value.fail { color: #F87171; }
+
+.pass-status {
+    padding: 12px 20px;
+    border-radius: 12px;
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: white;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.pass-status.passed { background: #10B981; }
+.pass-status.failed { background: #EF4444; }
+
+/* Empty State */
+.empty-grades {
+    text-align: center;
+    padding: 80px 40px;
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+
+.empty-grades .empty-icon {
+    width: 100px;
+    height: 100px;
+    background: linear-gradient(135deg, #F1F5F9, #E2E8F0);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 24px;
+}
+
+.empty-grades .empty-icon i {
+    font-size: 2.5rem;
+    color: #94A3B8;
+}
+
+.empty-grades h3 {
+    color: #1E293B;
+    margin-bottom: 8px;
+}
+
+.empty-grades p {
+    color: #64748B;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .student-profile-card {
+        flex-direction: column;
+        text-align: center;
+    }
+
+    .student-meta {
+        justify-content: center;
+    }
+
+    .grades-summary {
+        flex-direction: column;
+        text-align: center;
+    }
+
+    .summary-stats {
+        justify-content: center;
+    }
+
+    .final-grade {
+        flex-direction: column;
+    }
+
+    .scores-table .label-col {
+        width: 90px;
+        padding-left: 10px;
+        font-size: 0.75rem;
+    }
+
+    .scores-table th,
+    .scores-table td {
+        padding: 8px 4px;
+        font-size: 0.75rem;
+    }
+
+    .score-pill {
+        padding: 3px 6px;
+        font-size: 0.7rem;
+    }
 }
 </style>
 {% endblock %}

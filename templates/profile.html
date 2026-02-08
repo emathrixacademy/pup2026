@@ -1,0 +1,754 @@
+{% extends 'base.html' %}
+
+{% block title %}My Profile - Sangrenes LMS Portal{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1><i class="fas fa-user-cog"></i> My Profile</h1>
+        <p>Manage your account settings and photo</p>
+    </div>
+</div>
+
+<div class="profile-grid">
+    <!-- Left Column - Photo & Basic Info -->
+    <div class="card profile-photo-card">
+        <div class="card-body" style="text-align: center; padding: 2rem;">
+            <img id="current-photo" class="profile-photo-large"
+                 src="{{ url_for('static', filename='uploads/photos/' + (current_user.photo or 'default.png')) }}"
+                 alt="Profile Photo"
+                 onerror="this.src='https://ui-avatars.com/api/?name={{ current_user.full_name }}&background=800000&color=fff&size=180'">
+            <h2 class="profile-name">{{ current_user.full_name }}</h2>
+            <p class="profile-role">{{ current_user.role|capitalize }}</p>
+
+            {% if current_user.student_id %}
+            <div class="profile-badge">
+                <i class="fas fa-id-card"></i> {{ current_user.student_id }}
+            </div>
+            {% endif %}
+
+            {% if current_user.section %}
+            <div class="profile-badge secondary">
+                <i class="fas fa-users"></i> {{ current_user.section }}
+            </div>
+            {% endif %}
+
+            <button type="button" class="btn btn-primary mt-2" id="change-photo-btn">
+                <i class="fas fa-camera"></i> Change Photo
+            </button>
+        </div>
+    </div>
+
+    <!-- Right Column - Details -->
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title"><i class="fas fa-id-card"></i> Account Information</span>
+            {% if current_user.role == 'student' %}
+            <button type="button" class="btn btn-sm btn-primary" onclick="openModal('edit-profile-modal')">
+                <i class="fas fa-edit"></i> Edit Profile
+            </button>
+            {% endif %}
+        </div>
+        <div class="card-body">
+            <div class="info-grid">
+                <div class="info-item">
+                    <label>Username</label>
+                    <p>{{ current_user.username }}</p>
+                </div>
+                <div class="info-item">
+                    <label>Full Name</label>
+                    <p>{{ current_user.full_name }}</p>
+                </div>
+                <div class="info-item">
+                    <label>Email</label>
+                    <p>{{ current_user.email or 'Not set' }}</p>
+                </div>
+                <div class="info-item">
+                    <label>Contact Number</label>
+                    <p>{{ current_user.contact_number or 'Not set' }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if current_user.role == 'student' %}
+    <!-- Developer Accounts -->
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title"><i class="fas fa-code"></i> Developer Accounts</span>
+        </div>
+        <div class="card-body">
+            <div class="info-grid">
+                <div class="info-item">
+                    <label><i class="fab fa-github"></i> GitHub</label>
+                    {% if current_user.github_account %}
+                    <p><a href="https://github.com/{{ current_user.github_account }}" target="_blank" class="account-link">
+                        {{ current_user.github_account }} <i class="fas fa-external-link-alt"></i>
+                    </a></p>
+                    {% else %}
+                    <p class="text-muted">Not set</p>
+                    {% endif %}
+                </div>
+                <div class="info-item">
+                    <label><i class="fas fa-train"></i> Railway</label>
+                    {% if current_user.railway_account %}
+                    <p><a href="https://railway.app/{{ current_user.railway_account }}" target="_blank" class="account-link">
+                        {{ current_user.railway_account }} <i class="fas fa-external-link-alt"></i>
+                    </a></p>
+                    {% else %}
+                    <p class="text-muted">Not set</p>
+                    {% endif %}
+                </div>
+                <div class="info-item full-width">
+                    <label><i class="fab fa-facebook-messenger"></i> Messenger</label>
+                    {% if current_user.messenger %}
+                    <p><a href="{% if 'm.me' in current_user.messenger or 'http' in current_user.messenger %}{{ current_user.messenger }}{% else %}https://m.me/{{ current_user.messenger }}{% endif %}" target="_blank" class="account-link">
+                        {{ current_user.messenger }} <i class="fas fa-external-link-alt"></i>
+                    </a></p>
+                    {% else %}
+                    <p class="text-muted">Not set (Optional)</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- KYS (Know Your Student) Technical Background -->
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title"><i class="fas fa-laptop-code"></i> Technical Background (KYS)</span>
+        </div>
+        <div class="card-body">
+            <div class="kys-grid">
+                <div class="kys-item">
+                    <label><i class="fas fa-code"></i> Programming Languages</label>
+                    {% if current_user.programming_languages %}
+                    <div class="skill-tags">
+                        {% for lang in current_user.programming_languages.split(', ') %}
+                        <span class="skill-tag">{{ lang }}</span>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <p class="text-muted">Not specified</p>
+                    {% endif %}
+                </div>
+                <div class="kys-item">
+                    <label><i class="fas fa-database"></i> Databases</label>
+                    {% if current_user.databases_known %}
+                    <div class="skill-tags">
+                        {% for db in current_user.databases_known.split(', ') %}
+                        <span class="skill-tag db">{{ db }}</span>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <p class="text-muted">Not specified</p>
+                    {% endif %}
+                </div>
+                <div class="kys-item">
+                    <label><i class="fas fa-cloud"></i> Hosting Platforms</label>
+                    {% if current_user.hosting_platforms %}
+                    <div class="skill-tags">
+                        {% for host in current_user.hosting_platforms.split(', ') %}
+                        <span class="skill-tag host">{{ host }}</span>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <p class="text-muted">Not specified</p>
+                    {% endif %}
+                </div>
+                <div class="kys-item">
+                    <label><i class="fas fa-tools"></i> Other Tools & Frameworks</label>
+                    {% if current_user.other_tools %}
+                    <div class="skill-tags">
+                        {% for tool in current_user.other_tools.split(', ') %}
+                        <span class="skill-tag tool">{{ tool }}</span>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <p class="text-muted">Not specified</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Documents -->
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title"><i class="fas fa-file-alt"></i> Uploaded Documents</span>
+        </div>
+        <div class="card-body">
+            <div class="documents-grid">
+                <div class="document-item">
+                    <label><i class="fas fa-id-badge"></i> PUP ID</label>
+                    {% if current_user.pup_id_photo %}
+                    <div class="document-preview">
+                        <img src="{{ url_for('static', filename='uploads/documents/' + current_user.pup_id_photo) }}"
+                             alt="PUP ID" onclick="openImageModal(this.src)">
+                        <span class="document-status verified"><i class="fas fa-check-circle"></i> Uploaded</span>
+                    </div>
+                    {% else %}
+                    <div class="document-placeholder">
+                        <i class="fas fa-image"></i>
+                        <span>Not uploaded</span>
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="document-item">
+                    <label><i class="fas fa-file-alt"></i> Copy of Registration</label>
+                    {% if current_user.cor_photo %}
+                    <div class="document-preview">
+                        <img src="{{ url_for('static', filename='uploads/documents/' + current_user.cor_photo) }}"
+                             alt="COR" onclick="openImageModal(this.src)">
+                        <span class="document-status verified"><i class="fas fa-check-circle"></i> Uploaded</span>
+                    </div>
+                    {% else %}
+                    <div class="document-placeholder">
+                        <i class="fas fa-image"></i>
+                        <span>Not uploaded</span>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Password Change -->
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title"><i class="fas fa-key"></i> Change Password</span>
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('change_password') }}">
+                <div class="form-group">
+                    <label>Current Password</label>
+                    <input type="password" name="current_password" required placeholder="Enter current password">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>New Password</label>
+                        <input type="password" name="new_password" required placeholder="Enter new password" minlength="6">
+                    </div>
+                    <div class="form-group">
+                        <label>Confirm New Password</label>
+                        <input type="password" name="confirm_password" required placeholder="Confirm new password">
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save"></i> Update Password
+                </button>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Photo Change Modal -->
+<div class="modal" id="photo-modal">
+    <div class="modal-content" style="max-width: 550px;">
+        <div class="modal-header">
+            <h3><i class="fas fa-camera"></i> Update Profile Photo</h3>
+            <span class="modal-close" onclick="closeModal('photo-modal')">&times;</span>
+        </div>
+
+        <form method="POST" enctype="multipart/form-data" id="photo-form">
+            <div class="camera-container">
+                <video id="camera-video" class="camera-preview" autoplay playsinline style="display: none;"></video>
+                <canvas id="camera-canvas" style="display: none;"></canvas>
+                <img id="preview-photo" class="camera-preview"
+                     src="{{ url_for('static', filename='uploads/photos/' + (current_user.photo or 'default.png')) }}"
+                     alt="Preview"
+                     onerror="this.src='https://ui-avatars.com/api/?name={{ current_user.full_name }}&background=800000&color=fff&size=200'">
+
+                <div class="camera-controls">
+                    <button type="button" class="btn btn-primary" id="start-camera">
+                        <i class="fas fa-video"></i> Camera
+                    </button>
+                    <button type="button" class="btn btn-success" id="capture-btn" style="display: none;">
+                        <i class="fas fa-camera"></i> Capture
+                    </button>
+                    <button type="button" class="btn btn-secondary" id="retake-btn" style="display: none;">
+                        <i class="fas fa-redo"></i> Retake
+                    </button>
+                </div>
+
+                <p style="color: var(--text-gray); font-size: 0.9rem; margin-top: 1rem;">
+                    <i class="fas fa-upload"></i> Or:
+                    <label class="photo-upload-label">
+                        <input type="file" name="photo" id="photo-upload" accept="image/*" style="display: none;">
+                        Upload Photo
+                    </label>
+                </p>
+            </div>
+
+            <input type="hidden" name="photo_data" id="photo-data">
+
+            <div class="flex gap-1 mt-2">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('photo-modal')" style="flex: 1;">Cancel</button>
+                <button type="submit" class="btn btn-success" id="save-btn" style="flex: 1;" disabled>
+                    <i class="fas fa-save"></i> Save Photo
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if current_user.role == 'student' %}
+<!-- Edit Profile Modal -->
+<div class="modal" id="edit-profile-modal">
+    <div class="modal-content" style="max-width: 600px;">
+        <div class="modal-header">
+            <h3><i class="fas fa-edit"></i> Edit Profile</h3>
+            <span class="modal-close" onclick="closeModal('edit-profile-modal')">&times;</span>
+        </div>
+
+        <form method="POST" action="{{ url_for('update_profile') }}" enctype="multipart/form-data">
+            <div style="padding: 20px; max-height: 70vh; overflow-y: auto;">
+                <div class="form-group">
+                    <label>PUP Student Number</label>
+                    <input type="text" name="student_id" value="{{ current_user.student_id or '' }}"
+                           placeholder="e.g., 2021-00001-SR-0">
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Email Address</label>
+                        <input type="email" name="email" value="{{ current_user.email or '' }}"
+                               placeholder="your.email@example.com">
+                    </div>
+                    <div class="form-group">
+                        <label>Contact Number</label>
+                        <input type="text" name="contact_number" value="{{ current_user.contact_number or '' }}"
+                               placeholder="09XX XXX XXXX">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label><i class="fab fa-github"></i> GitHub Username</label>
+                        <input type="text" name="github_account" value="{{ current_user.github_account or '' }}"
+                               placeholder="your-github-username">
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-train"></i> Railway Username</label>
+                        <input type="text" name="railway_account" value="{{ current_user.railway_account or '' }}"
+                               placeholder="your-railway-username">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label><i class="fab fa-facebook-messenger"></i> Messenger</label>
+                    <input type="text" name="messenger" value="{{ current_user.messenger or '' }}"
+                           placeholder="https://m.me/your.username or username">
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Update PUP ID Photo</label>
+                        <input type="file" name="pup_id" accept="image/*">
+                        {% if current_user.pup_id_photo %}
+                        <small class="text-muted">Current: {{ current_user.pup_id_photo }}</small>
+                        {% endif %}
+                    </div>
+                    <div class="form-group">
+                        <label>Update COR Photo</label>
+                        <input type="file" name="cor" accept="image/*,.pdf">
+                        {% if current_user.cor_photo %}
+                        <small class="text-muted">Current: {{ current_user.cor_photo }}</small>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex gap-1" style="padding: 15px 20px; border-top: 1px solid var(--border-color);">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('edit-profile-modal')" style="flex: 1;">Cancel</button>
+                <button type="submit" class="btn btn-success" style="flex: 1;">
+                    <i class="fas fa-save"></i> Save Changes
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Image Preview Modal -->
+<div class="modal" id="image-modal">
+    <div class="modal-content" style="max-width: 90%; max-height: 90vh; padding: 0;">
+        <span class="modal-close" onclick="closeModal('image-modal')" style="position: absolute; right: 10px; top: 10px; z-index: 10; color: white; background: rgba(0,0,0,0.5); width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center;">&times;</span>
+        <img id="modal-image" src="" alt="Document" style="max-width: 100%; max-height: 85vh; display: block; margin: auto;">
+    </div>
+</div>
+{% endif %}
+
+<style>
+.profile-grid {
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    gap: 1.5rem;
+}
+
+@media (max-width: 900px) {
+    .profile-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.profile-photo-card {
+    height: fit-content;
+}
+
+.profile-photo-large {
+    width: 180px;
+    height: 180px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 4px solid #800000;
+    margin-bottom: 1rem;
+}
+
+.profile-name {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-dark);
+    margin-bottom: 0.25rem;
+}
+
+.profile-role {
+    color: var(--text-gray);
+    margin-bottom: 1rem;
+}
+
+.profile-badge {
+    display: inline-block;
+    background: #800000;
+    color: white;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 0.9rem;
+    margin: 0.25rem;
+}
+
+.profile-badge.secondary {
+    background: #1E3A5F;
+}
+
+.info-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.5rem;
+}
+
+@media (max-width: 600px) {
+    .info-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.info-item {
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.info-item.full-width {
+    grid-column: span 2;
+}
+
+@media (max-width: 600px) {
+    .info-item.full-width {
+        grid-column: span 1;
+    }
+}
+
+.info-item label {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-gray);
+    margin-bottom: 0.5rem;
+}
+
+.info-item p {
+    margin: 0;
+    font-size: 1.05rem;
+    color: var(--text-dark);
+}
+
+.account-link {
+    color: #0EA5E9;
+    text-decoration: none;
+}
+
+.account-link:hover {
+    text-decoration: underline;
+}
+
+.text-muted {
+    color: var(--text-gray);
+}
+
+.kys-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.5rem;
+}
+
+@media (max-width: 700px) {
+    .kys-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.kys-item {
+    padding-bottom: 1rem;
+}
+
+.kys-item label {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-gray);
+    margin-bottom: 0.75rem;
+}
+
+.skill-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.skill-tag {
+    display: inline-block;
+    padding: 6px 12px;
+    background: linear-gradient(135deg, #800000, #a52a2a);
+    color: white;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+.skill-tag.db {
+    background: linear-gradient(135deg, #10B981, #059669);
+}
+
+.skill-tag.host {
+    background: linear-gradient(135deg, #8B5CF6, #7C3AED);
+}
+
+.skill-tag.tool {
+    background: linear-gradient(135deg, #F59E0B, #D97706);
+}
+
+.documents-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.5rem;
+}
+
+@media (max-width: 600px) {
+    .documents-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.document-item label {
+    display: block;
+    font-weight: 600;
+    color: var(--text-dark);
+    margin-bottom: 0.75rem;
+}
+
+.document-preview {
+    position: relative;
+}
+
+.document-preview img {
+    width: 100%;
+    height: 150px;
+    object-fit: cover;
+    border-radius: 8px;
+    border: 2px solid var(--border-color);
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+
+.document-preview img:hover {
+    transform: scale(1.02);
+}
+
+.document-status {
+    display: block;
+    margin-top: 0.5rem;
+    font-size: 0.85rem;
+}
+
+.document-status.verified {
+    color: #10B981;
+}
+
+.document-placeholder {
+    background: #F3F4F6;
+    border: 2px dashed #D1D5DB;
+    border-radius: 8px;
+    height: 150px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #9CA3AF;
+}
+
+.document-placeholder i {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+}
+
+.form-row {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+}
+
+@media (max-width: 500px) {
+    .form-row {
+        grid-template-columns: 1fr;
+    }
+}
+
+.camera-container {
+    text-align: center;
+    padding: 20px;
+}
+
+.camera-preview {
+    width: 200px;
+    height: 200px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 4px solid #800000;
+    margin-bottom: 1rem;
+}
+
+.camera-preview.recording {
+    border-color: #EF4444;
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.5); }
+    50% { box-shadow: 0 0 0 15px rgba(239, 68, 68, 0); }
+}
+
+.camera-controls {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+}
+
+.photo-upload-label {
+    color: #0EA5E9;
+    cursor: pointer;
+    text-decoration: underline;
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const modal = document.getElementById('photo-modal');
+    const changePhotoBtn = document.getElementById('change-photo-btn');
+
+    const video = document.getElementById('camera-video');
+    const canvas = document.getElementById('camera-canvas');
+    const previewPhoto = document.getElementById('preview-photo');
+    const photoData = document.getElementById('photo-data');
+    const startCameraBtn = document.getElementById('start-camera');
+    const captureBtn = document.getElementById('capture-btn');
+    const retakeBtn = document.getElementById('retake-btn');
+    const saveBtn = document.getElementById('save-btn');
+    const photoUpload = document.getElementById('photo-upload');
+
+    let stream = null;
+
+    // Open photo modal
+    changePhotoBtn.addEventListener('click', () => {
+        openModal('photo-modal');
+    });
+
+    // Start camera
+    startCameraBtn.addEventListener('click', async () => {
+        try {
+            stream = await navigator.mediaDevices.getUserMedia({
+                video: { width: { ideal: 640 }, height: { ideal: 640 }, facingMode: 'user' }
+            });
+            video.srcObject = stream;
+            video.style.display = 'block';
+            video.classList.add('recording');
+            previewPhoto.style.display = 'none';
+            startCameraBtn.style.display = 'none';
+            captureBtn.style.display = 'inline-flex';
+        } catch (err) {
+            alert('Camera access denied. Please upload a photo instead.');
+        }
+    });
+
+    // Capture
+    captureBtn.addEventListener('click', () => {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        canvas.getContext('2d').drawImage(video, 0, 0);
+
+        const dataURL = canvas.toDataURL('image/png');
+        photoData.value = dataURL;
+        previewPhoto.src = dataURL;
+
+        if (stream) stream.getTracks().forEach(track => track.stop());
+
+        video.style.display = 'none';
+        video.classList.remove('recording');
+        previewPhoto.style.display = 'block';
+        captureBtn.style.display = 'none';
+        retakeBtn.style.display = 'inline-flex';
+        saveBtn.disabled = false;
+    });
+
+    // Retake
+    retakeBtn.addEventListener('click', async () => {
+        photoData.value = '';
+        saveBtn.disabled = true;
+        try {
+            stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+            video.srcObject = stream;
+            video.style.display = 'block';
+            video.classList.add('recording');
+            previewPhoto.style.display = 'none';
+            retakeBtn.style.display = 'none';
+            captureBtn.style.display = 'inline-flex';
+        } catch (err) {
+            alert('Camera access denied.');
+        }
+    });
+
+    // File upload
+    photoUpload.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                previewPhoto.src = event.target.result;
+                previewPhoto.style.display = 'block';
+                video.style.display = 'none';
+                startCameraBtn.style.display = 'none';
+                captureBtn.style.display = 'none';
+                retakeBtn.style.display = 'inline-flex';
+                saveBtn.disabled = false;
+            };
+            reader.readAsDataURL(file);
+        }
+    });
+
+    // Image modal for documents
+    function openImageModal(src) {
+        document.getElementById('modal-image').src = src;
+        openModal('image-modal');
+    }
+</script>
+{% endblock %}

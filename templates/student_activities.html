@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 
-{% block title %}Activities - Classroom LMS{% endblock %}
+{% block title %}Activities - Sangrenes LMS Portal{% endblock %}
 
 {% block content %}
 <div class="page-header">
@@ -10,42 +10,130 @@
 
 <div class="card">
     <div class="card-header">
-        <span class="card-title">Activities</span>
+        <span class="card-title"><i class="fas fa-tasks"></i> Activities</span>
     </div>
 
     {% if activities %}
     {% for activity in activities %}
-    <div class="question-card">
-        <h4>Activity {{ activity.activity_number }}: {{ activity.title }}</h4>
-        <p>{{ activity.instructions }}</p>
+    <div class="question-card" style="border-left: 4px solid {% if activity.is_active %}#10B981{% else %}#EF4444{% endif %};">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 10px;">
+            <h4 style="margin: 0;">Activity {{ activity.activity_number }}: {{ activity.title }}</h4>
+            {% if not activity.is_active %}
+            <span class="badge badge-danger"><i class="fas fa-lock"></i> Closed</span>
+            {% elif activity.due_date %}
+            <span class="badge badge-warning"><i class="fas fa-clock"></i> Due: {{ activity.due_date }}</span>
+            {% endif %}
+        </div>
+        <p style="margin-top: 0.75rem;">{{ activity.instructions }}</p>
         <p><strong>Points:</strong> {{ activity.points }}</p>
 
         {% if activity.id in submissions %}
-        <div class="mt-20" style="background: #D1FAE5; padding: 15px; border-radius: 6px;">
-            <p><strong>Your Submission:</strong></p>
-            <p>{{ submissions[activity.id].content }}</p>
-            {% if submissions[activity.id].score is not none %}
-            <p><strong>Score:</strong> {{ submissions[activity.id].score }}/{{ activity.points }}</p>
+        <div class="mt-20 submission-box">
+            <p><strong><i class="fas fa-check-circle" style="color: #10B981;"></i> Your Submission:</strong></p>
+            {% if submissions[activity.id].content %}
+            <p style="background: white; padding: 10px; border-radius: 6px; border: 1px solid #E5E7EB;">{{ submissions[activity.id].content }}</p>
+            {% endif %}
+            {% if submissions[activity.id].file_path %}
+            <p>
+                <i class="fas fa-file"></i> <strong>Attached File:</strong>
+                <a href="{{ url_for('static', filename='../uploads/activity_submissions/' + submissions[activity.id].file_path) }}" target="_blank" class="file-link">
+                    {{ submissions[activity.id].file_path.split('/')[-1] }}
+                </a>
+            </p>
+            {% endif %}
+            {% if submissions[activity.id].score is not none and submissions[activity.id].score_visible %}
+            <p><strong>Score:</strong> <span style="font-size: 1.2rem; color: #059669;">{{ submissions[activity.id].score }}/{{ activity.points }}</span></p>
             {% if submissions[activity.id].feedback %}
             <p><strong>Feedback:</strong> {{ submissions[activity.id].feedback }}</p>
             {% endif %}
+            {% elif submissions[activity.id].score is not none %}
+            <p><em style="color: #6B7280;"><i class="fas fa-clock"></i> Score pending release by instructor</em></p>
             {% else %}
-            <p><em>Not yet graded</em></p>
+            <p><em style="color: #6B7280;"><i class="fas fa-hourglass-half"></i> Not yet graded</em></p>
             {% endif %}
         </div>
         {% else %}
-        <form action="{{ url_for('submit_activity', activity_id=activity.id) }}" method="POST" class="mt-20">
+        {% if activity.is_active %}
+        <form action="{{ url_for('submit_activity', activity_id=activity.id) }}" method="POST" enctype="multipart/form-data" class="mt-20 submission-form">
             <div class="form-group">
-                <label>Your Submission</label>
-                <textarea name="content" rows="4" required placeholder="Enter your answer here..."></textarea>
+                <label>Your Answer/Response</label>
+                <textarea name="content" rows="4" placeholder="Enter your answer here..."></textarea>
             </div>
-            <button type="submit" class="btn">Submit Activity</button>
+            <div class="form-group">
+                <label><i class="fas fa-upload"></i> Upload File (Optional)</label>
+                <div class="file-upload-area">
+                    <input type="file" name="submission_file" id="file-{{ activity.id }}" accept=".pdf,.doc,.docx,.txt,.zip,.rar,.png,.jpg,.jpeg">
+                    <p class="file-hint">Supported: PDF, DOC, DOCX, TXT, ZIP, RAR, PNG, JPG (Max 16MB)</p>
+                </div>
+            </div>
+            <button type="submit" class="btn btn-success">
+                <i class="fas fa-paper-plane"></i> Submit Activity
+            </button>
         </form>
+        {% else %}
+        <div class="mt-20" style="background: #FEE2E2; padding: 15px; border-radius: 6px; text-align: center;">
+            <i class="fas fa-lock" style="font-size: 2rem; color: #EF4444; margin-bottom: 0.5rem;"></i>
+            <p style="color: #DC2626; font-weight: 600; margin: 0;">This activity is closed for submissions.</p>
+            <p style="color: #6B7280; font-size: 0.9rem; margin-top: 0.25rem;">The instructor has deactivated this activity.</p>
+        </div>
+        {% endif %}
         {% endif %}
     </div>
     {% endfor %}
     {% else %}
-    <p class="text-center">No activities for this session yet.</p>
+    <p class="text-center" style="padding: 2rem;">No activities for this session yet.</p>
     {% endif %}
 </div>
+
+<style>
+.submission-box {
+    background: #D1FAE5;
+    padding: 15px;
+    border-radius: 6px;
+}
+
+.submission-form {
+    background: #F9FAFB;
+    padding: 20px;
+    border-radius: 8px;
+    border: 1px solid #E5E7EB;
+}
+
+.file-upload-area {
+    border: 2px dashed #D1D5DB;
+    border-radius: 8px;
+    padding: 20px;
+    text-align: center;
+    background: white;
+}
+
+.file-upload-area input[type="file"] {
+    width: 100%;
+}
+
+.file-hint {
+    margin: 0.5rem 0 0 0;
+    font-size: 0.8rem;
+    color: #6B7280;
+}
+
+.file-link {
+    color: #0EA5E9;
+    text-decoration: none;
+}
+
+.file-link:hover {
+    text-decoration: underline;
+}
+
+.badge-danger {
+    background: #EF4444;
+    color: white;
+}
+
+.badge-warning {
+    background: #F59E0B;
+    color: white;
+}
+</style>
 {% endblock %}

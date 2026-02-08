@@ -20,21 +20,37 @@
 
     {% if item.activities %}
         {% for activity in item.activities %}
-        <div class="activity-card">
+        <div class="activity-card {% if not activity.is_active %}activity-inactive{% endif %}">
             <div class="activity-header">
                 <span class="activity-number">Activity {{ activity.activity_number }}</span>
-                <div class="flex gap-10">
+                <div class="flex gap-10" style="align-items: center;">
                     {% if activity.file_path %}
                     <a href="{{ url_for('view_activity_pdf', activity_id=activity.id) }}" target="_blank" class="btn-file">
                         View Activities
                     </a>
                     {% endif %}
                     <span class="activity-points">{{ activity.points }} points</span>
+                    {% if current_user.role == 'instructor' %}
+                    <div class="activity-toggle">
+                        <label class="toggle-switch">
+                            <input type="checkbox" onchange="toggleActivityActive({{ activity.id }})" {% if activity.is_active %}checked{% endif %}>
+                            <span class="toggle-slider"></span>
+                        </label>
+                        {% if activity.is_active %}
+                        <span class="status-badge active"><i class="fas fa-unlock"></i> Open</span>
+                        {% else %}
+                        <span class="status-badge inactive"><i class="fas fa-lock"></i> Closed</span>
+                        {% endif %}
+                    </div>
+                    {% endif %}
                 </div>
             </div>
             <h3 class="activity-title">{{ activity.title }}</h3>
+            {% if activity.due_date %}
+            <p class="due-date"><i class="fas fa-clock"></i> Due: {{ activity.due_date }}</p>
+            {% endif %}
             <div class="activity-instructions">
-                {{ activity.instructions }}
+                {{ activity.instructions | safe }}
             </div>
         </div>
         {% endfor %}
@@ -144,7 +160,76 @@
     color: #374151;
     font-size: 0.95rem;
     line-height: 1.6;
-    white-space: pre-wrap;
+}
+
+.activity-instructions h4 {
+    color: #0EA5E9;
+    margin: 15px 0 10px 0;
+    font-size: 1rem;
+}
+
+.activity-instructions ul, .activity-instructions ol {
+    margin: 0 0 15px 20px;
+    padding: 0;
+}
+
+.activity-instructions li {
+    margin-bottom: 5px;
+}
+
+.activity-instructions .task-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 10px 0 15px 0;
+    font-size: 0.9rem;
+}
+
+.activity-instructions .task-table th {
+    background: #0EA5E9;
+    color: white;
+    padding: 10px 12px;
+    text-align: left;
+    font-weight: 600;
+}
+
+.activity-instructions .task-table th:first-child {
+    width: 60px;
+    text-align: center;
+}
+
+.activity-instructions .task-table th:last-child {
+    width: 80px;
+    text-align: center;
+}
+
+.activity-instructions .task-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid #E0F2FE;
+}
+
+.activity-instructions .task-table td:first-child {
+    text-align: center;
+    font-weight: 600;
+    color: #0EA5E9;
+}
+
+.activity-instructions .task-table td:last-child {
+    text-align: center;
+    font-weight: 600;
+    color: #10B981;
+}
+
+.activity-instructions .task-table tr:hover {
+    background: #F0F9FF;
+}
+
+.activity-instructions .formula-box {
+    background: #FEF3C7;
+    border: 1px solid #F59E0B;
+    border-radius: 8px;
+    padding: 12px 15px;
+    font-family: monospace;
+    margin: 10px 0;
 }
 
 .no-activities {
@@ -152,5 +237,108 @@
     text-align: center;
     padding: 20px;
 }
+
+.activity-inactive {
+    opacity: 0.7;
+    border-color: #FCA5A5;
+    background: #FEF2F2;
+}
+
+.activity-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.status-badge {
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.status-badge.active {
+    background: #D1FAE5;
+    color: #059669;
+}
+
+.status-badge.inactive {
+    background: #FEE2E2;
+    color: #DC2626;
+}
+
+.due-date {
+    color: #F59E0B;
+    font-size: 0.9rem;
+    margin-bottom: 10px;
+}
+
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 40px;
+    height: 22px;
+}
+
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #ccc;
+    transition: .3s;
+    border-radius: 22px;
+}
+
+.toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 16px;
+    width: 16px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: .3s;
+    border-radius: 50%;
+}
+
+input:checked + .toggle-slider {
+    background-color: #10B981;
+}
+
+input:checked + .toggle-slider:before {
+    transform: translateX(18px);
+}
 </style>
+
+{% if current_user.role == 'instructor' %}
+<script>
+async function toggleActivityActive(activityId) {
+    try {
+        const response = await fetch('/api/toggle-visibility', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: 'activity_active', id: activityId })
+        });
+        const data = await response.json();
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Failed to update activity status');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('An error occurred');
+    }
+}
+</script>
+{% endif %}
 {% endblock %}

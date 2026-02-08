@@ -1,26 +1,80 @@
 {% extends 'base.html' %}
 
-{% block title %}Student Dashboard - Classroom LMS{% endblock %}
+{% block title %}Student Dashboard - Sangrenes LMS Portal{% endblock %}
 
 {% block content %}
 <div class="page-header">
-    <h1>Welcome, {{ current_user.full_name }}!</h1>
-</div>
-
-<div class="card">
-    <p><strong>Student ID:</strong> {{ current_user.student_id }}</p>
-    <p><strong>Section:</strong> {{ current_user.section }}</p>
-</div>
-
-<h2 class="mt-20">Available Subjects</h2>
-<div class="dashboard-grid">
-    {% for subject in subjects %}
-    <div class="subject-card">
-        <h3>{{ subject.code }}</h3>
-        <p><strong>{{ subject.name }}</strong></p>
-        <p>{{ subject.description }}</p>
-        <a href="{{ url_for('student_subject', subject_id=subject.id) }}" class="btn btn-sm mt-20">View Subject</a>
+    <div>
+        <h1><i class="fas fa-home"></i> Welcome, {{ current_user.full_name }}!</h1>
+        <p>Access your classes, activities, and grades</p>
     </div>
-    {% endfor %}
+</div>
+
+<!-- Student Info Card -->
+<div class="card" style="margin-bottom: 2rem;">
+    <div class="card-body">
+        <div class="flex gap-2 items-center" style="flex-wrap: wrap;">
+            <img src="{{ url_for('static', filename='uploads/photos/' + (current_user.photo or 'default.png')) }}"
+                 alt="Profile"
+                 style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover; border: 3px solid var(--primary-blue);"
+                 onerror="this.src='https://ui-avatars.com/api/?name={{ current_user.full_name }}&background=0EA5E9&color=fff&size=80'">
+            <div>
+                <h3 style="margin-bottom: 0.25rem;">{{ current_user.full_name }}</h3>
+                <p style="color: var(--text-gray); margin-bottom: 0.5rem;">
+                    <i class="fas fa-id-card"></i> {{ current_user.student_id or 'N/A' }} |
+                    <i class="fas fa-users"></i> {{ current_user.section or 'N/A' }}
+                </p>
+                <span class="badge badge-active"><i class="fas fa-check-circle"></i> Active Student</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Available Subjects -->
+<div class="card">
+    <div class="card-header">
+        <h3><i class="fas fa-book"></i> My Enrolled Subjects</h3>
+    </div>
+    <div class="card-body">
+        {% if subjects %}
+        <div class="dashboard-grid">
+            {% for subject in subjects %}
+            {% set color_class = 'blue' %}
+            {% if subject.code == 'COMP019' %}
+                {% set color_class = 'blue' %}
+            {% elif subject.code == 'COMP012' %}
+                {% set color_class = 'green' %}
+            {% elif subject.code == 'CNS' %}
+                {% set color_class = 'purple' %}
+            {% elif subject.code == 'ES' %}
+                {% set color_class = 'orange' %}
+            {% endif %}
+            <div class="subject-card">
+                <div class="subject-card-header {{ color_class }}">
+                    <span class="schedule-badge">
+                        <i class="fas fa-clock"></i> {{ subject.day }} {{ subject.time_schedule }}
+                    </span>
+                    <h3>{{ subject.code }} - {{ subject.name }}</h3>
+                    <p class="section-info">{{ subject.section }}</p>
+                </div>
+                <div class="subject-card-body">
+                    <a href="{{ url_for('student_subject', subject_id=subject.id) }}" class="btn btn-primary btn-sm">
+                        <i class="fas fa-folder-open"></i> Open
+                    </a>
+                    <a href="{{ url_for('my_grades') }}" class="btn btn-secondary btn-sm">
+                        <i class="fas fa-chart-bar"></i> Grades
+                    </a>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <i class="fas fa-book-open" style="font-size: 3rem; color: var(--text-gray); margin-bottom: 1rem;"></i>
+            <h3 style="color: var(--text-dark); margin-bottom: 0.5rem;">No Enrolled Subjects</h3>
+            <p>You are not yet enrolled in any subjects. Please contact your instructor to be enrolled in your classes.</p>
+        </div>
+        {% endif %}
+    </div>
 </div>
 {% endblock %}

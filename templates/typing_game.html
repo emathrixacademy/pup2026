@@ -1,0 +1,2449 @@
+{% extends 'base.html' %}
+
+{% block title %}Python Code Blaster - Sangrenes LMS Portal{% endblock %}
+
+{% block content %}
+<div class="game-wrapper">
+    <!-- Sound Toggle Button -->
+    <button id="sound-toggle-btn" class="sound-toggle" onclick="toggleSound()" title="Mute Sounds (M)">
+        <i class="fas fa-volume-up"></i>
+    </button>
+
+    <!-- Start Screen -->
+    <div id="start-screen" class="game-screen">
+        <!-- Tab Navigation -->
+        <div class="tab-navigation">
+            <button class="tab-btn active" onclick="switchTab('play')">
+                <i class="fas fa-play-circle"></i> Play
+            </button>
+            <button class="tab-btn" onclick="switchTab('leaderboard')">
+                <i class="fas fa-crown"></i> Leaderboard
+            </button>
+            <button class="tab-btn" onclick="switchTab('profile')">
+                <i class="fas fa-user-astronaut"></i> My Stats
+            </button>
+        </div>
+
+        <!-- Play Tab -->
+        <div id="play-tab" class="tab-content active">
+            <div class="game-logo">
+                <div class="bomb-icon-large">
+                    <i class="fas fa-bomb"></i>
+                </div>
+                <h1 class="game-title">
+                    <span class="title-python">Python</span>
+                    <span class="title-code">Code</span>
+                    <span class="title-blaster">Blaster</span>
+                </h1>
+                <p class="game-tagline">Type Python code before the bomb explodes!</p>
+            </div>
+
+            <div class="difficulty-select">
+                <h3><i class="fas fa-rocket"></i> Select Difficulty</h3>
+                <div class="difficulty-buttons">
+                    <button class="diff-btn easy" onclick="startGame('easy')">
+                        <i class="fas fa-seedling"></i>
+                        <span>Easy</span>
+                        <small>15 seconds</small>
+                    </button>
+                    <button class="diff-btn medium" onclick="startGame('medium')">
+                        <i class="fas fa-fire"></i>
+                        <span>Medium</span>
+                        <small>10 seconds</small>
+                    </button>
+                    <button class="diff-btn hard" onclick="startGame('hard')">
+                        <i class="fas fa-skull-crossbones"></i>
+                        <span>Hard</span>
+                        <small>6 seconds</small>
+                    </button>
+                    <button class="diff-btn insane" onclick="startGame('insane')">
+                        <i class="fas fa-meteor"></i>
+                        <span>Insane</span>
+                        <small>4 seconds</small>
+                    </button>
+                </div>
+            </div>
+
+            <div class="high-score-display">
+                <i class="fas fa-trophy"></i> Your Best: <span id="high-score">0</span>
+            </div>
+
+            <div class="game-instructions">
+                <h4><i class="fas fa-lightbulb"></i> How to Play</h4>
+                <ul>
+                    <li><i class="fas fa-keyboard"></i> Type the Python code exactly as shown</li>
+                    <li><i class="fas fa-stopwatch"></i> Complete before the bomb explodes</li>
+                    <li><i class="fas fa-gem"></i> Earn XP to climb the ranks</li>
+                    <li><i class="fas fa-chart-line"></i> Compete with classmates on the leaderboard</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Leaderboard Tab -->
+        <div id="leaderboard-tab" class="tab-content">
+            <div class="leaderboard-header">
+                <h2><i class="fas fa-crown"></i> Leaderboard</h2>
+                <div class="leaderboard-tabs">
+                    <button class="lb-tab active" onclick="switchLeaderboard('allTime')">
+                        <i class="fas fa-infinity"></i> All Time
+                    </button>
+                    <button class="lb-tab" onclick="switchLeaderboard('weekly')">
+                        <i class="fas fa-calendar-week"></i> This Week
+                    </button>
+                </div>
+            </div>
+
+            <div id="leaderboard-content" class="leaderboard-list">
+                <div class="loading-spinner">
+                    <i class="fas fa-spinner fa-spin"></i> Loading...
+                </div>
+            </div>
+        </div>
+
+        <!-- Profile/Stats Tab -->
+        <div id="profile-tab" class="tab-content">
+            <div class="profile-stats-header">
+                <div class="user-avatar-large" id="user-avatar">
+                    <img src="{{ url_for('static', filename='uploads/photos/' + (current_user.photo or 'default.png')) }}"
+                         alt="Profile"
+                         onerror="this.src='https://ui-avatars.com/api/?name={{ current_user.full_name }}&background=8B5CF6&color=fff&size=120'">
+                </div>
+                <h2 id="user-name-display">{{ current_user.full_name }}</h2>
+                <div class="user-rank-badge" id="user-rank-badge">
+                    <i class="fas fa-medal"></i> <span id="user-rank">Beginner</span>
+                </div>
+            </div>
+
+            <div class="xp-progress-section">
+                <div class="xp-header">
+                    <span><i class="fas fa-bolt"></i> XP Points</span>
+                    <span id="user-xp">0</span>
+                </div>
+                <div class="xp-bar">
+                    <div class="xp-fill" id="xp-fill"></div>
+                </div>
+                <div class="xp-to-next">
+                    <span id="xp-to-next-rank">50 XP to next rank</span>
+                </div>
+            </div>
+
+            <div class="stats-grid-profile">
+                <div class="profile-stat-card">
+                    <div class="stat-icon gold"><i class="fas fa-trophy"></i></div>
+                    <div class="stat-info">
+                        <span>Best Score</span>
+                        <strong id="profile-best-score">0</strong>
+                    </div>
+                </div>
+                <div class="profile-stat-card">
+                    <div class="stat-icon purple"><i class="fas fa-gamepad"></i></div>
+                    <div class="stat-info">
+                        <span>Games Played</span>
+                        <strong id="profile-games">0</strong>
+                    </div>
+                </div>
+                <div class="profile-stat-card">
+                    <div class="stat-icon green"><i class="fas fa-code"></i></div>
+                    <div class="stat-info">
+                        <span>Codes Typed</span>
+                        <strong id="profile-codes">0</strong>
+                    </div>
+                </div>
+                <div class="profile-stat-card">
+                    <div class="stat-icon orange"><i class="fas fa-fire"></i></div>
+                    <div class="stat-info">
+                        <span>Best Streak</span>
+                        <strong id="profile-streak">0</strong>
+                    </div>
+                </div>
+                <div class="profile-stat-card">
+                    <div class="stat-icon blue"><i class="fas fa-layer-group"></i></div>
+                    <div class="stat-info">
+                        <span>Highest Level</span>
+                        <strong id="profile-level">0</strong>
+                    </div>
+                </div>
+                <div class="profile-stat-card">
+                    <div class="stat-icon pink"><i class="fas fa-globe"></i></div>
+                    <div class="stat-info">
+                        <span>Global Rank</span>
+                        <strong id="profile-global-rank">#-</strong>
+                    </div>
+                </div>
+            </div>
+
+            <div class="rank-ladder">
+                <h3><i class="fas fa-stairs"></i> Rank Ladder</h3>
+                <div class="ranks-list">
+                    <div class="rank-item master"><i class="fas fa-dragon"></i> Python Master <span>10,000+ XP</span></div>
+                    <div class="rank-item ninja"><i class="fas fa-user-ninja"></i> Code Ninja <span>5,000+ XP</span></div>
+                    <div class="rank-item senior"><i class="fas fa-laptop-code"></i> Senior Dev <span>2,500+ XP</span></div>
+                    <div class="rank-item dev"><i class="fas fa-code"></i> Developer <span>1,000+ XP</span></div>
+                    <div class="rank-item junior"><i class="fas fa-terminal"></i> Junior Dev <span>500+ XP</span></div>
+                    <div class="rank-item apprentice"><i class="fas fa-book-reader"></i> Apprentice <span>200+ XP</span></div>
+                    <div class="rank-item novice"><i class="fas fa-seedling"></i> Novice <span>50+ XP</span></div>
+                    <div class="rank-item beginner"><i class="fas fa-baby"></i> Beginner <span>0+ XP</span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Game Screen -->
+    <div id="game-screen" class="game-screen" style="display: none;">
+        <div class="game-header">
+            <div class="stat-box score-box">
+                <i class="fas fa-star"></i>
+                <span>Score</span>
+                <strong id="score">0</strong>
+            </div>
+            <div class="stat-box level-box">
+                <i class="fas fa-layer-group"></i>
+                <span>Level</span>
+                <strong id="level">1</strong>
+            </div>
+            <div class="stat-box streak-box">
+                <i class="fas fa-fire-alt"></i>
+                <span>Streak</span>
+                <strong id="streak">0</strong>
+            </div>
+            <div class="stat-box combo-box">
+                <i class="fas fa-bolt"></i>
+                <span>Combo</span>
+                <strong id="combo">x1</strong>
+            </div>
+        </div>
+
+        <div class="bomb-container">
+            <div class="bomb-wrapper" id="bomb-wrapper">
+                <div class="bomb-body" id="bomb-body">
+                    <div class="bomb-face" id="bomb-face">
+                        <div class="bomb-eyes">
+                            <div class="eye left"></div>
+                            <div class="eye right"></div>
+                        </div>
+                        <div class="bomb-mouth" id="bomb-mouth"></div>
+                    </div>
+                    <div class="bomb-fuse" id="bomb-fuse">
+                        <div class="fuse-spark" id="fuse-spark"></div>
+                    </div>
+                </div>
+                <div class="timer-ring" id="timer-ring">
+                    <svg viewBox="0 0 100 100">
+                        <circle class="timer-bg" cx="50" cy="50" r="45"/>
+                        <circle class="timer-progress" id="timer-progress" cx="50" cy="50" r="45"/>
+                    </svg>
+                    <div class="timer-text" id="timer-text">10</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="code-display-area">
+            <div class="code-category" id="code-category">
+                <i class="fas fa-code"></i> <span id="category-text">Basic Print</span>
+            </div>
+            <div class="code-to-type" id="code-to-type">
+                <span class="typed" id="typed-text"></span><span class="cursor">|</span><span class="remaining" id="remaining-text">print("Hello World")</span>
+            </div>
+            <div class="typing-hint" id="typing-hint"></div>
+        </div>
+
+        <div class="input-area">
+            <input type="text" id="type-input" class="type-input" placeholder="Start typing..." autocomplete="off" autocapitalize="off" spellcheck="false">
+            <div class="input-feedback" id="input-feedback"></div>
+        </div>
+
+        <div class="progress-bar-container">
+            <div class="progress-label">Level Progress</div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progress-fill"></div>
+            </div>
+            <div class="progress-text"><span id="codes-completed">0</span> / <span id="codes-needed">5</span> codes</div>
+        </div>
+    </div>
+
+    <!-- Explosion Screen -->
+    <div id="explosion-screen" class="game-screen" style="display: none;">
+        <div class="explosion-animation" id="explosion-animation">
+            <div class="explosion-particles"></div>
+            <div class="explosion-text">BOOM!</div>
+        </div>
+        <div class="game-over-content">
+            <h2><i class="fas fa-ghost"></i> Game Over!</h2>
+
+            <!-- XP Earned Section -->
+            <div class="xp-earned-section" id="xp-earned-section">
+                <div class="xp-earned-icon">
+                    <i class="fas fa-bolt"></i>
+                </div>
+                <div class="xp-earned-text">
+                    <span>XP Earned</span>
+                    <strong id="xp-earned">+0</strong>
+                </div>
+                <div class="rank-display" id="current-rank-display">
+                    <i class="fas fa-medal"></i> <span id="end-rank">Beginner</span>
+                </div>
+            </div>
+
+            <div class="final-stats">
+                <div class="final-stat">
+                    <i class="fas fa-star"></i>
+                    <span>Final Score</span>
+                    <strong id="final-score">0</strong>
+                </div>
+                <div class="final-stat">
+                    <i class="fas fa-layer-group"></i>
+                    <span>Level Reached</span>
+                    <strong id="final-level">1</strong>
+                </div>
+                <div class="final-stat">
+                    <i class="fas fa-code"></i>
+                    <span>Codes Typed</span>
+                    <strong id="total-codes">0</strong>
+                </div>
+                <div class="final-stat">
+                    <i class="fas fa-fire"></i>
+                    <span>Best Streak</span>
+                    <strong id="best-streak">0</strong>
+                </div>
+            </div>
+            <div class="new-high-score" id="new-high-score" style="display: none;">
+                <i class="fas fa-trophy"></i> NEW HIGH SCORE!
+            </div>
+            <div class="game-over-buttons">
+                <button class="play-again-btn" onclick="restartGame()">
+                    <i class="fas fa-redo"></i> Play Again
+                </button>
+                <button class="menu-btn" onclick="showMenu()">
+                    <i class="fas fa-crown"></i> Leaderboard
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Success Animation Overlay -->
+    <div id="success-overlay" class="success-overlay">
+        <div class="success-text">PERFECT!</div>
+        <div class="bonus-points" id="bonus-points">+100</div>
+    </div>
+</div>
+
+<style>
+/* Game Wrapper */
+.game-wrapper {
+    min-height: calc(100vh - 120px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    border-radius: 20px;
+    position: relative;
+    overflow: hidden;
+}
+
+.game-wrapper::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+    pointer-events: none;
+}
+
+/* Sound Toggle Button */
+.sound-toggle {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    font-size: 1.3rem;
+    cursor: pointer;
+    z-index: 100;
+    transition: all 0.3s ease;
+    backdrop-filter: blur(10px);
+}
+
+.sound-toggle:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: scale(1.1);
+}
+
+.sound-toggle:active {
+    transform: scale(0.95);
+}
+
+/* Tab Navigation */
+.tab-navigation {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 25px;
+    background: rgba(255, 255, 255, 0.05);
+    padding: 8px;
+    border-radius: 15px;
+}
+
+.tab-btn {
+    flex: 1;
+    padding: 12px 20px;
+    border: none;
+    border-radius: 10px;
+    background: transparent;
+    color: #a0aec0;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.tab-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+}
+
+.tab-btn.active {
+    background: linear-gradient(135deg, #8B5CF6, #6D28D9);
+    color: white;
+    box-shadow: 0 4px 15px rgba(139, 92, 246, 0.4);
+}
+
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+    animation: fadeIn 0.3s ease;
+}
+
+/* Leaderboard Styles */
+.leaderboard-header {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.leaderboard-header h2 {
+    color: #ffd43b;
+    font-size: 1.8rem;
+    margin-bottom: 15px;
+}
+
+.leaderboard-tabs {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+}
+
+.lb-tab {
+    padding: 10px 25px;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-radius: 25px;
+    background: transparent;
+    color: #a0aec0;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.lb-tab:hover {
+    border-color: #8B5CF6;
+    color: white;
+}
+
+.lb-tab.active {
+    background: linear-gradient(135deg, #ffd43b, #F59E0B);
+    border-color: transparent;
+    color: #1a1a2e;
+}
+
+.leaderboard-list {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.leaderboard-item {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 15px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 15px;
+    margin-bottom: 10px;
+    transition: all 0.3s ease;
+}
+
+.leaderboard-item:hover {
+    background: rgba(255, 255, 255, 0.1);
+    transform: translateX(5px);
+}
+
+.leaderboard-item.current-user {
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.3), rgba(109, 40, 217, 0.3));
+    border: 2px solid #8B5CF6;
+}
+
+.lb-rank {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    font-weight: 800;
+    font-size: 1.1rem;
+}
+
+.lb-rank.gold { background: linear-gradient(135deg, #ffd43b, #F59E0B); color: #1a1a2e; }
+.lb-rank.silver { background: linear-gradient(135deg, #C0C0C0, #A8A8A8); color: #1a1a2e; }
+.lb-rank.bronze { background: linear-gradient(135deg, #CD7F32, #B87333); color: white; }
+.lb-rank.normal { background: rgba(255, 255, 255, 0.1); color: white; }
+
+.lb-avatar {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 3px solid rgba(255, 255, 255, 0.2);
+}
+
+.lb-info {
+    flex: 1;
+}
+
+.lb-name {
+    color: white;
+    font-weight: 600;
+    font-size: 1rem;
+    margin-bottom: 3px;
+}
+
+.lb-section {
+    color: #a0aec0;
+    font-size: 0.8rem;
+}
+
+.lb-score {
+    text-align: right;
+}
+
+.lb-score-value {
+    color: #ffd43b;
+    font-size: 1.3rem;
+    font-weight: 700;
+}
+
+.lb-score-label {
+    color: #a0aec0;
+    font-size: 0.75rem;
+}
+
+/* Profile Stats */
+.profile-stats-header {
+    text-align: center;
+    margin-bottom: 25px;
+}
+
+.user-avatar-large {
+    width: 100px;
+    height: 100px;
+    margin: 0 auto 15px;
+}
+
+.user-avatar-large img {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 4px solid #8B5CF6;
+    box-shadow: 0 0 30px rgba(139, 92, 246, 0.5);
+}
+
+.profile-stats-header h2 {
+    color: white;
+    margin-bottom: 10px;
+}
+
+.user-rank-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 20px;
+    background: linear-gradient(135deg, #8B5CF6, #6D28D9);
+    border-radius: 25px;
+    color: white;
+    font-weight: 600;
+}
+
+.xp-progress-section {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 15px;
+    padding: 20px;
+    margin-bottom: 25px;
+}
+
+.xp-header {
+    display: flex;
+    justify-content: space-between;
+    color: white;
+    margin-bottom: 10px;
+    font-weight: 600;
+}
+
+.xp-header span:last-child {
+    color: #ffd43b;
+}
+
+.xp-bar {
+    height: 12px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    overflow: hidden;
+    margin-bottom: 8px;
+}
+
+.xp-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #8B5CF6, #ffd43b);
+    border-radius: 6px;
+    transition: width 0.5s ease;
+    width: 0%;
+}
+
+.xp-to-next {
+    text-align: center;
+    color: #a0aec0;
+    font-size: 0.85rem;
+}
+
+.stats-grid-profile {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 15px;
+    margin-bottom: 25px;
+}
+
+.profile-stat-card {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 15px;
+    padding: 15px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.stat-icon {
+    width: 45px;
+    height: 45px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+}
+
+.stat-icon.gold { background: linear-gradient(135deg, #ffd43b, #F59E0B); color: #1a1a2e; }
+.stat-icon.purple { background: linear-gradient(135deg, #8B5CF6, #6D28D9); color: white; }
+.stat-icon.green { background: linear-gradient(135deg, #10B981, #059669); color: white; }
+.stat-icon.orange { background: linear-gradient(135deg, #F97316, #EA580C); color: white; }
+.stat-icon.blue { background: linear-gradient(135deg, #0EA5E9, #0284C7); color: white; }
+.stat-icon.pink { background: linear-gradient(135deg, #EC4899, #DB2777); color: white; }
+
+.stat-info span {
+    display: block;
+    color: #a0aec0;
+    font-size: 0.75rem;
+}
+
+.stat-info strong {
+    color: white;
+    font-size: 1.1rem;
+}
+
+/* Rank Ladder */
+.rank-ladder {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 15px;
+    padding: 20px;
+}
+
+.rank-ladder h3 {
+    color: white;
+    margin-bottom: 15px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.ranks-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.rank-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 15px;
+    border-radius: 10px;
+    color: white;
+    font-weight: 500;
+    opacity: 0.6;
+    transition: all 0.3s ease;
+}
+
+.rank-item.current {
+    opacity: 1;
+    transform: scale(1.02);
+    box-shadow: 0 0 20px rgba(255, 255, 255, 0.2);
+}
+
+.rank-item i { margin-right: 10px; }
+.rank-item span { font-size: 0.8rem; opacity: 0.7; }
+
+.rank-item.master { background: linear-gradient(135deg, #ff6b6b, #ee5a24); }
+.rank-item.ninja { background: linear-gradient(135deg, #1e3799, #0c2461); }
+.rank-item.senior { background: linear-gradient(135deg, #8B5CF6, #6D28D9); }
+.rank-item.dev { background: linear-gradient(135deg, #10B981, #059669); }
+.rank-item.junior { background: linear-gradient(135deg, #0EA5E9, #0284C7); }
+.rank-item.apprentice { background: linear-gradient(135deg, #F59E0B, #D97706); }
+.rank-item.novice { background: linear-gradient(135deg, #6B7280, #4B5563); }
+.rank-item.beginner { background: linear-gradient(135deg, #374151, #1F2937); }
+
+/* XP Earned Section */
+.xp-earned-section {
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.3), rgba(109, 40, 217, 0.3));
+    border: 2px solid #8B5CF6;
+    border-radius: 20px;
+    padding: 20px;
+    margin-bottom: 25px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    animation: xpPulse 2s ease-in-out infinite;
+}
+
+@keyframes xpPulse {
+    0%, 100% { box-shadow: 0 0 20px rgba(139, 92, 246, 0.3); }
+    50% { box-shadow: 0 0 40px rgba(139, 92, 246, 0.6); }
+}
+
+.xp-earned-icon {
+    width: 50px;
+    height: 50px;
+    background: linear-gradient(135deg, #ffd43b, #F59E0B);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    color: #1a1a2e;
+}
+
+.xp-earned-text {
+    text-align: center;
+}
+
+.xp-earned-text span {
+    display: block;
+    color: #a0aec0;
+    font-size: 0.85rem;
+}
+
+.xp-earned-text strong {
+    color: #ffd43b;
+    font-size: 2rem;
+    font-weight: 800;
+}
+
+.rank-display {
+    padding: 8px 16px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 20px;
+    color: white;
+    font-weight: 600;
+}
+
+.loading-spinner {
+    text-align: center;
+    padding: 40px;
+    color: #a0aec0;
+    font-size: 1.2rem;
+}
+
+.game-screen {
+    width: 100%;
+    max-width: 800px;
+    position: relative;
+    z-index: 1;
+}
+
+/* Start Screen */
+#start-screen {
+    text-align: center;
+}
+
+.game-logo {
+    margin-bottom: 40px;
+}
+
+.bomb-icon-large {
+    font-size: 5rem;
+    color: #ff6b6b;
+    margin-bottom: 20px;
+    animation: bombPulse 2s ease-in-out infinite;
+    text-shadow: 0 0 30px rgba(255, 107, 107, 0.5);
+}
+
+@keyframes bombPulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+}
+
+.game-title {
+    font-size: 3rem;
+    font-weight: 800;
+    margin-bottom: 10px;
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+
+.title-python {
+    color: #3776ab;
+    text-shadow: 0 0 20px rgba(55, 118, 171, 0.5);
+}
+
+.title-code {
+    color: #ffd43b;
+    text-shadow: 0 0 20px rgba(255, 212, 59, 0.5);
+}
+
+.title-blaster {
+    color: #ff6b6b;
+    text-shadow: 0 0 20px rgba(255, 107, 107, 0.5);
+}
+
+.game-tagline {
+    color: #a0aec0;
+    font-size: 1.2rem;
+}
+
+/* Difficulty Selection */
+.difficulty-select {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 20px;
+    padding: 30px;
+    margin-bottom: 30px;
+    backdrop-filter: blur(10px);
+}
+
+.difficulty-select h3 {
+    color: white;
+    margin-bottom: 20px;
+    font-size: 1.3rem;
+}
+
+.difficulty-buttons {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 15px;
+}
+
+@media (max-width: 700px) {
+    .difficulty-buttons {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+.diff-btn {
+    padding: 20px 15px;
+    border: none;
+    border-radius: 15px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    color: white;
+}
+
+.diff-btn i {
+    font-size: 2rem;
+}
+
+.diff-btn span {
+    font-size: 1.1rem;
+}
+
+.diff-btn small {
+    font-size: 0.8rem;
+    opacity: 0.8;
+}
+
+.diff-btn.easy {
+    background: linear-gradient(135deg, #10B981, #059669);
+}
+
+.diff-btn.medium {
+    background: linear-gradient(135deg, #F59E0B, #D97706);
+}
+
+.diff-btn.hard {
+    background: linear-gradient(135deg, #EF4444, #DC2626);
+}
+
+.diff-btn.insane {
+    background: linear-gradient(135deg, #8B5CF6, #6D28D9);
+}
+
+.diff-btn:hover {
+    transform: translateY(-5px) scale(1.05);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+.high-score-display {
+    color: #ffd43b;
+    font-size: 1.3rem;
+    font-weight: 600;
+    margin-bottom: 30px;
+}
+
+.high-score-display i {
+    margin-right: 10px;
+}
+
+/* Game Instructions */
+.game-instructions {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 15px;
+    padding: 20px 30px;
+    text-align: left;
+}
+
+.game-instructions h4 {
+    color: white;
+    margin-bottom: 15px;
+    font-size: 1.1rem;
+}
+
+.game-instructions ul {
+    list-style: none;
+    color: #a0aec0;
+}
+
+.game-instructions li {
+    padding: 8px 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.game-instructions li i {
+    color: #ffd43b;
+    width: 20px;
+}
+
+.game-instructions kbd {
+    background: rgba(255, 255, 255, 0.2);
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-family: monospace;
+    font-weight: bold;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+/* Game Header */
+.game-header {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 15px;
+    margin-bottom: 30px;
+}
+
+.stat-box {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 15px;
+    padding: 15px;
+    text-align: center;
+    backdrop-filter: blur(10px);
+}
+
+.stat-box i {
+    font-size: 1.5rem;
+    margin-bottom: 5px;
+}
+
+.stat-box span {
+    display: block;
+    font-size: 0.8rem;
+    color: #a0aec0;
+    margin-bottom: 5px;
+}
+
+.stat-box strong {
+    font-size: 1.5rem;
+    color: white;
+}
+
+.score-box i { color: #ffd43b; }
+.level-box i { color: #10B981; }
+.streak-box i { color: #ff6b6b; }
+.combo-box i { color: #8B5CF6; }
+
+/* Bomb Container */
+.bomb-container {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 30px;
+}
+
+.bomb-wrapper {
+    position: relative;
+    width: 180px;
+    height: 180px;
+}
+
+.timer-ring {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.timer-ring svg {
+    width: 100%;
+    height: 100%;
+    transform: rotate(-90deg);
+}
+
+.timer-bg {
+    fill: none;
+    stroke: rgba(255, 255, 255, 0.1);
+    stroke-width: 8;
+}
+
+.timer-progress {
+    fill: none;
+    stroke: #10B981;
+    stroke-width: 8;
+    stroke-linecap: round;
+    stroke-dasharray: 283;
+    stroke-dashoffset: 0;
+    transition: stroke-dashoffset 0.1s linear, stroke 0.3s ease;
+}
+
+.timer-progress.warning {
+    stroke: #F59E0B;
+}
+
+.timer-progress.danger {
+    stroke: #EF4444;
+}
+
+.timer-text {
+    position: absolute;
+    bottom: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: white;
+}
+
+.bomb-body {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 100px;
+    height: 100px;
+    background: linear-gradient(135deg, #2d3748 0%, #1a202c 100%);
+    border-radius: 50%;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), inset 0 -5px 20px rgba(0, 0, 0, 0.3);
+}
+
+.bomb-face {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 80%;
+    height: 80%;
+}
+
+.bomb-eyes {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    margin-top: 20px;
+}
+
+.eye {
+    width: 15px;
+    height: 15px;
+    background: white;
+    border-radius: 50%;
+    position: relative;
+}
+
+.eye::after {
+    content: '';
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    background: #1a202c;
+    border-radius: 50%;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.bomb-mouth {
+    width: 30px;
+    height: 15px;
+    border: 3px solid white;
+    border-top: none;
+    border-radius: 0 0 20px 20px;
+    margin: 15px auto 0;
+}
+
+.bomb-body.worried .bomb-mouth {
+    border-radius: 20px 20px 0 0;
+    border: 3px solid white;
+    border-bottom: none;
+}
+
+.bomb-body.scared .bomb-eyes .eye::after {
+    width: 12px;
+    height: 12px;
+}
+
+.bomb-body.scared .bomb-mouth {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 3px solid white;
+}
+
+.bomb-fuse {
+    position: absolute;
+    top: -20px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 6px;
+    height: 25px;
+    background: linear-gradient(to bottom, #8B4513, #654321);
+    border-radius: 3px;
+}
+
+.fuse-spark {
+    position: absolute;
+    top: -10px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 20px;
+    height: 20px;
+    background: radial-gradient(circle, #ffd43b 0%, #ff6b6b 50%, transparent 70%);
+    border-radius: 50%;
+    animation: sparkle 0.3s ease-in-out infinite;
+}
+
+@keyframes sparkle {
+    0%, 100% { transform: translateX(-50%) scale(1); opacity: 1; }
+    50% { transform: translateX(-50%) scale(1.3); opacity: 0.8; }
+}
+
+.bomb-wrapper.shake {
+    animation: bombShake 0.1s ease-in-out infinite;
+}
+
+@keyframes bombShake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-5px) rotate(-2deg); }
+    75% { transform: translateX(5px) rotate(2deg); }
+}
+
+/* Code Display */
+.code-display-area {
+    background: #1e1e1e;
+    border-radius: 15px;
+    padding: 25px;
+    margin-bottom: 20px;
+    border: 2px solid #333;
+}
+
+.code-category {
+    color: #569cd6;
+    font-size: 0.9rem;
+    margin-bottom: 15px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.code-to-type {
+    font-family: 'Fira Code', 'Consolas', monospace;
+    font-size: 1.5rem;
+    line-height: 1.6;
+    word-break: break-all;
+}
+
+.typed {
+    color: #4ec9b0;
+    background: rgba(78, 201, 176, 0.1);
+}
+
+.cursor {
+    color: #ffd43b;
+    animation: blink 0.8s ease-in-out infinite;
+}
+
+@keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+}
+
+.remaining {
+    color: #808080;
+}
+
+.typing-hint {
+    margin-top: 15px;
+    font-size: 0.85rem;
+    color: #6a9955;
+    font-style: italic;
+    min-height: 20px;
+}
+
+/* Input Area */
+.input-area {
+    position: relative;
+    margin-bottom: 20px;
+}
+
+.type-input {
+    width: 100%;
+    padding: 18px 25px;
+    font-size: 1.3rem;
+    font-family: 'Fira Code', 'Consolas', monospace;
+    border: 3px solid #333;
+    border-radius: 15px;
+    background: #1e1e1e;
+    color: white;
+    outline: none;
+    transition: all 0.3s ease;
+}
+
+.type-input:focus {
+    border-color: #569cd6;
+    box-shadow: 0 0 20px rgba(86, 156, 214, 0.3);
+}
+
+.type-input.correct {
+    border-color: #10B981;
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.3);
+}
+
+.type-input.error {
+    border-color: #EF4444;
+    box-shadow: 0 0 20px rgba(239, 68, 68, 0.3);
+    animation: inputShake 0.3s ease;
+}
+
+@keyframes inputShake {
+    0%, 100% { transform: translateX(0); }
+    20%, 60% { transform: translateX(-5px); }
+    40%, 80% { transform: translateX(5px); }
+}
+
+.input-feedback {
+    position: absolute;
+    right: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 1.5rem;
+}
+
+/* Progress Bar */
+.progress-bar-container {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 15px;
+    padding: 15px 20px;
+}
+
+.progress-label {
+    color: #a0aec0;
+    font-size: 0.85rem;
+    margin-bottom: 10px;
+}
+
+.progress-bar {
+    height: 12px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    overflow: hidden;
+    margin-bottom: 8px;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #10B981, #34D399);
+    border-radius: 6px;
+    transition: width 0.3s ease;
+    width: 0%;
+}
+
+.progress-text {
+    color: white;
+    font-size: 0.9rem;
+    text-align: right;
+}
+
+/* Success Overlay */
+.success-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    z-index: 100;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.success-overlay.show {
+    opacity: 1;
+}
+
+.success-text {
+    font-size: 4rem;
+    font-weight: 800;
+    color: #10B981;
+    text-shadow: 0 0 30px rgba(16, 185, 129, 0.8);
+    animation: successPop 0.5s ease;
+}
+
+.bonus-points {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #ffd43b;
+    text-shadow: 0 0 20px rgba(255, 212, 59, 0.8);
+    margin-top: 10px;
+}
+
+@keyframes successPop {
+    0% { transform: scale(0); opacity: 0; }
+    50% { transform: scale(1.2); }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+/* Explosion Screen */
+#explosion-screen {
+    text-align: center;
+}
+
+.explosion-animation {
+    position: relative;
+    width: 300px;
+    height: 300px;
+    margin: 0 auto 30px;
+}
+
+.explosion-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 5rem;
+    font-weight: 900;
+    color: #ff6b6b;
+    text-shadow: 0 0 50px rgba(255, 107, 107, 0.8);
+    animation: explosionText 1s ease-out;
+}
+
+@keyframes explosionText {
+    0% { transform: translate(-50%, -50%) scale(0); opacity: 0; }
+    50% { transform: translate(-50%, -50%) scale(1.5); }
+    100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+}
+
+.explosion-particles {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 300px;
+    height: 300px;
+    transform: translate(-50%, -50%);
+}
+
+.explosion-particles::before,
+.explosion-particles::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 100%;
+    height: 100%;
+    background: radial-gradient(circle, #ff6b6b 0%, #ffd43b 30%, transparent 70%);
+    border-radius: 50%;
+    animation: explode 1s ease-out forwards;
+}
+
+@keyframes explode {
+    0% { transform: translate(-50%, -50%) scale(0); opacity: 1; }
+    100% { transform: translate(-50%, -50%) scale(2); opacity: 0; }
+}
+
+.game-over-content h2 {
+    color: #ff6b6b;
+    font-size: 2.5rem;
+    margin-bottom: 30px;
+}
+
+.final-stats {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.final-stat {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 15px;
+    padding: 20px;
+    text-align: center;
+}
+
+.final-stat i {
+    font-size: 2rem;
+    color: #ffd43b;
+    margin-bottom: 10px;
+}
+
+.final-stat span {
+    display: block;
+    color: #a0aec0;
+    font-size: 0.9rem;
+    margin-bottom: 5px;
+}
+
+.final-stat strong {
+    font-size: 2rem;
+    color: white;
+}
+
+.new-high-score {
+    background: linear-gradient(135deg, #ffd43b, #F59E0B);
+    color: #1a1a2e;
+    padding: 15px 30px;
+    border-radius: 30px;
+    font-size: 1.3rem;
+    font-weight: 700;
+    margin-bottom: 30px;
+    display: inline-block;
+    animation: highScorePulse 1s ease-in-out infinite;
+}
+
+@keyframes highScorePulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+}
+
+.game-over-buttons {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+}
+
+.play-again-btn, .menu-btn {
+    padding: 15px 40px;
+    border: none;
+    border-radius: 30px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    transition: all 0.3s ease;
+}
+
+.play-again-btn {
+    background: linear-gradient(135deg, #10B981, #059669);
+    color: white;
+}
+
+.menu-btn {
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+}
+
+.play-again-btn:hover, .menu-btn:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+    .game-title {
+        font-size: 2rem;
+    }
+
+    .game-header {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .code-to-type {
+        font-size: 1.1rem;
+    }
+
+    .type-input {
+        font-size: 1rem;
+    }
+
+    .final-stats {
+        grid-template-columns: 1fr;
+    }
+
+    .game-over-buttons {
+        flex-direction: column;
+    }
+
+    .tab-navigation {
+        flex-wrap: wrap;
+    }
+
+    .tab-btn {
+        padding: 10px 15px;
+        font-size: 0.85rem;
+    }
+
+    .tab-btn i {
+        display: none;
+    }
+
+    .stats-grid-profile {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .profile-stat-card {
+        padding: 12px;
+    }
+
+    .stat-icon {
+        width: 35px;
+        height: 35px;
+        font-size: 1rem;
+    }
+
+    .leaderboard-item {
+        padding: 12px;
+    }
+
+    .lb-avatar {
+        width: 40px;
+        height: 40px;
+    }
+
+    .xp-earned-section {
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .ranks-list {
+        font-size: 0.85rem;
+    }
+
+    .rank-item {
+        padding: 8px 12px;
+    }
+}
+
+/* Empty state for leaderboard */
+.empty-leaderboard {
+    text-align: center;
+    padding: 60px 20px;
+}
+</style>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ============== SOUND SYSTEM ==============
+class SoundManager {
+    constructor() {
+        this.audioContext = null;
+        this.enabled = true;
+        this.volume = 0.5;
+        this.initialized = false;
+    }
+
+    init() {
+        if (this.initialized) return;
+        try {
+            this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            this.initialized = true;
+        } catch (e) {
+            console.log('Web Audio API not supported');
+            this.enabled = false;
+        }
+    }
+
+    // Play a tone with given frequency, duration, and type
+    playTone(frequency, duration, type = 'sine', volume = this.volume, decay = true) {
+        if (!this.enabled || !this.audioContext) return;
+
+        const oscillator = this.audioContext.createOscillator();
+        const gainNode = this.audioContext.createGain();
+
+        oscillator.connect(gainNode);
+        gainNode.connect(this.audioContext.destination);
+
+        oscillator.frequency.value = frequency;
+        oscillator.type = type;
+
+        gainNode.gain.setValueAtTime(volume, this.audioContext.currentTime);
+        if (decay) {
+            gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + duration);
+        }
+
+        oscillator.start(this.audioContext.currentTime);
+        oscillator.stop(this.audioContext.currentTime + duration);
+    }
+
+    // Play multiple tones in sequence
+    playSequence(notes, interval = 0.1) {
+        notes.forEach((note, index) => {
+            setTimeout(() => {
+                this.playTone(note.freq, note.duration || 0.1, note.type || 'sine', note.volume || this.volume);
+            }, index * interval * 1000);
+        });
+    }
+
+    // Typing sound - soft mechanical click
+    typeKey() {
+        if (!this.enabled || !this.audioContext) return;
+
+        // Create a short click sound
+        const duration = 0.05;
+        const oscillator = this.audioContext.createOscillator();
+        const gainNode = this.audioContext.createGain();
+
+        oscillator.connect(gainNode);
+        gainNode.connect(this.audioContext.destination);
+
+        oscillator.frequency.setValueAtTime(800, this.audioContext.currentTime);
+        oscillator.frequency.exponentialRampToValueAtTime(400, this.audioContext.currentTime + duration);
+        oscillator.type = 'square';
+
+        gainNode.gain.setValueAtTime(0.1, this.audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + duration);
+
+        oscillator.start();
+        oscillator.stop(this.audioContext.currentTime + duration);
+    }
+
+    // Correct keystroke - pleasant blip
+    correctKey() {
+        this.playTone(880, 0.08, 'sine', 0.15);
+    }
+
+    // Error sound - buzzer
+    errorSound() {
+        this.playTone(200, 0.15, 'sawtooth', 0.3);
+        setTimeout(() => this.playTone(150, 0.15, 'sawtooth', 0.25), 50);
+    }
+
+    // Code completed - success fanfare
+    successSound() {
+        this.playSequence([
+            { freq: 523, duration: 0.1, volume: 0.3 },  // C5
+            { freq: 659, duration: 0.1, volume: 0.3 },  // E5
+            { freq: 784, duration: 0.15, volume: 0.35 }, // G5
+            { freq: 1047, duration: 0.25, volume: 0.4 }  // C6
+        ], 0.08);
+    }
+
+    // Level up - triumphant sound
+    levelUpSound() {
+        this.playSequence([
+            { freq: 392, duration: 0.1, volume: 0.35 },   // G4
+            { freq: 523, duration: 0.1, volume: 0.35 },   // C5
+            { freq: 659, duration: 0.1, volume: 0.35 },   // E5
+            { freq: 784, duration: 0.15, volume: 0.4 },   // G5
+            { freq: 1047, duration: 0.3, volume: 0.45 }   // C6
+        ], 0.1);
+    }
+
+    // Combo increase - power up sound
+    comboSound(multiplier) {
+        const baseFreq = 400 + (multiplier * 100);
+        this.playSequence([
+            { freq: baseFreq, duration: 0.08, type: 'square', volume: 0.2 },
+            { freq: baseFreq * 1.5, duration: 0.12, type: 'square', volume: 0.25 }
+        ], 0.06);
+    }
+
+    // Warning tick - time running low
+    warningTick() {
+        this.playTone(440, 0.08, 'triangle', 0.2);
+    }
+
+    // Danger tick - critical time
+    dangerTick() {
+        this.playTone(330, 0.1, 'square', 0.25);
+    }
+
+    // Explosion sound
+    explosionSound() {
+        if (!this.enabled || !this.audioContext) return;
+
+        // Create noise for explosion
+        const duration = 0.8;
+        const bufferSize = this.audioContext.sampleRate * duration;
+        const buffer = this.audioContext.createBuffer(1, bufferSize, this.audioContext.sampleRate);
+        const data = buffer.getChannelData(0);
+
+        // Fill with noise
+        for (let i = 0; i < bufferSize; i++) {
+            data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / bufferSize, 2);
+        }
+
+        const noise = this.audioContext.createBufferSource();
+        noise.buffer = buffer;
+
+        const filter = this.audioContext.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(1000, this.audioContext.currentTime);
+        filter.frequency.exponentialRampToValueAtTime(100, this.audioContext.currentTime + duration);
+
+        const gainNode = this.audioContext.createGain();
+        gainNode.gain.setValueAtTime(0.6, this.audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + duration);
+
+        noise.connect(filter);
+        filter.connect(gainNode);
+        gainNode.connect(this.audioContext.destination);
+
+        noise.start();
+
+        // Add low rumble
+        this.playTone(60, 0.5, 'sine', 0.4);
+        this.playTone(80, 0.4, 'sine', 0.3);
+    }
+
+    // Game start sound
+    gameStartSound() {
+        this.playSequence([
+            { freq: 262, duration: 0.15, volume: 0.3 },  // C4
+            { freq: 330, duration: 0.15, volume: 0.3 },  // E4
+            { freq: 392, duration: 0.15, volume: 0.3 },  // G4
+            { freq: 523, duration: 0.3, volume: 0.4 }    // C5
+        ], 0.12);
+    }
+
+    // Button click
+    clickSound() {
+        this.playTone(600, 0.05, 'sine', 0.15);
+    }
+
+    // New high score
+    highScoreSound() {
+        const notes = [523, 659, 784, 880, 1047, 1175, 1319, 1568];
+        notes.forEach((freq, i) => {
+            setTimeout(() => {
+                this.playTone(freq, 0.15, 'sine', 0.3);
+            }, i * 80);
+        });
+    }
+
+    toggle() {
+        this.enabled = !this.enabled;
+        return this.enabled;
+    }
+}
+
+// Create global sound manager
+const soundManager = new SoundManager();
+
+// Python code snippets organized by category and difficulty
+const pythonCodes = {
+    easy: [
+        { code: 'print("Hello")', category: 'Output', hint: 'Basic print statement' },
+        { code: 'x = 5', category: 'Variables', hint: 'Assign value to variable' },
+        { code: 'name = "Python"', category: 'Strings', hint: 'String variable' },
+        { code: 'my_list = []', category: 'Lists', hint: 'Empty list' },
+        { code: 'len(items)', category: 'Functions', hint: 'Get length' },
+        { code: 'range(10)', category: 'Functions', hint: 'Generate sequence' },
+        { code: 'str(100)', category: 'Type Conversion', hint: 'Convert to string' },
+        { code: 'int("42")', category: 'Type Conversion', hint: 'Convert to integer' },
+        { code: 'True', category: 'Boolean', hint: 'Boolean true value' },
+        { code: 'False', category: 'Boolean', hint: 'Boolean false value' },
+        { code: 'None', category: 'Special', hint: 'Null value in Python' },
+        { code: 'input()', category: 'Input', hint: 'Get user input' },
+        { code: 'type(x)', category: 'Functions', hint: 'Get type of variable' },
+        { code: 'abs(-5)', category: 'Math', hint: 'Absolute value' },
+        { code: 'max(1, 5)', category: 'Math', hint: 'Maximum value' },
+        { code: 'min(1, 5)', category: 'Math', hint: 'Minimum value' },
+        { code: 'sum([1, 2])', category: 'Math', hint: 'Sum of list' },
+        { code: 'list()', category: 'Type Conversion', hint: 'Create empty list' },
+        { code: 'dict()', category: 'Type Conversion', hint: 'Create empty dict' },
+        { code: 'set()', category: 'Type Conversion', hint: 'Create empty set' },
+    ],
+    medium: [
+        { code: 'for i in range(5):', category: 'Loops', hint: 'For loop with range' },
+        { code: 'while x < 10:', category: 'Loops', hint: 'While loop condition' },
+        { code: 'if x > 5:', category: 'Conditionals', hint: 'If statement' },
+        { code: 'elif x == 3:', category: 'Conditionals', hint: 'Else if statement' },
+        { code: 'else:', category: 'Conditionals', hint: 'Else clause' },
+        { code: 'def my_func():', category: 'Functions', hint: 'Function definition' },
+        { code: 'return value', category: 'Functions', hint: 'Return statement' },
+        { code: 'import random', category: 'Imports', hint: 'Import module' },
+        { code: 'from math import sqrt', category: 'Imports', hint: 'Import specific function' },
+        { code: 'list.append(item)', category: 'Lists', hint: 'Add to list' },
+        { code: 'list.pop()', category: 'Lists', hint: 'Remove last item' },
+        { code: 'string.split()', category: 'Strings', hint: 'Split string' },
+        { code: 'string.strip()', category: 'Strings', hint: 'Remove whitespace' },
+        { code: 'string.lower()', category: 'Strings', hint: 'Lowercase string' },
+        { code: 'string.upper()', category: 'Strings', hint: 'Uppercase string' },
+        { code: '", ".join(list)', category: 'Strings', hint: 'Join list elements' },
+        { code: 'dict.get("key")', category: 'Dictionaries', hint: 'Get dict value' },
+        { code: 'dict.keys()', category: 'Dictionaries', hint: 'Get all keys' },
+        { code: 'dict.values()', category: 'Dictionaries', hint: 'Get all values' },
+        { code: 'x in my_list', category: 'Operators', hint: 'Check membership' },
+        { code: 'not x', category: 'Operators', hint: 'Logical not' },
+        { code: 'x and y', category: 'Operators', hint: 'Logical and' },
+        { code: 'x or y', category: 'Operators', hint: 'Logical or' },
+        { code: 'break', category: 'Control Flow', hint: 'Exit loop' },
+        { code: 'continue', category: 'Control Flow', hint: 'Skip iteration' },
+    ],
+    hard: [
+        { code: 'class MyClass:', category: 'OOP', hint: 'Class definition' },
+        { code: 'def __init__(self):', category: 'OOP', hint: 'Constructor method' },
+        { code: 'self.value = x', category: 'OOP', hint: 'Instance attribute' },
+        { code: 'try:', category: 'Exception', hint: 'Try block' },
+        { code: 'except Exception as e:', category: 'Exception', hint: 'Catch exception' },
+        { code: 'finally:', category: 'Exception', hint: 'Finally block' },
+        { code: 'raise ValueError()', category: 'Exception', hint: 'Raise exception' },
+        { code: 'with open("f.txt") as f:', category: 'File I/O', hint: 'Open file context' },
+        { code: 'f.read()', category: 'File I/O', hint: 'Read file content' },
+        { code: 'f.write("text")', category: 'File I/O', hint: 'Write to file' },
+        { code: '[x for x in range(10)]', category: 'Comprehension', hint: 'List comprehension' },
+        { code: '{k: v for k, v in items}', category: 'Comprehension', hint: 'Dict comprehension' },
+        { code: 'lambda x: x * 2', category: 'Functions', hint: 'Lambda function' },
+        { code: 'map(func, list)', category: 'Functions', hint: 'Map function' },
+        { code: 'filter(func, list)', category: 'Functions', hint: 'Filter function' },
+        { code: '@decorator', category: 'Decorators', hint: 'Decorator syntax' },
+        { code: '*args', category: 'Functions', hint: 'Variable arguments' },
+        { code: '**kwargs', category: 'Functions', hint: 'Keyword arguments' },
+        { code: 'global variable', category: 'Scope', hint: 'Global declaration' },
+        { code: 'assert x == 5', category: 'Testing', hint: 'Assert statement' },
+        { code: 'yield value', category: 'Generators', hint: 'Generator yield' },
+        { code: 'async def fetch():', category: 'Async', hint: 'Async function' },
+        { code: 'await response', category: 'Async', hint: 'Await coroutine' },
+    ],
+    insane: [
+        { code: 'print(f"Value: {x}")', category: 'F-strings', hint: 'Formatted string' },
+        { code: 'isinstance(obj, MyClass)', category: 'OOP', hint: 'Check instance type' },
+        { code: 'super().__init__()', category: 'OOP', hint: 'Call parent init' },
+        { code: 'from typing import List', category: 'Type Hints', hint: 'Import type hint' },
+        { code: 'def func(x: int) -> str:', category: 'Type Hints', hint: 'Function type hints' },
+        { code: 'sorted(items, key=lambda x: x[1])', category: 'Functions', hint: 'Sort with key' },
+        { code: 'enumerate(list)', category: 'Built-ins', hint: 'Get index and value' },
+        { code: 'zip(list1, list2)', category: 'Built-ins', hint: 'Combine iterables' },
+        { code: 'collections.defaultdict(list)', category: 'Collections', hint: 'Default dictionary' },
+        { code: '@staticmethod', category: 'Decorators', hint: 'Static method decorator' },
+        { code: '@classmethod', category: 'Decorators', hint: 'Class method decorator' },
+        { code: '@property', category: 'Decorators', hint: 'Property decorator' },
+        { code: '__name__ == "__main__"', category: 'Special', hint: 'Main guard' },
+        { code: 'os.path.join(dir, file)', category: 'OS', hint: 'Join file paths' },
+        { code: 'json.dumps(data)', category: 'JSON', hint: 'Serialize to JSON' },
+        { code: 'json.loads(string)', category: 'JSON', hint: 'Parse JSON string' },
+        { code: 're.match(pattern, str)', category: 'Regex', hint: 'Match pattern' },
+        { code: 'datetime.now()', category: 'DateTime', hint: 'Current datetime' },
+        { code: 'random.choice(items)', category: 'Random', hint: 'Random selection' },
+        { code: 'threading.Thread(target=fn)', category: 'Threading', hint: 'Create thread' },
+    ]
+};
+
+// Game state
+let gameState = {
+    score: 0,
+    level: 1,
+    streak: 0,
+    bestStreak: 0,
+    combo: 1,
+    totalCodes: 0,
+    codesInLevel: 0,
+    codesNeeded: 5,
+    difficulty: 'medium',
+    timeLimit: 10,
+    timeRemaining: 10,
+    timerInterval: null,
+    currentCode: null,
+    highScore: localStorage.getItem('pythonBlasterHighScore') || 0,
+    isPlaying: false,
+    lastWarningTime: 0,
+    lastDangerTime: 0,
+    previousCombo: 1
+};
+
+// DOM Elements
+const startScreen = document.getElementById('start-screen');
+const gameScreen = document.getElementById('game-screen');
+const explosionScreen = document.getElementById('explosion-screen');
+const typeInput = document.getElementById('type-input');
+const typedText = document.getElementById('typed-text');
+const remainingText = document.getElementById('remaining-text');
+const timerProgress = document.getElementById('timer-progress');
+const timerText = document.getElementById('timer-text');
+const bombWrapper = document.getElementById('bomb-wrapper');
+const bombBody = document.getElementById('bomb-body');
+const successOverlay = document.getElementById('success-overlay');
+
+// Initialize high score display
+document.getElementById('high-score').textContent = gameState.highScore;
+
+// Difficulty settings
+const difficultySettings = {
+    easy: { time: 15, codesNeeded: 5 },
+    medium: { time: 10, codesNeeded: 5 },
+    hard: { time: 6, codesNeeded: 6 },
+    insane: { time: 4, codesNeeded: 7 }
+};
+
+function startGame(difficulty) {
+    // Initialize sound system on first interaction
+    soundManager.init();
+    soundManager.gameStartSound();
+
+    gameState.difficulty = difficulty;
+    gameState.timeLimit = difficultySettings[difficulty].time;
+    gameState.codesNeeded = difficultySettings[difficulty].codesNeeded;
+    gameState.score = 0;
+    gameState.level = 1;
+    gameState.streak = 0;
+    gameState.bestStreak = 0;
+    gameState.combo = 1;
+    gameState.previousCombo = 1;
+    gameState.totalCodes = 0;
+    gameState.codesInLevel = 0;
+    gameState.isPlaying = true;
+    gameState.lastWarningTime = 0;
+    gameState.lastDangerTime = 0;
+
+    updateStats();
+
+    startScreen.style.display = 'none';
+    explosionScreen.style.display = 'none';
+    gameScreen.style.display = 'block';
+
+    loadNextCode();
+    typeInput.focus();
+}
+
+function loadNextCode() {
+    // Determine difficulty pool based on level
+    let pool = [];
+    if (gameState.level <= 2) {
+        pool = [...pythonCodes.easy];
+    } else if (gameState.level <= 4) {
+        pool = [...pythonCodes.easy, ...pythonCodes.medium];
+    } else if (gameState.level <= 6) {
+        pool = [...pythonCodes.medium, ...pythonCodes.hard];
+    } else {
+        pool = [...pythonCodes.hard, ...pythonCodes.insane];
+    }
+
+    // Mix in difficulty-specific codes
+    if (gameState.difficulty === 'hard' || gameState.difficulty === 'insane') {
+        pool = [...pool, ...pythonCodes.hard, ...pythonCodes.insane];
+    }
+
+    // Pick random code
+    gameState.currentCode = pool[Math.floor(Math.random() * pool.length)];
+
+    // Update display
+    typedText.textContent = '';
+    remainingText.textContent = gameState.currentCode.code;
+    document.getElementById('category-text').textContent = gameState.currentCode.category;
+    document.getElementById('typing-hint').textContent = '💡 ' + gameState.currentCode.hint;
+    typeInput.value = '';
+    typeInput.className = 'type-input';
+    document.getElementById('input-feedback').textContent = '';
+
+    // Reset bomb state
+    bombBody.className = 'bomb-body';
+    bombWrapper.classList.remove('shake');
+
+    // Reset and start timer
+    gameState.timeRemaining = gameState.timeLimit;
+    updateTimerDisplay();
+    startTimer();
+}
+
+function startTimer() {
+    clearInterval(gameState.timerInterval);
+
+    gameState.timerInterval = setInterval(() => {
+        gameState.timeRemaining -= 0.1;
+        updateTimerDisplay();
+
+        if (gameState.timeRemaining <= 0) {
+            gameOver();
+        }
+    }, 100);
+}
+
+function updateTimerDisplay() {
+    const progress = (gameState.timeRemaining / gameState.timeLimit) * 283;
+    timerProgress.style.strokeDashoffset = 283 - progress;
+    timerText.textContent = Math.ceil(gameState.timeRemaining);
+
+    // Update bomb expression and timer color based on time
+    const timePercent = gameState.timeRemaining / gameState.timeLimit;
+    const currentSecond = Math.ceil(gameState.timeRemaining);
+
+    if (timePercent > 0.5) {
+        timerProgress.className = 'timer-progress';
+        bombBody.className = 'bomb-body';
+        bombWrapper.classList.remove('shake');
+    } else if (timePercent > 0.25) {
+        timerProgress.className = 'timer-progress warning';
+        bombBody.className = 'bomb-body worried';
+        bombWrapper.classList.remove('shake');
+
+        // Play warning tick every second
+        if (currentSecond !== gameState.lastWarningTime && currentSecond > 0) {
+            gameState.lastWarningTime = currentSecond;
+            soundManager.warningTick();
+        }
+    } else {
+        timerProgress.className = 'timer-progress danger';
+        bombBody.className = 'bomb-body scared';
+        bombWrapper.classList.add('shake');
+
+        // Play danger tick every second (more urgent)
+        if (currentSecond !== gameState.lastDangerTime && currentSecond > 0) {
+            gameState.lastDangerTime = currentSecond;
+            soundManager.dangerTick();
+        }
+    }
+}
+
+function updateStats() {
+    document.getElementById('score').textContent = gameState.score;
+    document.getElementById('level').textContent = gameState.level;
+    document.getElementById('streak').textContent = gameState.streak;
+    document.getElementById('combo').textContent = 'x' + gameState.combo;
+    document.getElementById('codes-completed').textContent = gameState.codesInLevel;
+    document.getElementById('codes-needed').textContent = gameState.codesNeeded;
+    document.getElementById('progress-fill').style.width =
+        (gameState.codesInLevel / gameState.codesNeeded * 100) + '%';
+}
+
+// Input handling
+typeInput.addEventListener('input', function() {
+    const typed = this.value;
+    const target = gameState.currentCode.code;
+
+    if (target.startsWith(typed)) {
+        // Correct so far - play typing sound
+        soundManager.typeKey();
+        soundManager.correctKey();
+
+        typedText.textContent = typed;
+        remainingText.textContent = target.slice(typed.length);
+        this.className = 'type-input correct';
+        document.getElementById('input-feedback').textContent = '✓';
+
+        if (typed === target) {
+            codeCompleted();
+        }
+    } else {
+        // Error - play error sound
+        soundManager.errorSound();
+
+        this.className = 'type-input error';
+        document.getElementById('input-feedback').textContent = '✗';
+        gameState.streak = 0;
+        gameState.combo = 1;
+        gameState.previousCombo = 1;
+        updateStats();
+    }
+});
+
+function codeCompleted() {
+    clearInterval(gameState.timerInterval);
+
+    // Play success sound
+    soundManager.successSound();
+
+    // Calculate bonus points
+    const timeBonus = Math.floor(gameState.timeRemaining * 10);
+    const streakBonus = gameState.streak * 5;
+    const basePoints = 100 * gameState.combo;
+    const totalPoints = basePoints + timeBonus + streakBonus;
+
+    gameState.score += totalPoints;
+    gameState.streak++;
+    gameState.totalCodes++;
+    gameState.codesInLevel++;
+
+    if (gameState.streak > gameState.bestStreak) {
+        gameState.bestStreak = gameState.streak;
+    }
+
+    // Update combo multiplier
+    gameState.previousCombo = gameState.combo;
+    if (gameState.streak >= 10) gameState.combo = 4;
+    else if (gameState.streak >= 5) gameState.combo = 3;
+    else if (gameState.streak >= 3) gameState.combo = 2;
+    else gameState.combo = 1;
+
+    // Play combo sound if combo increased
+    if (gameState.combo > gameState.previousCombo) {
+        setTimeout(() => soundManager.comboSound(gameState.combo), 300);
+    }
+
+    // Show success animation
+    showSuccess(totalPoints);
+
+    // Check level up
+    if (gameState.codesInLevel >= gameState.codesNeeded) {
+        levelUp();
+    }
+
+    updateStats();
+
+    // Load next code after brief delay
+    setTimeout(() => {
+        if (gameState.isPlaying) {
+            loadNextCode();
+        }
+    }, 500);
+}
+
+function showSuccess(points) {
+    document.getElementById('bonus-points').textContent = '+' + points;
+    successOverlay.classList.add('show');
+
+    setTimeout(() => {
+        successOverlay.classList.remove('show');
+    }, 400);
+}
+
+function levelUp() {
+    gameState.level++;
+    gameState.codesInLevel = 0;
+
+    // Play level up sound
+    setTimeout(() => soundManager.levelUpSound(), 400);
+
+    // Slightly decrease time limit for harder levels (minimum 3 seconds)
+    if (gameState.timeLimit > 3) {
+        gameState.timeLimit = Math.max(3, gameState.timeLimit - 0.5);
+    }
+}
+
+function gameOver() {
+    clearInterval(gameState.timerInterval);
+    gameState.isPlaying = false;
+
+    // Play explosion sound
+    soundManager.explosionSound();
+
+    // Check high score
+    const isNewHighScore = gameState.score > gameState.highScore;
+    if (isNewHighScore) {
+        gameState.highScore = gameState.score;
+        localStorage.setItem('pythonBlasterHighScore', gameState.highScore);
+        // Play high score sound after explosion
+        setTimeout(() => soundManager.highScoreSound(), 800);
+    }
+
+    // Update final stats
+    document.getElementById('final-score').textContent = gameState.score;
+    document.getElementById('final-level').textContent = gameState.level;
+    document.getElementById('total-codes').textContent = gameState.totalCodes;
+    document.getElementById('best-streak').textContent = gameState.bestStreak;
+    document.getElementById('high-score').textContent = gameState.highScore;
+
+    if (isNewHighScore) {
+        document.getElementById('new-high-score').style.display = 'inline-block';
+    } else {
+        document.getElementById('new-high-score').style.display = 'none';
+    }
+
+    // Show explosion
+    gameScreen.style.display = 'none';
+    explosionScreen.style.display = 'block';
+}
+
+function restartGame() {
+    soundManager.clickSound();
+    startGame(gameState.difficulty);
+}
+
+function showMenu() {
+    soundManager.clickSound();
+    explosionScreen.style.display = 'none';
+    gameScreen.style.display = 'none';
+    startScreen.style.display = 'block';
+
+    // Show leaderboard tab
+    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+    document.querySelectorAll('.tab-btn')[1].classList.add('active');
+    document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+    document.getElementById('leaderboard-tab').classList.add('active');
+    loadLeaderboard();
+}
+
+function toggleSound() {
+    const enabled = soundManager.toggle();
+    const btn = document.getElementById('sound-toggle-btn');
+    if (btn) {
+        btn.innerHTML = enabled ?
+            '<i class="fas fa-volume-up"></i>' :
+            '<i class="fas fa-volume-mute"></i>';
+        btn.title = enabled ? 'Mute Sounds' : 'Unmute Sounds';
+    }
+    if (enabled) {
+        soundManager.clickSound();
+    }
+}
+
+// Prevent form submission
+typeInput.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+    }
+});
+
+// Add keyboard shortcut for sound toggle (M key)
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'm' || e.key === 'M') {
+        if (!gameState.isPlaying || document.activeElement !== typeInput) {
+            toggleSound();
+        }
+    }
+});
+
+// ============== TAB SYSTEM ==============
+function switchTab(tabName) {
+    soundManager.init();
+    soundManager.clickSound();
+
+    // Update tab buttons
+    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+    event.target.closest('.tab-btn').classList.add('active');
+
+    // Update tab content
+    document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+    document.getElementById(tabName + '-tab').classList.add('active');
+
+    // Load data if needed
+    if (tabName === 'leaderboard') {
+        loadLeaderboard();
+    } else if (tabName === 'profile') {
+        loadUserStats();
+    }
+}
+
+// ============== LEADERBOARD ==============
+let currentLeaderboardType = 'allTime';
+let leaderboardData = null;
+
+function switchLeaderboard(type) {
+    soundManager.clickSound();
+    currentLeaderboardType = type;
+
+    document.querySelectorAll('.lb-tab').forEach(btn => btn.classList.remove('active'));
+    event.target.classList.add('active');
+
+    renderLeaderboard();
+}
+
+async function loadLeaderboard() {
+    const container = document.getElementById('leaderboard-content');
+    container.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> Loading...</div>';
+
+    try {
+        const response = await fetch('/api/game/leaderboard');
+        leaderboardData = await response.json();
+        renderLeaderboard();
+        updateUserProfile(leaderboardData);
+    } catch (error) {
+        container.innerHTML = '<div class="loading-spinner"><i class="fas fa-exclamation-circle"></i> Failed to load</div>';
+    }
+}
+
+function renderLeaderboard() {
+    const container = document.getElementById('leaderboard-content');
+    const data = currentLeaderboardType === 'allTime' ? leaderboardData?.allTime : leaderboardData?.weekly;
+
+    if (!data || data.length === 0) {
+        container.innerHTML = `
+            <div class="empty-leaderboard">
+                <i class="fas fa-trophy" style="font-size: 3rem; color: #ffd43b; margin-bottom: 15px;"></i>
+                <p style="color: #a0aec0;">No scores yet. Be the first to play!</p>
+            </div>
+        `;
+        return;
+    }
+
+    const currentUserId = leaderboardData.currentUser.id;
+
+    container.innerHTML = data.map((player, index) => {
+        const rankClass = index === 0 ? 'gold' : index === 1 ? 'silver' : index === 2 ? 'bronze' : 'normal';
+        const isCurrentUser = player.id === currentUserId;
+        const photoUrl = player.photo ?
+            `/static/uploads/photos/${player.photo}` :
+            `https://ui-avatars.com/api/?name=${encodeURIComponent(player.full_name)}&background=8B5CF6&color=fff`;
+
+        return `
+            <div class="leaderboard-item ${isCurrentUser ? 'current-user' : ''}">
+                <div class="lb-rank ${rankClass}">
+                    ${index < 3 ? '<i class="fas fa-crown"></i>' : index + 1}
+                </div>
+                <img src="${photoUrl}" alt="${player.full_name}" class="lb-avatar"
+                     onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(player.full_name)}&background=8B5CF6&color=fff'">
+                <div class="lb-info">
+                    <div class="lb-name">${player.full_name} ${isCurrentUser ? '(You)' : ''}</div>
+                    <div class="lb-section">${player.section || 'No section'}</div>
+                </div>
+                <div class="lb-score">
+                    <div class="lb-score-value">${(player.highest_score || 0).toLocaleString()}</div>
+                    <div class="lb-score-label">points</div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+// ============== USER STATS ==============
+function loadUserStats() {
+    if (leaderboardData) {
+        updateUserProfile(leaderboardData);
+    } else {
+        loadLeaderboard();
+    }
+}
+
+function updateUserProfile(data) {
+    if (!data.userStats) return;
+
+    const stats = data.userStats;
+    const xp = stats.xp_points || 0;
+
+    // Update profile stats
+    document.getElementById('user-xp').textContent = xp.toLocaleString();
+    document.getElementById('user-rank').textContent = stats.current_rank || 'Beginner';
+    document.getElementById('profile-best-score').textContent = (stats.highest_score || 0).toLocaleString();
+    document.getElementById('profile-games').textContent = stats.total_games || 0;
+    document.getElementById('profile-codes').textContent = stats.total_codes_typed || 0;
+    document.getElementById('profile-streak').textContent = stats.best_streak || 0;
+    document.getElementById('profile-level').textContent = stats.highest_level || 0;
+    document.getElementById('profile-global-rank').textContent = '#' + (stats.global_rank || '-');
+
+    // Update XP bar
+    const rankThresholds = [
+        { rank: 'Beginner', min: 0, max: 50 },
+        { rank: 'Novice', min: 50, max: 200 },
+        { rank: 'Apprentice', min: 200, max: 500 },
+        { rank: 'Junior Dev', min: 500, max: 1000 },
+        { rank: 'Developer', min: 1000, max: 2500 },
+        { rank: 'Senior Dev', min: 2500, max: 5000 },
+        { rank: 'Code Ninja', min: 5000, max: 10000 },
+        { rank: 'Python Master', min: 10000, max: 999999 }
+    ];
+
+    const currentRankData = rankThresholds.find(r => xp >= r.min && xp < r.max) || rankThresholds[0];
+    const progress = ((xp - currentRankData.min) / (currentRankData.max - currentRankData.min)) * 100;
+
+    document.getElementById('xp-fill').style.width = Math.min(progress, 100) + '%';
+    document.getElementById('xp-to-next-rank').textContent =
+        currentRankData.max < 999999 ?
+        `${(currentRankData.max - xp).toLocaleString()} XP to ${rankThresholds[rankThresholds.indexOf(currentRankData) + 1]?.rank || 'Max'}` :
+        'Max Rank Achieved!';
+
+    // Highlight current rank in ladder
+    document.querySelectorAll('.rank-item').forEach(item => item.classList.remove('current'));
+    const rankClass = (stats.current_rank || 'Beginner').toLowerCase().replace(' ', '-');
+    const rankElement = document.querySelector(`.rank-item.${rankClass.split(' ')[0]}`);
+    if (rankElement) rankElement.classList.add('current');
+}
+
+// ============== SAVE SCORE ==============
+async function saveScore() {
+    try {
+        const response = await fetch('/api/game/save-score', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                score: gameState.score,
+                level: gameState.level,
+                codesTyped: gameState.totalCodes,
+                bestStreak: gameState.bestStreak,
+                difficulty: gameState.difficulty
+            })
+        });
+
+        const data = await response.json();
+        if (data.success) {
+            document.getElementById('xp-earned').textContent = '+' + data.xp_earned;
+            document.getElementById('end-rank').textContent = data.rank;
+        }
+    } catch (error) {
+        console.error('Failed to save score:', error);
+    }
+}
+
+// Override gameOver to save score
+const originalGameOver = gameOver;
+gameOver = function() {
+    originalGameOver();
+    saveScore();
+};
+
+// Load leaderboard on page load
+document.addEventListener('DOMContentLoaded', function() {
+    // Preload leaderboard data
+    setTimeout(() => {
+        fetch('/api/game/leaderboard')
+            .then(res => res.json())
+            .then(data => {
+                leaderboardData = data;
+                if (data.userStats) {
+                    document.getElementById('high-score').textContent =
+                        (data.userStats.highest_score || 0).toLocaleString();
+                }
+            })
+            .catch(() => {});
+    }, 500);
+});
+</script>
+{% endblock %}
