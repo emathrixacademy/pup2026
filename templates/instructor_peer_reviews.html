@@ -78,6 +78,12 @@
                     </td>
                     <td>
                         <div class="btn-group">
+                            <form action="{{ url_for('assign_peer_reviewers', activity_id=activity.id) }}" method="POST" style="display:inline;"
+                                  onsubmit="return confirm('Randomly assign peer reviewers for this activity? Completed reviews will be preserved.')">
+                                <button type="submit" class="btn btn-sm btn-violet" title="Assign Reviewers">
+                                    <i class="fas fa-random"></i> Assign
+                                </button>
+                            </form>
                             <a href="{{ url_for('peer_review_settings', activity_id=activity.id) }}" class="btn btn-sm btn-primary" title="Settings">
                                 <i class="fas fa-cog"></i>
                             </a>
