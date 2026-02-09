@@ -1309,8 +1309,43 @@ def subject_detail(id):
     subject = cursor.fetchone()
     cursor.execute('SELECT * FROM sessions WHERE subject_id = ? ORDER BY session_number', (id,))
     sessions = cursor.fetchall()
+
+    # Get enrolled students with photos
+    cursor.execute('''
+        SELECT u.id, u.full_name, u.photo FROM users u
+        JOIN enrollments e ON u.id = e.student_id
+        WHERE e.subject_id = ?
+        ORDER BY u.full_name
+    ''', (id,))
+    enrolled_students = cursor.fetchall()
+    total_enrolled = len(enrolled_students)
+
+    # Get per-session completion stats: which students submitted for each session
+    session_stats = {}
+    for s in sessions:
+        cursor.execute('''
+            SELECT DISTINCT u.id, u.full_name, u.photo
+            FROM submissions sub
+            JOIN activities a ON sub.activity_id = a.id
+            JOIN users u ON sub.student_id = u.id
+            WHERE a.session_id = ?
+            ORDER BY u.full_name
+        ''', (s['id'],))
+        completed_students = [dict(st) for st in cursor.fetchall()]
+
+        cursor.execute('SELECT COUNT(*) FROM activities WHERE session_id = ?', (s['id'],))
+        activity_count = cursor.fetchone()[0]
+
+        session_stats[s['id']] = {
+            'completed_students': completed_students,
+            'completed_count': len(completed_students),
+            'activity_count': activity_count
+        }
+
     conn.close()
-    return render_template('sessions.html', subject=subject, sessions=sessions)
+    return render_template('sessions.html', subject=subject, sessions=sessions,
+                           enrolled_students=enrolled_students, total_enrolled=total_enrolled,
+                           session_stats=session_stats)
 
 # ==================== ACTIVITIES ====================
 

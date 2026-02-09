@@ -22,6 +22,25 @@
     </div>
 </div>
 
+{% if current_user.role == 'instructor' and total_enrolled > 0 %}
+<div class="enrolled-bar">
+    <div class="enrolled-header">
+        <span><i class="fas fa-users"></i> Enrolled Students ({{ total_enrolled }})</span>
+    </div>
+    <div class="enrolled-avatars">
+        {% for student in enrolled_students[:20] %}
+        <div class="avatar-chip" title="{{ student.full_name }}">
+            <img src="/static/uploads/photos/{{ student.photo or 'default.png' }}" alt="{{ student.full_name }}" onerror="this.src='/static/uploads/photos/default.png'">
+            <span class="avatar-name">{{ student.full_name.split(' ')[0] }}</span>
+        </div>
+        {% endfor %}
+        {% if total_enrolled > 20 %}
+        <div class="avatar-more">+{{ total_enrolled - 20 }} more</div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
 <div class="card">
     <div class="card-header">
         <h3><i class="fas fa-list"></i> Sessions ({{ sessions|length }})</h3>
@@ -32,10 +51,11 @@
     <div class="card-body" style="padding: 0;">
         <ul class="session-list" style="padding: 1rem;">
             {% for session in sessions %}
+            {% set stats = session_stats.get(session.id, {}) if session_stats is defined else {} %}
             <li class="session-item">
                 <div class="session-info">
                     <div class="session-number">{{ session.session_number }}</div>
-                    <div>
+                    <div class="session-details">
                         <div class="session-title">{{ session.title }}</div>
                         <div class="session-meta">
                             {% if session.is_visible %}
@@ -44,6 +64,27 @@
                                 <span class="badge badge-hidden"><i class="fas fa-eye-slash"></i> Hidden</span>
                             {% endif %}
                         </div>
+                        {% if current_user.role == 'instructor' and stats %}
+                        <div class="session-completion">
+                            {% if stats.completed_students %}
+                            <div class="completion-avatars">
+                                {% for st in stats.completed_students[:8] %}
+                                <img class="mini-avatar" src="/static/uploads/photos/{{ st.photo or 'default.png' }}" alt="{{ st.full_name }}" title="{{ st.full_name }}" onerror="this.src='/static/uploads/photos/default.png'">
+                                {% endfor %}
+                                {% if stats.completed_count > 8 %}
+                                <span class="mini-avatar-more" title="{{ stats.completed_count }} students completed">+{{ stats.completed_count - 8 }}</span>
+                                {% endif %}
+                            </div>
+                            <span class="completion-count">
+                                <i class="fas fa-check-circle"></i> {{ stats.completed_count }}/{{ total_enrolled }} completed
+                            </span>
+                            {% else %}
+                            <span class="completion-count none">
+                                <i class="fas fa-clock"></i> No submissions yet
+                            </span>
+                            {% endif %}
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
                 <div class="session-actions">
@@ -72,6 +113,148 @@
         </ul>
     </div>
 </div>
+
+<style>
+/* Enrolled Students Bar */
+.enrolled-bar {
+    background: white;
+    border-radius: 12px;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1.25rem;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    border-left: 4px solid #8B5CF6;
+}
+
+.enrolled-header {
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 0.75rem;
+    font-size: 0.95rem;
+}
+
+.enrolled-header i {
+    color: #8B5CF6;
+    margin-right: 6px;
+}
+
+.enrolled-avatars {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+
+.avatar-chip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: #F3F4F6;
+    border-radius: 20px;
+    padding: 4px 10px 4px 4px;
+    transition: background 0.2s;
+}
+
+.avatar-chip:hover {
+    background: #EDE9FE;
+}
+
+.avatar-chip img {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid white;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.avatar-name {
+    font-size: 0.8rem;
+    color: #4B5563;
+    font-weight: 500;
+    max-width: 80px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.avatar-more {
+    background: #8B5CF6;
+    color: white;
+    border-radius: 20px;
+    padding: 6px 12px;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+/* Session Completion Row */
+.session-details {
+    flex: 1;
+}
+
+.session-completion {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 6px;
+}
+
+.completion-avatars {
+    display: flex;
+    align-items: center;
+}
+
+.mini-avatar {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid white;
+    margin-left: -8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+    transition: transform 0.2s;
+}
+
+.mini-avatar:first-child {
+    margin-left: 0;
+}
+
+.mini-avatar:hover {
+    transform: scale(1.2);
+    z-index: 2;
+    position: relative;
+}
+
+.mini-avatar-more {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: #8B5CF6;
+    color: white;
+    font-size: 0.65rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: -8px;
+    border: 2px solid white;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+}
+
+.completion-count {
+    font-size: 0.8rem;
+    color: #059669;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.completion-count i {
+    margin-right: 3px;
+}
+
+.completion-count.none {
+    color: #9CA3AF;
+}
+</style>
 {% endblock %}
 
 {% block extra_js %}
