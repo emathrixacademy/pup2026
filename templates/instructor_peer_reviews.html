@@ -36,12 +36,41 @@
 </div>
 
 {% if activities %}
+<!-- Filter Bar -->
+<div class="pr-filter-bar">
+    <div class="pr-filter-group">
+        <label><i class="fas fa-filter"></i> Filter:</label>
+        <select id="filterPRSubject" onchange="filterPRActivities()">
+            <option value="">All Subjects</option>
+            {% set seen = [] %}
+            {% for activity in activities %}
+            {% if activity.subject_name not in seen %}
+            {% if seen.append(activity.subject_name) %}{% endif %}
+            <option value="{{ activity.subject_name }}">{{ activity.subject_name }}</option>
+            {% endif %}
+            {% endfor %}
+        </select>
+        <select id="filterPRSection" onchange="filterPRActivities()">
+            <option value="">All Sections</option>
+            {% set seen_sec = [] %}
+            {% for activity in activities %}
+            {% if activity.section not in seen_sec %}
+            {% if seen_sec.append(activity.section) %}{% endif %}
+            <option value="{{ activity.section }}">{{ activity.section }}</option>
+            {% endif %}
+            {% endfor %}
+        </select>
+        <input type="text" id="searchPR" placeholder="Search activity..." oninput="filterPRActivities()" class="pr-filter-search">
+    </div>
+    <span class="pr-filter-count">Showing <span id="prVisibleCount">{{ activities|length }}</span> of {{ activities|length }}</span>
+</div>
+
 <div class="card">
     <div class="card-header">
         <span class="card-title"><i class="fas fa-list"></i> Activities with Peer Review</span>
     </div>
     <div class="card-body">
-        <table class="data-table">
+        <table class="data-table" id="prTable">
             <thead>
                 <tr>
                     <th>Activity</th>
@@ -54,7 +83,7 @@
             </thead>
             <tbody>
                 {% for activity in activities %}
-                <tr>
+                <tr class="pr-row" data-subject="{{ activity.subject_name }}" data-section="{{ activity.section }}" data-title="{{ activity.title|lower }}">
                     <td>
                         <strong>{{ activity.title }}</strong>
                         <br><small class="text-muted">{{ activity.session_title }}</small>
@@ -219,5 +248,70 @@
     color: #9CA3AF;
     margin: 0;
 }
+
+/* PR Filter Bar */
+.pr-filter-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: white;
+    padding: 14px 20px;
+    border-radius: 12px;
+    margin-bottom: 16px;
+    border: 1px solid #E5E7EB;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+.pr-filter-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+.pr-filter-group label {
+    font-weight: 600;
+    color: #6B7280;
+    font-size: 0.85rem;
+    white-space: nowrap;
+}
+.pr-filter-group select, .pr-filter-search {
+    padding: 8px 12px;
+    border: 1px solid #D1D5DB;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    background: #F9FAFB;
+    color: #374151;
+    min-width: 150px;
+}
+.pr-filter-group select:focus, .pr-filter-search:focus {
+    outline: none;
+    border-color: #8B5CF6;
+    box-shadow: 0 0 0 3px rgba(139,92,246,0.1);
+}
+.pr-filter-search { min-width: 180px; }
+.pr-filter-count {
+    font-size: 0.85rem;
+    color: #6B7280;
+    white-space: nowrap;
+}
 </style>
+
+<script>
+function filterPRActivities() {
+    const subject = document.getElementById('filterPRSubject').value;
+    const section = document.getElementById('filterPRSection').value;
+    const search = document.getElementById('searchPR').value.toLowerCase().trim();
+    const rows = document.querySelectorAll('.pr-row');
+    let visible = 0;
+    rows.forEach(row => {
+        let show = true;
+        if (subject && row.dataset.subject !== subject) show = false;
+        if (section && row.dataset.section !== section) show = false;
+        if (search && !row.dataset.title.includes(search)) show = false;
+        row.style.display = show ? '' : 'none';
+        if (show) visible++;
+    });
+    document.getElementById('prVisibleCount').textContent = visible;
+}
+</script>
 {% endblock %}

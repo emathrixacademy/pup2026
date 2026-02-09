@@ -779,9 +779,25 @@ def students():
     students_list = cursor.fetchall()
     cursor.execute('SELECT * FROM subjects ORDER BY code, section')
     subjects = cursor.fetchall()
+
+    # Get distinct sections for filter
+    cursor.execute('SELECT DISTINCT section FROM users WHERE role = "student" AND section IS NOT NULL ORDER BY section')
+    sections = [r['section'] for r in cursor.fetchall()]
+
+    # Get enrollment counts per student
+    cursor.execute('''
+        SELECT e.student_id, COUNT(*) as subject_count,
+               GROUP_CONCAT(s.code || ' ' || s.section, ', ') as enrolled_subjects
+        FROM enrollments e
+        JOIN subjects s ON e.subject_id = s.id
+        GROUP BY e.student_id
+    ''')
+    enrollment_map = {r['student_id']: r for r in cursor.fetchall()}
+
     conn.close()
 
-    return render_template('students.html', students=students_list, subjects=subjects)
+    return render_template('students.html', students=students_list, subjects=subjects,
+                           sections=sections, enrollment_map=enrollment_map)
 
 @app.route('/students/add', methods=['POST'])
 @login_required
@@ -3155,14 +3171,233 @@ def grades():
     if current_user.role != 'instructor':
         return redirect(url_for('student_dashboard'))
 
+    filter_subject = request.args.get('subject_id', '')
+
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute('SELECT * FROM subjects')
+    cursor.execute('SELECT * FROM subjects ORDER BY code, section')
     subjects = cursor.fetchall()
     cursor.execute('SELECT * FROM users WHERE role = "student" ORDER BY full_name')
     students = cursor.fetchall()
+
+    # Get distinct sections for filter
+    cursor.execute('SELECT DISTINCT section FROM users WHERE role = "student" AND section IS NOT NULL ORDER BY section')
+    sections = [r['section'] for r in cursor.fetchall()]
+
+    # Build grade summary per student (across all enrolled subjects or filtered subject)
+    student_grades_map = {}
+    for student in students:
+        # Get enrolled subjects
+        cursor.execute('''
+            SELECT s.* FROM subjects s
+            INNER JOIN enrollments e ON s.id = e.subject_id
+            WHERE e.student_id = ?
+            ORDER BY s.code
+        ''', (student['id'],))
+        enrolled_subjects = cursor.fetchall()
+
+        subject_grades = []
+        for subj in enrolled_subjects:
+            weights = get_grade_weights(subj['code'])
+
+            # Activity avg
+            cursor.execute('''
+                SELECT AVG(sub.score) as avg_score
+                FROM submissions sub
+                JOIN activities a ON sub.activity_id = a.id
+                JOIN sessions ses ON a.session_id = ses.id
+                WHERE ses.subject_id = ? AND sub.student_id = ? AND sub.score IS NOT NULL AND sub.score_visible = 1
+            ''', (subj['id'], student['id']))
+            row = cursor.fetchone()
+            activity_avg = row['avg_score'] if row and row['avg_score'] else 0
+
+            # Quiz avg
+            cursor.execute('''
+                SELECT AVG(qa.score) as avg_score
+                FROM quiz_attempts qa
+                JOIN quizzes q ON qa.quiz_id = q.id
+                JOIN sessions ses ON q.session_id = ses.id
+                WHERE ses.subject_id = ? AND qa.student_id = ? AND qa.score IS NOT NULL AND qa.score_visible = 1
+            ''', (subj['id'], student['id']))
+            row = cursor.fetchone()
+            quiz_avg = row['avg_score'] if row and row['avg_score'] else 0
+
+            # Exam scores
+            cursor.execute('''
+                SELECT ea.score, e.exam_type
+                FROM exam_attempts ea
+                JOIN exams e ON ea.exam_id = e.id
+                WHERE e.subject_id = ? AND ea.student_id = ? AND ea.score_visible = 1
+            ''', (subj['id'], student['id']))
+            midterm = None
+            final_exam = None
+            for exam in cursor.fetchall():
+                if exam['exam_type'] == 'midterm':
+                    midterm = exam['score']
+                elif exam['exam_type'] == 'final':
+                    final_exam = exam['score']
+
+            weighted = (
+                (activity_avg * weights['activities']) +
+                (quiz_avg * weights['quizzes']) +
+                ((midterm or 0) * weights['midterm']) +
+                ((final_exam or 0) * weights['final'])
+            )
+            pup_grade = get_pup_grade(weighted)
+
+            subject_grades.append({
+                'subject_id': subj['id'],
+                'code': subj['code'],
+                'section': subj['section'],
+                'activity_avg': round(activity_avg, 1),
+                'quiz_avg': round(quiz_avg, 1),
+                'midterm': round(midterm, 1) if midterm is not None else None,
+                'final': round(final_exam, 1) if final_exam is not None else None,
+                'weighted': round(weighted, 2),
+                'pup_grade': pup_grade,
+                'passed': pup_grade <= 3.00
+            })
+
+        student_grades_map[student['id']] = subject_grades
+
     conn.close()
-    return render_template('grades.html', subjects=subjects, students=students)
+    return render_template('grades.html', subjects=subjects, students=students,
+                           sections=sections, student_grades_map=student_grades_map,
+                           filter_subject=filter_subject)
+
+@app.route('/grades/download')
+@login_required
+def download_grades_csv():
+    """Download grade book as CSV"""
+    if current_user.role != 'instructor':
+        return redirect(url_for('student_dashboard'))
+
+    subject_id = request.args.get('subject_id', type=int)
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    cursor.execute('SELECT * FROM users WHERE role = "student" ORDER BY full_name')
+    students = cursor.fetchall()
+
+    import io, csv
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    if subject_id:
+        cursor.execute('SELECT * FROM subjects WHERE id = ?', (subject_id,))
+        subj = cursor.fetchone()
+        if not subj:
+            conn.close()
+            flash('Subject not found', 'error')
+            return redirect(url_for('grades'))
+
+        writer.writerow(['Student ID', 'Full Name', 'Section', 'Subject',
+                         'Activity Avg', 'Quiz Avg', 'Midterm', 'Final',
+                         'Weighted Avg', 'PUP Grade', 'Status'])
+
+        weights = get_grade_weights(subj['code'])
+        for student in students:
+            cursor.execute('SELECT 1 FROM enrollments WHERE student_id = ? AND subject_id = ?',
+                           (student['id'], subject_id))
+            if not cursor.fetchone():
+                continue
+
+            cursor.execute('''
+                SELECT AVG(sub.score) as avg FROM submissions sub
+                JOIN activities a ON sub.activity_id = a.id JOIN sessions ses ON a.session_id = ses.id
+                WHERE ses.subject_id = ? AND sub.student_id = ? AND sub.score IS NOT NULL AND sub.score_visible = 1
+            ''', (subject_id, student['id']))
+            act_avg = cursor.fetchone()['avg'] or 0
+
+            cursor.execute('''
+                SELECT AVG(qa.score) as avg FROM quiz_attempts qa
+                JOIN quizzes q ON qa.quiz_id = q.id JOIN sessions ses ON q.session_id = ses.id
+                WHERE ses.subject_id = ? AND qa.student_id = ? AND qa.score IS NOT NULL AND qa.score_visible = 1
+            ''', (subject_id, student['id']))
+            quiz_avg = cursor.fetchone()['avg'] or 0
+
+            cursor.execute('''
+                SELECT ea.score, e.exam_type FROM exam_attempts ea
+                JOIN exams e ON ea.exam_id = e.id
+                WHERE e.subject_id = ? AND ea.student_id = ? AND ea.score_visible = 1
+            ''', (subject_id, student['id']))
+            midterm = final_exam = None
+            for exam in cursor.fetchall():
+                if exam['exam_type'] == 'midterm':
+                    midterm = exam['score']
+                elif exam['exam_type'] == 'final':
+                    final_exam = exam['score']
+
+            weighted = (act_avg * weights['activities'] + quiz_avg * weights['quizzes'] +
+                        (midterm or 0) * weights['midterm'] + (final_exam or 0) * weights['final'])
+            pup = get_pup_grade(weighted)
+
+            writer.writerow([student['student_id'], student['full_name'], student['section'],
+                             f"{subj['code']} {subj['section']}",
+                             f"{act_avg:.1f}", f"{quiz_avg:.1f}",
+                             f"{midterm:.1f}" if midterm is not None else '--',
+                             f"{final_exam:.1f}" if final_exam is not None else '--',
+                             f"{weighted:.2f}%", f"{pup:.2f}",
+                             'PASSED' if pup <= 3.00 else 'FAILED'])
+    else:
+        writer.writerow(['Student ID', 'Full Name', 'Section', 'Subject',
+                         'Activity Avg', 'Quiz Avg', 'Midterm', 'Final',
+                         'Weighted Avg', 'PUP Grade', 'Status'])
+        for student in students:
+            cursor.execute('''
+                SELECT s.* FROM subjects s
+                INNER JOIN enrollments e ON s.id = e.subject_id
+                WHERE e.student_id = ? ORDER BY s.code
+            ''', (student['id'],))
+            for subj in cursor.fetchall():
+                weights = get_grade_weights(subj['code'])
+                cursor.execute('''
+                    SELECT AVG(sub.score) as avg FROM submissions sub
+                    JOIN activities a ON sub.activity_id = a.id JOIN sessions ses ON a.session_id = ses.id
+                    WHERE ses.subject_id = ? AND sub.student_id = ? AND sub.score IS NOT NULL AND sub.score_visible = 1
+                ''', (subj['id'], student['id']))
+                act_avg = cursor.fetchone()['avg'] or 0
+
+                cursor.execute('''
+                    SELECT AVG(qa.score) as avg FROM quiz_attempts qa
+                    JOIN quizzes q ON qa.quiz_id = q.id JOIN sessions ses ON q.session_id = ses.id
+                    WHERE ses.subject_id = ? AND qa.student_id = ? AND qa.score IS NOT NULL AND qa.score_visible = 1
+                ''', (subj['id'], student['id']))
+                quiz_avg = cursor.fetchone()['avg'] or 0
+
+                cursor.execute('''
+                    SELECT ea.score, e.exam_type FROM exam_attempts ea
+                    JOIN exams e ON ea.exam_id = e.id
+                    WHERE e.subject_id = ? AND ea.student_id = ? AND ea.score_visible = 1
+                ''', (subj['id'], student['id']))
+                midterm = final_exam = None
+                for exam in cursor.fetchall():
+                    if exam['exam_type'] == 'midterm':
+                        midterm = exam['score']
+                    elif exam['exam_type'] == 'final':
+                        final_exam = exam['score']
+
+                weighted = (act_avg * weights['activities'] + quiz_avg * weights['quizzes'] +
+                            (midterm or 0) * weights['midterm'] + (final_exam or 0) * weights['final'])
+                pup = get_pup_grade(weighted)
+
+                writer.writerow([student['student_id'], student['full_name'], student['section'],
+                                 f"{subj['code']} {subj['section']}",
+                                 f"{act_avg:.1f}", f"{quiz_avg:.1f}",
+                                 f"{midterm:.1f}" if midterm is not None else '--',
+                                 f"{final_exam:.1f}" if final_exam is not None else '--',
+                                 f"{weighted:.2f}%", f"{pup:.2f}",
+                                 'PASSED' if pup <= 3.00 else 'FAILED'])
+
+    conn.close()
+    from flask import Response
+    return Response(
+        output.getvalue(),
+        mimetype='text/csv',
+        headers={'Content-Disposition': 'attachment; filename=grade_book.csv'}
+    )
+
 
 @app.route('/grades/student/<int:student_id>')
 @login_required

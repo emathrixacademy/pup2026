@@ -1,39 +1,172 @@
 {% extends 'base.html' %}
 
-{% block title %}Grade Book - Classroom LMS{% endblock %}
+{% block title %}Grade Book - Sangrenes LMS Portal{% endblock %}
 
 {% block content %}
 <div class="page-header">
-    <h1>Grade Book</h1>
+    <div>
+        <h1><i class="fas fa-chart-bar"></i> Grade Book</h1>
+        <p>View and manage student grades across all subjects</p>
+    </div>
+    <div class="header-actions">
+        <a href="{{ url_for('download_grades_csv', subject_id=filter_subject) }}" class="btn btn-success" id="downloadBtn">
+            <i class="fas fa-download"></i> Download CSV
+        </a>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="gb-filter-bar">
+    <div class="gb-filter-group">
+        <label><i class="fas fa-filter"></i> Filter by:</label>
+        <select id="filterSubject" onchange="filterGrades()">
+            <option value="">All Subjects</option>
+            {% for subject in subjects %}
+            <option value="{{ subject.id }}" {% if filter_subject|string == subject.id|string %}selected{% endif %}>
+                {{ subject.code }} - {{ subject.section }}
+            </option>
+            {% endfor %}
+        </select>
+        <select id="filterSection" onchange="filterGrades()">
+            <option value="">All Sections</option>
+            {% for sec in sections %}
+            <option value="{{ sec }}">{{ sec }}</option>
+            {% endfor %}
+        </select>
+        <input type="text" id="searchStudent" placeholder="Search name or ID..." oninput="filterGrades()" class="gb-filter-search">
+    </div>
+    <div class="gb-filter-count">
+        Showing <span id="visibleCount">{{ students|length }}</span> of {{ students|length }} students
+    </div>
+</div>
+
+<!-- Grade Weights Legend -->
+<div class="gb-weights-bar">
+    <span class="gb-weight-item"><i class="fas fa-tasks"></i> Activities <strong>50%</strong></span>
+    <span class="gb-weight-item"><i class="fas fa-question-circle"></i> Quizzes <strong>10%</strong></span>
+    <span class="gb-weight-item"><i class="fas fa-file-alt"></i> Midterm <strong>20%</strong></span>
+    <span class="gb-weight-item"><i class="fas fa-graduation-cap"></i> Final <strong>20%</strong></span>
 </div>
 
 <div class="card">
     <div class="card-header">
-        <span class="card-title">All Students</span>
+        <span class="card-title">All Students ({{ students|length }})</span>
     </div>
     <div class="table-container">
-        <table>
+        <table id="gradesTable">
             <thead>
                 <tr>
+                    <th style="width:50px">Photo</th>
                     <th>Student ID</th>
                     <th>Full Name</th>
                     <th>Section</th>
+                    <th>Subject</th>
+                    <th class="text-center">Activities</th>
+                    <th class="text-center">Quizzes</th>
+                    <th class="text-center">Midterm</th>
+                    <th class="text-center">Final</th>
+                    <th class="text-center">Weighted</th>
+                    <th class="text-center">PUP Grade</th>
+                    <th class="text-center">Status</th>
                     <th>Actions</th>
                 </tr>
             </thead>
             <tbody>
                 {% for student in students %}
-                <tr>
-                    <td>{{ student.student_id }}</td>
-                    <td>{{ student.full_name }}</td>
-                    <td>{{ student.section }}</td>
+                {% set subject_list = student_grades_map.get(student.id, []) %}
+                {% if subject_list %}
+                {% for sg in subject_list %}
+                <tr class="grade-row"
+                    data-section="{{ student.section or '' }}"
+                    data-subject-id="{{ sg.subject_id }}"
+                    data-name="{{ student.full_name|lower }}"
+                    data-sid="{{ (student.student_id or '')|lower }}">
+                    {% if loop.first %}
+                    <td rowspan="{{ subject_list|length }}">
+                        <div class="gb-avatar">
+                            {% if student.photo and student.photo != 'default.png' %}
+                            <img src="{{ url_for('static', filename='uploads/photos/' + student.photo) }}" alt="{{ student.full_name }}">
+                            {% else %}
+                            <div class="gb-avatar-initials">{{ student.full_name[:2]|upper }}</div>
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td rowspan="{{ subject_list|length }}"><span class="gb-sid">{{ student.student_id or 'N/A' }}</span></td>
+                    <td rowspan="{{ subject_list|length }}"><div class="gb-student-name">{{ student.full_name }}</div></td>
+                    <td rowspan="{{ subject_list|length }}"><span class="gb-section">{{ student.section or 'N/A' }}</span></td>
+                    {% endif %}
+                    <td><span class="gb-subject-badge">{{ sg.code }}</span></td>
+                    <td class="text-center"><span class="gb-score">{{ sg.activity_avg }}%</span></td>
+                    <td class="text-center"><span class="gb-score">{{ sg.quiz_avg }}%</span></td>
+                    <td class="text-center">
+                        {% if sg.midterm is not none %}
+                        <span class="gb-score">{{ sg.midterm }}%</span>
+                        {% else %}
+                        <span class="gb-no-score">--</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-center">
+                        {% if sg.final is not none %}
+                        <span class="gb-score">{{ sg.final }}%</span>
+                        {% else %}
+                        <span class="gb-no-score">--</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-center">
+                        <span class="gb-weighted {% if sg.weighted >= 75 %}passing{% else %}failing{% endif %}">
+                            {{ sg.weighted }}%
+                        </span>
+                    </td>
+                    <td class="text-center">
+                        <span class="gb-pup {% if sg.pup_grade <= 3.00 %}passing{% else %}failing{% endif %}">
+                            {{ "%.2f"|format(sg.pup_grade) }}
+                        </span>
+                    </td>
+                    <td class="text-center">
+                        {% if sg.pup_grade <= 3.00 %}
+                        <span class="gb-status passed"><i class="fas fa-check-circle"></i> Passed</span>
+                        {% else %}
+                        <span class="gb-status failed"><i class="fas fa-times-circle"></i> Failed</span>
+                        {% endif %}
+                    </td>
+                    {% if loop.first %}
+                    <td rowspan="{{ subject_list|length }}">
+                        <a href="{{ url_for('student_grades', student_id=student.id) }}" class="btn btn-sm btn-teal">
+                            <i class="fas fa-chart-bar"></i> Details
+                        </a>
+                    </td>
+                    {% endif %}
+                </tr>
+                {% endfor %}
+                {% else %}
+                <tr class="grade-row"
+                    data-section="{{ student.section or '' }}"
+                    data-subject-id=""
+                    data-name="{{ student.full_name|lower }}"
+                    data-sid="{{ (student.student_id or '')|lower }}">
                     <td>
-                        <a href="{{ url_for('student_grades', student_id=student.id) }}" class="btn btn-sm btn-teal">View Grades</a>
+                        <div class="gb-avatar">
+                            {% if student.photo and student.photo != 'default.png' %}
+                            <img src="{{ url_for('static', filename='uploads/photos/' + student.photo) }}" alt="{{ student.full_name }}">
+                            {% else %}
+                            <div class="gb-avatar-initials">{{ student.full_name[:2]|upper }}</div>
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td><span class="gb-sid">{{ student.student_id or 'N/A' }}</span></td>
+                    <td><div class="gb-student-name">{{ student.full_name }}</div></td>
+                    <td><span class="gb-section">{{ student.section or 'N/A' }}</span></td>
+                    <td colspan="8" class="text-center"><span class="gb-no-score">Not enrolled in any subject</span></td>
+                    <td>
+                        <a href="{{ url_for('student_grades', student_id=student.id) }}" class="btn btn-sm btn-teal">
+                            <i class="fas fa-chart-bar"></i> Details
+                        </a>
                     </td>
                 </tr>
+                {% endif %}
                 {% else %}
                 <tr>
-                    <td colspan="4" class="text-center">No students enrolled yet.</td>
+                    <td colspan="13" class="text-center">No students enrolled yet.</td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -41,27 +174,199 @@
     </div>
 </div>
 
-<div class="card mt-20">
-    <div class="card-header">
-        <span class="card-title">Grade Weights</span>
-    </div>
-    <ul class="session-list">
-        <li class="session-item">
-            <span>Quizzes</span>
-            <strong>20%</strong>
-        </li>
-        <li class="session-item">
-            <span>Activities</span>
-            <strong>40%</strong>
-        </li>
-        <li class="session-item">
-            <span>Midterm Exam</span>
-            <strong>20%</strong>
-        </li>
-        <li class="session-item">
-            <span>Final Exam</span>
-            <strong>20%</strong>
-        </li>
-    </ul>
-</div>
+<style>
+.header-actions { display: flex; gap: 10px; }
+
+/* Filter Bar */
+.gb-filter-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: white;
+    padding: 14px 20px;
+    border-radius: 12px;
+    margin-bottom: 12px;
+    border: 1px solid #E5E7EB;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+.gb-filter-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+.gb-filter-group label {
+    font-weight: 600;
+    color: #6B7280;
+    font-size: 0.85rem;
+    white-space: nowrap;
+}
+.gb-filter-group select, .gb-filter-search {
+    padding: 8px 12px;
+    border: 1px solid #D1D5DB;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    background: #F9FAFB;
+    color: #374151;
+    min-width: 160px;
+}
+.gb-filter-group select:focus, .gb-filter-search:focus {
+    outline: none;
+    border-color: #6366F1;
+    box-shadow: 0 0 0 3px rgba(99,102,241,0.1);
+}
+.gb-filter-search { min-width: 200px; }
+.gb-filter-count { font-size: 0.85rem; color: #6B7280; white-space: nowrap; }
+
+/* Weights bar */
+.gb-weights-bar {
+    display: flex;
+    gap: 20px;
+    background: white;
+    padding: 10px 20px;
+    border-radius: 10px;
+    margin-bottom: 16px;
+    border: 1px solid #E5E7EB;
+    flex-wrap: wrap;
+}
+.gb-weight-item {
+    font-size: 0.82rem;
+    color: #6B7280;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.gb-weight-item i { color: #8B5CF6; }
+.gb-weight-item strong { color: #1E293B; }
+
+/* Avatar */
+.gb-avatar {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    overflow: hidden;
+    border: 2px solid #E5E7EB;
+}
+.gb-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.gb-avatar-initials {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #6366F1, #8B5CF6);
+    color: white;
+    font-weight: 700;
+    font-size: 0.75rem;
+}
+
+/* Student info */
+.gb-student-name { font-weight: 600; color: #1E293B; font-size: 0.9rem; }
+.gb-sid {
+    font-family: 'Courier New', monospace;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #4F46E5;
+    background: #EEF2FF;
+    padding: 2px 7px;
+    border-radius: 4px;
+}
+.gb-section {
+    background: #F0FDF4;
+    color: #15803D;
+    padding: 2px 8px;
+    border-radius: 5px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    border: 1px solid #BBF7D0;
+}
+.gb-subject-badge {
+    background: #EDE9FE;
+    color: #7C3AED;
+    padding: 2px 8px;
+    border-radius: 5px;
+    font-size: 0.78rem;
+    font-weight: 700;
+}
+
+/* Scores */
+.gb-score { font-size: 0.85rem; font-weight: 600; color: #374151; }
+.gb-no-score { font-size: 0.85rem; color: #D1D5DB; }
+.gb-weighted {
+    font-weight: 700;
+    font-size: 0.85rem;
+    padding: 2px 8px;
+    border-radius: 5px;
+}
+.gb-weighted.passing { background: #D1FAE5; color: #059669; }
+.gb-weighted.failing { background: #FEE2E2; color: #DC2626; }
+
+.gb-pup {
+    font-weight: 800;
+    font-size: 0.9rem;
+    padding: 3px 10px;
+    border-radius: 6px;
+}
+.gb-pup.passing { background: #EDE9FE; color: #6D28D9; }
+.gb-pup.failing { background: #FEE2E2; color: #DC2626; }
+
+.gb-status {
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 20px;
+    white-space: nowrap;
+}
+.gb-status.passed { background: #D1FAE5; color: #059669; }
+.gb-status.failed { background: #FEE2E2; color: #DC2626; }
+
+/* Table */
+#gradesTable { font-size: 0.88rem; }
+#gradesTable th { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; color: #6B7280; }
+#gradesTable tbody tr { transition: background 0.15s; }
+#gradesTable tbody tr:hover { background: #F8FAFC; }
+.text-center { text-align: center; }
+
+@media (max-width: 768px) {
+    .gb-filter-bar { flex-direction: column; align-items: stretch; }
+    .gb-filter-group { flex-direction: column; align-items: stretch; }
+    .gb-filter-group select, .gb-filter-search { min-width: 100%; }
+    .gb-weights-bar { flex-direction: column; gap: 8px; }
+}
+</style>
+
+<script>
+function filterGrades() {
+    const subjectId = document.getElementById('filterSubject').value;
+    const section = document.getElementById('filterSection').value;
+    const search = document.getElementById('searchStudent').value.toLowerCase().trim();
+    const rows = document.querySelectorAll('.grade-row');
+    let visible = 0;
+
+    // Update CSV download link
+    const downloadBtn = document.getElementById('downloadBtn');
+    let csvUrl = '{{ url_for("download_grades_csv") }}';
+    if (subjectId) csvUrl += '?subject_id=' + subjectId;
+    downloadBtn.href = csvUrl;
+
+    rows.forEach(row => {
+        let show = true;
+        if (section && row.dataset.section !== section) show = false;
+        if (subjectId && row.dataset.subjectId !== subjectId) show = false;
+        if (search && !row.dataset.name.includes(search) && !row.dataset.sid.includes(search)) show = false;
+        row.style.display = show ? '' : 'none';
+        if (show) visible++;
+    });
+
+    document.getElementById('visibleCount').textContent = visible;
+}
+
+// Run filter on page load if subject pre-selected
+document.addEventListener('DOMContentLoaded', function() {
+    if (document.getElementById('filterSubject').value) {
+        filterGrades();
+    }
+});
+</script>
 {% endblock %}

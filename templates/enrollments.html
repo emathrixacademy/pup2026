@@ -58,8 +58,18 @@
 <!-- Pending Students Tab -->
 <div id="pending-tab" class="tab-content active">
     {% if pending_students %}
-    <!-- Section Filter -->
+    <!-- Section Filter + Search -->
     <div class="filter-bar">
+        <div class="section-filters">
+            <select id="filterPendingSection" onchange="filterPending()" class="filter-select">
+                <option value="">All Sections</option>
+                {% for sec in sections %}
+                <option value="{{ sec }}">{{ sec }}</option>
+                {% endfor %}
+            </select>
+            <input type="text" id="searchPending" placeholder="Search name or ID..." oninput="filterPending()" class="filter-search-input">
+            <span class="filter-count-text">Showing <span id="pendingVisibleCount">{{ pending_students|length }}</span> of {{ pending_students|length }}</span>
+        </div>
         <div class="section-filters">
             {% for section, count in pending_by_section.items() %}
             {% if section %}
@@ -73,7 +83,7 @@
 
     <div class="card">
         <div class="card-body">
-            <table class="data-table">
+            <table class="data-table" id="pending-table">
                 <thead>
                     <tr>
                         <th><input type="checkbox" id="select-all-pending" onchange="toggleSelectAll(this)"></th>
@@ -87,7 +97,7 @@
                 </thead>
                 <tbody>
                     {% for student in pending_students %}
-                    <tr id="pending-row-{{ student.id }}">
+                    <tr id="pending-row-{{ student.id }}" class="pending-row" data-section="{{ student.section or '' }}" data-name="{{ student.full_name|lower }}" data-sid="{{ (student.student_id or '')|lower }}">
                         <td><input type="checkbox" class="student-checkbox" value="{{ student.id }}"></td>
                         <td>
                             <div class="student-info">
@@ -136,9 +146,18 @@
     <div class="card">
         <div class="card-body">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 10px;">
-                <div class="search-box">
-                    <i class="fas fa-search"></i>
-                    <input type="text" id="search-approved" placeholder="Search approved students..." onkeyup="filterApproved()">
+                <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                    <select id="filterApprovedSection" onchange="filterApproved()" class="filter-select">
+                        <option value="">All Sections</option>
+                        {% for sec in sections %}
+                        <option value="{{ sec }}">{{ sec }}</option>
+                        {% endfor %}
+                    </select>
+                    <div class="search-box">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="search-approved" placeholder="Search students..." onkeyup="filterApproved()">
+                    </div>
+                    <span class="filter-count-text">Showing <span id="approvedVisibleCount">{{ approved_students|length }}</span> of {{ approved_students|length }}</span>
                 </div>
                 <button class="btn btn-info" onclick="syncAllSubjects()" title="Enroll all approved students in their section's subjects">
                     <i class="fas fa-sync"></i> Sync All Subjects
@@ -157,7 +176,7 @@
                 </thead>
                 <tbody>
                     {% for student in approved_students %}
-                    <tr id="approved-row-{{ student.id }}">
+                    <tr id="approved-row-{{ student.id }}" class="approved-row" data-section="{{ student.section or '' }}" data-name="{{ student.full_name|lower }}" data-sid="{{ (student.student_id or '')|lower }}">
                         <td>
                             <div class="student-info">
                                 <img src="{{ url_for('static', filename='uploads/photos/' + (student.photo or 'default.png')) }}"
@@ -290,12 +309,49 @@
 
 .filter-bar {
     margin-bottom: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
 }
 
 .section-filters {
     display: flex;
     flex-wrap: wrap;
     gap: 0.5rem;
+    align-items: center;
+}
+
+.filter-select {
+    padding: 8px 12px;
+    border: 1px solid #D1D5DB;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    background: #F9FAFB;
+    color: #374151;
+    min-width: 160px;
+}
+.filter-select:focus {
+    outline: none;
+    border-color: #8B5CF6;
+    box-shadow: 0 0 0 3px rgba(139,92,246,0.1);
+}
+.filter-search-input {
+    padding: 8px 12px;
+    border: 1px solid #D1D5DB;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    background: #F9FAFB;
+    min-width: 180px;
+}
+.filter-search-input:focus {
+    outline: none;
+    border-color: #8B5CF6;
+    box-shadow: 0 0 0 3px rgba(139,92,246,0.1);
+}
+.filter-count-text {
+    font-size: 0.8rem;
+    color: #6B7280;
+    white-space: nowrap;
 }
 
 .section-filter-btn {
@@ -567,14 +623,34 @@ async function revokeApproval(studentId, name) {
     }
 }
 
-function filterApproved() {
-    const search = document.getElementById('search-approved').value.toLowerCase();
-    const rows = document.querySelectorAll('#approved-table tbody tr');
-
+function filterPending() {
+    const section = document.getElementById('filterPendingSection').value;
+    const search = document.getElementById('searchPending').value.toLowerCase().trim();
+    const rows = document.querySelectorAll('.pending-row');
+    let visible = 0;
     rows.forEach(row => {
-        const text = row.textContent.toLowerCase();
-        row.style.display = text.includes(search) ? '' : 'none';
+        let show = true;
+        if (section && row.dataset.section !== section) show = false;
+        if (search && !row.dataset.name.includes(search) && !row.dataset.sid.includes(search)) show = false;
+        row.style.display = show ? '' : 'none';
+        if (show) visible++;
     });
+    document.getElementById('pendingVisibleCount').textContent = visible;
+}
+
+function filterApproved() {
+    const section = document.getElementById('filterApprovedSection').value;
+    const search = document.getElementById('search-approved').value.toLowerCase().trim();
+    const rows = document.querySelectorAll('.approved-row');
+    let visible = 0;
+    rows.forEach(row => {
+        let show = true;
+        if (section && row.dataset.section !== section) show = false;
+        if (search && !row.dataset.name.includes(search) && !row.dataset.sid.includes(search)) show = false;
+        row.style.display = show ? '' : 'none';
+        if (show) visible++;
+    });
+    document.getElementById('approvedVisibleCount').textContent = visible;
 }
 
 function updateCounts() {

@@ -13,43 +13,96 @@
     </button>
 </div>
 
+<!-- Filters -->
+<div class="filter-bar">
+    <div class="filter-group">
+        <label><i class="fas fa-filter"></i> Filter by:</label>
+        <select id="filterSection" onchange="filterStudents()">
+            <option value="">All Sections</option>
+            {% for sec in sections %}
+            <option value="{{ sec }}">{{ sec }}</option>
+            {% endfor %}
+        </select>
+        <select id="filterSubject" onchange="filterStudents()">
+            <option value="">All Subjects</option>
+            {% for subject in subjects %}
+            <option value="{{ subject.code }} {{ subject.section }}">{{ subject.code }} - {{ subject.section }}</option>
+            {% endfor %}
+        </select>
+        <input type="text" id="searchName" placeholder="Search name or ID..." oninput="filterStudents()" class="filter-search">
+    </div>
+    <div class="filter-count">
+        Showing <span id="visibleCount">{{ students|length }}</span> of {{ students|length }} students
+    </div>
+</div>
+
 <div class="card">
     <div class="card-header">
         <span class="card-title">All Students ({{ students|length }})</span>
     </div>
     <div class="table-container">
-        <table>
+        <table id="studentsTable">
             <thead>
                 <tr>
+                    <th style="width:60px">Photo</th>
                     <th>Student ID</th>
                     <th>Full Name</th>
                     <th>Username</th>
                     <th>Section</th>
+                    <th>Enrolled In</th>
                     <th>Actions</th>
                 </tr>
             </thead>
             <tbody>
                 {% for student in students %}
-                <tr>
-                    <td>{{ student.student_id }}</td>
-                    <td>{{ student.full_name }}</td>
-                    <td>{{ student.username }}</td>
-                    <td>{{ student.section }}</td>
+                {% set enroll = enrollment_map.get(student.id) %}
+                <tr class="student-row"
+                    data-section="{{ student.section or '' }}"
+                    data-subjects="{{ enroll.enrolled_subjects if enroll else '' }}"
+                    data-name="{{ student.full_name|lower }}"
+                    data-sid="{{ student.student_id|lower if student.student_id else '' }}">
                     <td>
-                        <a href="{{ url_for('manage_enrollments', student_id=student.id) }}" class="btn btn-sm btn-primary" title="Manage Subjects">
-                            <i class="fas fa-book"></i> Enroll
-                        </a>
-                        <a href="{{ url_for('student_grades', student_id=student.id) }}" class="btn btn-sm btn-teal" title="View Grades">
-                            <i class="fas fa-chart-bar"></i> Grades
-                        </a>
-                        <a href="{{ url_for('delete_student', id=student.id) }}" class="btn btn-sm btn-danger" onclick="return confirmDelete('Delete this student?')" title="Delete Student">
-                            <i class="fas fa-trash"></i>
-                        </a>
+                        <div class="student-avatar">
+                            {% if student.photo and student.photo != 'default.png' %}
+                            <img src="{{ url_for('static', filename='uploads/photos/' + student.photo) }}" alt="{{ student.full_name }}">
+                            {% else %}
+                            <div class="avatar-initials">{{ student.full_name[:2]|upper }}</div>
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td><span class="sid-badge">{{ student.student_id or 'N/A' }}</span></td>
+                    <td>
+                        <div class="student-name">{{ student.full_name }}</div>
+                        {% if student.email %}
+                        <small class="text-muted">{{ student.email }}</small>
+                        {% endif %}
+                    </td>
+                    <td><code class="username-code">{{ student.username }}</code></td>
+                    <td><span class="section-badge">{{ student.section or 'N/A' }}</span></td>
+                    <td>
+                        {% if enroll %}
+                        <span class="enroll-count" title="{{ enroll.enrolled_subjects }}">{{ enroll.subject_count }} subject{{ 's' if enroll.subject_count != 1 }}</span>
+                        {% else %}
+                        <span class="enroll-none">Not enrolled</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div class="action-btns">
+                            <a href="{{ url_for('manage_enrollments', student_id=student.id) }}" class="btn btn-sm btn-primary" title="Manage Subjects">
+                                <i class="fas fa-book"></i> Enroll
+                            </a>
+                            <a href="{{ url_for('student_grades', student_id=student.id) }}" class="btn btn-sm btn-teal" title="View Grades">
+                                <i class="fas fa-chart-bar"></i> Grades
+                            </a>
+                            <a href="{{ url_for('delete_student', id=student.id) }}" class="btn btn-sm btn-danger" onclick="return confirmDelete('Delete this student?')" title="Delete Student">
+                                <i class="fas fa-trash"></i>
+                            </a>
+                        </div>
                     </td>
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="5" class="text-center">No students yet. Add students individually or upload a file.</td>
+                    <td colspan="7" class="text-center">No students yet. Add students individually or upload a file.</td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -124,11 +177,196 @@
 </div>
 
 <style>
+/* Filter Bar */
+.filter-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: white;
+    padding: 14px 20px;
+    border-radius: 12px;
+    margin-bottom: 16px;
+    border: 1px solid #E5E7EB;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+.filter-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+.filter-group label {
+    font-weight: 600;
+    color: #6B7280;
+    font-size: 0.85rem;
+    white-space: nowrap;
+}
+.filter-group select, .filter-search {
+    padding: 8px 12px;
+    border: 1px solid #D1D5DB;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    background: #F9FAFB;
+    color: #374151;
+    min-width: 160px;
+}
+.filter-group select:focus, .filter-search:focus {
+    outline: none;
+    border-color: #6366F1;
+    box-shadow: 0 0 0 3px rgba(99,102,241,0.1);
+}
+.filter-search {
+    min-width: 200px;
+}
+.filter-count {
+    font-size: 0.85rem;
+    color: #6B7280;
+    white-space: nowrap;
+}
+
+/* Student Avatar */
+.student-avatar {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    overflow: hidden;
+    border: 2px solid #E5E7EB;
+    flex-shrink: 0;
+}
+.student-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.avatar-initials {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #6366F1, #8B5CF6);
+    color: white;
+    font-weight: 700;
+    font-size: 0.8rem;
+    letter-spacing: 0.5px;
+}
+
+/* Student Name */
+.student-name {
+    font-weight: 600;
+    color: #1E293B;
+}
+
+/* Badges */
+.sid-badge {
+    font-family: 'Courier New', monospace;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #4F46E5;
+    background: #EEF2FF;
+    padding: 3px 8px;
+    border-radius: 5px;
+}
+.username-code {
+    background: #F1F5F9;
+    padding: 3px 8px;
+    border-radius: 5px;
+    font-size: 0.85rem;
+    color: #475569;
+}
+.section-badge {
+    display: inline-block;
+    background: #F0FDF4;
+    color: #15803D;
+    padding: 3px 10px;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    border: 1px solid #BBF7D0;
+}
+.enroll-count {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #0369A1;
+    background: #E0F2FE;
+    padding: 3px 10px;
+    border-radius: 6px;
+    cursor: default;
+    border: 1px solid #BAE6FD;
+}
+.enroll-none {
+    font-size: 0.8rem;
+    color: #9CA3AF;
+    font-style: italic;
+}
+
+/* Action buttons */
+.action-btns {
+    display: flex;
+    gap: 5px;
+    flex-wrap: wrap;
+}
+
+/* Table styling */
+#studentsTable tbody tr {
+    transition: background 0.15s;
+}
+#studentsTable tbody tr:hover {
+    background: #F8FAFC;
+}
+
+/* Checkbox label hover */
 .checkbox-label:hover {
     background: var(--bg-light);
 }
 .checkbox-label input:checked + span {
     color: var(--primary-blue);
 }
+
+@media (max-width: 768px) {
+    .filter-bar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .filter-group {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .filter-group select, .filter-search {
+        min-width: 100%;
+    }
+    .action-btns {
+        flex-direction: column;
+    }
+}
 </style>
+
+<script>
+function filterStudents() {
+    const section = document.getElementById('filterSection').value;
+    const subject = document.getElementById('filterSubject').value;
+    const search = document.getElementById('searchName').value.toLowerCase().trim();
+    const rows = document.querySelectorAll('.student-row');
+    let visible = 0;
+
+    rows.forEach(row => {
+        const rowSection = row.dataset.section;
+        const rowSubjects = row.dataset.subjects;
+        const rowName = row.dataset.name;
+        const rowSid = row.dataset.sid;
+
+        let show = true;
+
+        if (section && rowSection !== section) show = false;
+        if (subject && !rowSubjects.includes(subject)) show = false;
+        if (search && !rowName.includes(search) && !rowSid.includes(search)) show = false;
+
+        row.style.display = show ? '' : 'none';
+        if (show) visible++;
+    });
+
+    document.getElementById('visibleCount').textContent = visible;
+}
+</script>
 {% endblock %}
