@@ -5,8 +5,42 @@
 {% block content %}
 <div class="page-header">
     <h1>{{ activity.title }} - Submissions</h1>
-    <a href="javascript:history.back()" class="btn btn-secondary">Back</a>
+    <div>
+        {% if activity.enable_peer_review %}
+        <a href="{{ url_for('view_peer_reviews', activity_id=activity.id) }}" class="btn btn-info">
+            <i class="fas fa-clipboard-check"></i> View Reviews
+        </a>
+        {% endif %}
+        <a href="{{ url_for('peer_review_settings', activity_id=activity.id) }}" class="btn btn-warning">
+            <i class="fas fa-users-cog"></i> Peer Review
+        </a>
+        <a href="javascript:history.back()" class="btn btn-secondary">Back</a>
+    </div>
 </div>
+
+{% if activity.enable_peer_review %}
+<div class="card mb-20">
+    <div class="card-body">
+        <div class="scoring-info">
+            <h4><i class="fas fa-calculator"></i> Scoring Formula (Peer Review Enabled)</h4>
+            <div class="score-formula">
+                <span class="formula-item"><strong>25%</strong> Peer Review</span>
+                <span class="formula-op">+</span>
+                <span class="formula-item"><strong>25%</strong> Participation</span>
+                <span class="formula-op">+</span>
+                <span class="formula-item"><strong>50%</strong> Instructor</span>
+                <span class="formula-op">=</span>
+                <span class="formula-result">Final Score</span>
+            </div>
+            <form action="{{ url_for('recalculate_activity_scores', activity_id=activity.id) }}" method="POST" style="margin-top: 15px;">
+                <button type="submit" class="btn btn-sm btn-secondary">
+                    <i class="fas fa-sync"></i> Recalculate All Scores
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
 
 <div class="card">
     <div class="card-header">
@@ -20,20 +54,97 @@
             <div>
                 <strong>{{ submission.full_name }}</strong> ({{ submission.sid }})
                 <br><small>Submitted: {{ submission.submitted_at }}</small>
+                {% if submission.is_late %}
+                <br><span class="badge badge-danger">
+                    <i class="fas fa-exclamation-triangle"></i> Late by {{ submission.late_days }} day(s) | Penalty: -{{ submission.late_penalty }} pts
+                </span>
+                {% endif %}
             </div>
-            <div>
-                {% if submission.score is not none %}
+            <div class="score-display-area">
+                {% if activity.enable_peer_review and submission.final_score is not none %}
+                <div class="final-score-display">
+                    <span class="final-label">Final Score:</span>
+                    <span class="final-value">{{ "%.1f"|format(submission.final_score) }}/{{ activity.points }}</span>
+                </div>
+                {% elif submission.score is not none %}
                 <span class="grade-display">{{ submission.score }}/{{ activity.points }}</span>
+                {% if submission.late_penalty %}
+                <br><small class="text-danger">After penalty: {{ [submission.score - submission.late_penalty, 0]|max }}/{{ activity.points }}</small>
+                {% endif %}
                 {% else %}
-                <span>Not graded</span>
+                <span class="not-graded">Not graded</span>
                 {% endif %}
             </div>
         </div>
 
+        {% if activity.enable_peer_review %}
+        <div class="score-breakdown mt-20">
+            <div class="breakdown-item">
+                <span class="breakdown-label"><i class="fas fa-users"></i> Peer Review (25%)</span>
+                <span class="breakdown-value">
+                    {% if submission.peer_review_score is not none %}
+                    {{ "%.1f"|format(submission.peer_review_score) }}%
+                    {% else %}
+                    <em>Pending</em>
+                    {% endif %}
+                </span>
+            </div>
+            <div class="breakdown-item">
+                <span class="breakdown-label"><i class="fas fa-hand-paper"></i> Participation (25%)</span>
+                <span class="breakdown-value">
+                    {% if submission.participation_score is not none %}
+                    {{ "%.1f"|format(submission.participation_score) }}%
+                    {% else %}
+                    <em>Pending</em>
+                    {% endif %}
+                </span>
+            </div>
+            <div class="breakdown-item">
+                <span class="breakdown-label"><i class="fas fa-chalkboard-teacher"></i> Instructor (50%)</span>
+                <span class="breakdown-value">
+                    {% if submission.instructor_score is not none %}
+                    {{ "%.1f"|format(submission.instructor_score) }}/{{ activity.points }}
+                    {% elif submission.score is not none %}
+                    {{ submission.score }}/{{ activity.points }}
+                    {% else %}
+                    <em>Not graded</em>
+                    {% endif %}
+                </span>
+            </div>
+        </div>
+        {% endif %}
+
         <div class="mt-20">
             <strong>Submission:</strong>
-            <p>{{ submission.content }}</p>
+            <p>{{ submission.content or 'No text content' }}</p>
         </div>
+
+        <!-- Display uploaded files -->
+        {% if submission.files %}
+        <div class="mt-20">
+            <strong>Uploaded Files ({{ submission.files|length }}):</strong>
+            <div class="file-list" style="margin-top: 10px;">
+                {% for file in submission.files %}
+                <div class="file-item" style="display: inline-flex; align-items: center; margin-right: 15px; margin-bottom: 10px; padding: 8px 12px; background: #f5f5f5; border-radius: 5px;">
+                    <i class="fas fa-file-alt" style="margin-right: 8px; color: #7c2d12;"></i>
+                    <a href="{{ url_for('static', filename='uploads/activity_submissions/' + file.file_path) }}" target="_blank" style="color: #7c2d12;">
+                        {{ file.file_name }}
+                    </a>
+                    <a href="{{ url_for('static', filename='uploads/activity_submissions/' + file.file_path) }}" download class="btn btn-secondary" style="margin-left: 10px; padding: 2px 8px; font-size: 12px;">
+                        <i class="fas fa-download"></i>
+                    </a>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% elif submission.file_path %}
+        <div class="mt-20">
+            <strong>Uploaded File:</strong>
+            <a href="{{ url_for('static', filename='uploads/activity_submissions/' + submission.file_path) }}" target="_blank" class="btn btn-secondary" style="margin-left: 10px;">
+                <i class="fas fa-download"></i> Download
+            </a>
+        </div>
+        {% endif %}
 
         {% if submission.feedback %}
         <div class="mt-20">
@@ -42,24 +153,130 @@
         </div>
         {% endif %}
 
-        <form action="{{ url_for('grade_activity', activity_id=activity.id) }}" method="POST" class="mt-20">
+        <form action="{{ url_for('grade_activity', activity_id=activity.id) }}" method="POST" class="mt-20 grading-form">
             <input type="hidden" name="submission_id" value="{{ submission.id }}">
             <div class="flex gap-10">
                 <div class="form-group" style="flex: 1;">
-                    <label>Score (out of {{ activity.points }})</label>
-                    <input type="number" name="score" value="{{ submission.score or '' }}" min="0" max="{{ activity.points }}" required>
+                    <label>
+                        {% if activity.enable_peer_review %}
+                        Instructor Score (50% weight)
+                        {% else %}
+                        Score (out of {{ activity.points }})
+                        {% endif %}
+                        {% if submission.late_penalty %} <small class="text-danger">Late penalty: -{{ submission.late_penalty }}</small>{% endif %}
+                    </label>
+                    <input type="number" name="score" value="{{ submission.instructor_score or submission.score or '' }}" min="0" max="{{ activity.points }}" step="0.5" required>
                 </div>
                 <div class="form-group" style="flex: 2;">
                     <label>Feedback</label>
                     <input type="text" name="feedback" value="{{ submission.feedback or '' }}">
                 </div>
             </div>
-            <button type="submit" class="btn">Save Grade</button>
+            <button type="submit" class="btn">
+                <i class="fas fa-save"></i> Save Grade
+            </button>
         </form>
     </div>
     {% endfor %}
     {% else %}
-    <p class="text-center">No submissions yet.</p>
+    <p class="text-center" style="padding: 2rem;">No submissions yet.</p>
     {% endif %}
 </div>
+
+<style>
+.mb-20 { margin-bottom: 20px; }
+.scoring-info {
+    background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+    padding: 20px;
+    border-radius: 12px;
+    border: 1px solid #fbbf24;
+}
+.scoring-info h4 {
+    margin: 0 0 15px 0;
+    color: #92400e;
+}
+.score-formula {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    font-size: 16px;
+}
+.formula-item {
+    background: white;
+    padding: 10px 15px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+.formula-op {
+    font-weight: bold;
+    color: #92400e;
+    font-size: 20px;
+}
+.formula-result {
+    background: #7c2d12;
+    color: white;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-weight: bold;
+}
+.score-breakdown {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px;
+    background: #f3f4f6;
+    padding: 15px;
+    border-radius: 8px;
+}
+.breakdown-item {
+    background: white;
+    padding: 12px 15px;
+    border-radius: 6px;
+    display: flex;
+    flex-direction: column;
+}
+.breakdown-label {
+    font-size: 12px;
+    color: #6b7280;
+    margin-bottom: 5px;
+}
+.breakdown-value {
+    font-size: 16px;
+    font-weight: 600;
+    color: #1f2937;
+}
+.breakdown-value em {
+    color: #9ca3af;
+    font-weight: normal;
+}
+.final-score-display {
+    text-align: right;
+}
+.final-label {
+    display: block;
+    font-size: 12px;
+    color: #6b7280;
+}
+.final-value {
+    font-size: 24px;
+    font-weight: 700;
+    color: #059669;
+}
+.not-graded {
+    color: #9ca3af;
+}
+.grading-form {
+    background: #f9fafb;
+    padding: 15px;
+    border-radius: 8px;
+    border: 1px solid #e5e7eb;
+}
+.btn-info {
+    background: #0ea5e9;
+    color: white;
+}
+.btn-info:hover {
+    background: #0284c7;
+}
+</style>
 {% endblock %}

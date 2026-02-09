@@ -137,7 +137,7 @@
                         <tr>
                             <th class="label-col">COMPONENT</th>
                             <th>MIDTERM EXAM</th>
-                            <th>FINAL PROJECT</th>
+                            <th>FINAL EXAM</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -153,9 +153,9 @@
                                 {% endif %}
                             </td>
                             <td class="exam-cell">
-                                {% if g.final_project is not none %}
-                                    <span class="score-pill exam">{{ "%.1f"|format(g.final_project) }}%</span>
-                                {% elif g.final_project_pending %}
+                                {% if g.final is not none %}
+                                    <span class="score-pill exam">{{ "%.1f"|format(g.final) }}%</span>
+                                {% elif g.final_pending %}
                                     <span class="score-pending"><i class="fas fa-clock"></i> Pending</span>
                                 {% else %}
                                     <span class="score-na">Not yet taken</span>
@@ -171,14 +171,26 @@
         <div class="grades-summary">
             <div class="summary-stats">
                 <div class="stat-item">
-                    <span class="stat-label">Quiz Average</span>
-                    <span class="stat-value">{{ "%.1f"|format(g.quiz_avg) }}%</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-label">Activity Average</span>
+                    <span class="stat-label">Activity Avg (50%)</span>
                     <span class="stat-value">{{ "%.1f"|format(g.activity_avg) }}%</span>
                 </div>
                 <div class="stat-item">
+                    <span class="stat-label">Quiz Avg (10%)</span>
+                    <span class="stat-value">{{ "%.1f"|format(g.quiz_avg) }}%</span>
+                </div>
+                <div class="stat-item midterm">
+                    <span class="stat-label">Midterm (20%)</span>
+                    <span class="stat-value {% if g.midterm is not none %}{% if g.midterm >= 75 %}passing{% else %}failing{% endif %}{% endif %}">
+                        {% if g.midterm is not none %}{{ "%.1f"|format(g.midterm) }}%{% else %}--{% endif %}
+                    </span>
+                </div>
+                <div class="stat-item final">
+                    <span class="stat-label">Final (20%)</span>
+                    <span class="stat-value {% if g.final is not none %}{% if g.final >= 75 %}passing{% else %}failing{% endif %}{% endif %}">
+                        {% if g.final is not none %}{{ "%.1f"|format(g.final) }}%{% else %}--{% endif %}
+                    </span>
+                </div>
+                <div class="stat-item weighted">
                     <span class="stat-label">Weighted Average</span>
                     <span class="stat-value {% if g.weighted >= 75 %}passing{% else %}failing{% endif %}">{{ "%.2f"|format(g.weighted) }}%</span>
                 </div>
@@ -235,8 +247,8 @@
     height: 80px;
     border-radius: 50%;
     object-fit: cover;
-    border: 4px solid #6366F1;
-    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+    border: 4px solid #8B5CF6;
+    box-shadow: 0 4px 15px rgba(139, 92, 246, 0.4);
 }
 
 .student-details h2 {
@@ -268,12 +280,12 @@
     border: 1px solid rgba(0, 0, 0, 0.05);
 }
 
-/* Color Variants for Header */
-.grades-card.emerald .grades-card-header { background: linear-gradient(135deg, #10B981, #059669); }
-.grades-card.violet .grades-card-header { background: linear-gradient(135deg, #8B5CF6, #7C3AED); }
-.grades-card.amber .grades-card-header { background: linear-gradient(135deg, #F59E0B, #D97706); }
-.grades-card.rose .grades-card-header { background: linear-gradient(135deg, #F43F5E, #E11D48); }
-.grades-card.blue .grades-card-header { background: linear-gradient(135deg, #0EA5E9, #0284C7); }
+/* Color Variants for Header - Vibrant Gradients */
+.grades-card.emerald .grades-card-header { background: linear-gradient(135deg, #10B981, #059669); box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4); }
+.grades-card.violet .grades-card-header { background: linear-gradient(135deg, #8B5CF6, #6D28D9); box-shadow: 0 4px 15px rgba(139, 92, 246, 0.4); }
+.grades-card.amber .grades-card-header { background: linear-gradient(135deg, #F59E0B, #D97706); box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4); }
+.grades-card.rose .grades-card-header { background: linear-gradient(135deg, #F43F5E, #E11D48); box-shadow: 0 4px 15px rgba(244, 63, 94, 0.4); }
+.grades-card.blue .grades-card-header { background: linear-gradient(135deg, #8B5CF6, #6D28D9); box-shadow: 0 4px 15px rgba(139, 92, 246, 0.4); }
 
 .grades-card-header {
     display: flex;
@@ -424,7 +436,7 @@
 
 /* Summary Section */
 .grades-summary {
-    background: linear-gradient(135deg, #1E293B, #334155);
+    background: linear-gradient(135deg, #1a1a2e 0%, #2d1b4e 50%, #1a1a2e 100%);
     padding: 20px 24px;
     display: flex;
     justify-content: space-between;
@@ -460,6 +472,27 @@
 
 .stat-value.passing { color: #34D399; }
 .stat-value.failing { color: #F87171; }
+
+.stat-item.midterm {
+    background: rgba(245, 158, 11, 0.1);
+    padding: 10px 15px;
+    border-radius: 10px;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.stat-item.final {
+    background: rgba(239, 68, 68, 0.1);
+    padding: 10px 15px;
+    border-radius: 10px;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.stat-item.weighted {
+    background: rgba(139, 92, 246, 0.2);
+    padding: 10px 15px;
+    border-radius: 10px;
+    border: 1px solid rgba(139, 92, 246, 0.4);
+}
 
 .final-grade {
     display: flex;

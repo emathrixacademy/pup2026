@@ -27,6 +27,19 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
 
+# Custom Jinja2 filter for newlines to <br>
+@app.template_filter('nl2br')
+def nl2br_filter(s):
+    if s:
+        return s.replace('\n', '<br>')
+    return s
+
+# Error handler for Request Entity Too Large (file upload too big)
+@app.errorhandler(413)
+def request_entity_too_large(error):
+    flash('File too large! Please upload a smaller file (max 16MB).', 'error')
+    return redirect(request.referrer or url_for('profile'))
+
 def compress_image(image_data, max_size=(400, 400), quality=70):
     """Compress and resize image to reduce file size"""
     try:
@@ -59,12 +72,21 @@ def parse_json_filter(value):
             return []
     return []
 
+@app.template_filter('from_json')
+def from_json_filter(value):
+    if value:
+        try:
+            return json.loads(value)
+        except:
+            return []
+    return []
+
 # Ensure upload folder exists
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 class User(UserMixin):
     def __init__(self, id, username, full_name, role, student_id=None, section=None, photo='default.png',
-                 profile_completed=1, email=None, github_account=None, railway_account=None,
+                 profile_completed=1, is_approved=1, email=None, github_account=None, railway_account=None,
                  messenger=None, pup_id_photo=None, cor_photo=None, contact_number=None,
                  programming_languages=None, databases_known=None, hosting_platforms=None, other_tools=None):
         self.id = id
@@ -75,6 +97,7 @@ class User(UserMixin):
         self.section = section
         self.photo = photo or 'default.png'
         self.profile_completed = profile_completed
+        self.is_approved = is_approved
         self.email = email
         self.github_account = github_account
         self.railway_account = railway_account
@@ -105,6 +128,7 @@ def load_user(user_id):
             user['section'],
             user['photo'] if 'photo' in keys else 'default.png',
             user['profile_completed'] if 'profile_completed' in keys else 1,
+            user['is_approved'] if 'is_approved' in keys else 1,
             user['email'] if 'email' in keys else None,
             user['github_account'] if 'github_account' in keys else None,
             user['railway_account'] if 'railway_account' in keys else None,
@@ -155,25 +179,21 @@ def get_pup_grade(percentage):
 
 # Grade weights per subject
 def get_grade_weights(subject_code):
-    """Get grade component weights based on subject code"""
-    if subject_code == 'COMP012':
-        # Network Administration specific weights
-        return {
-            'quizzes': 0.10,      # 10%
-            'activities': 0.25,   # 25%
-            'midterm': 0.15,      # 15%
-            'final': 0.15,        # 15%
-            'final_project': 0.35 # 35%
-        }
-    else:
-        # Default weights for other subjects
-        return {
-            'quizzes': 0.20,      # 20%
-            'activities': 0.40,   # 40%
-            'midterm': 0.20,      # 20%
-            'final': 0.20,        # 20%
-            'final_project': 0.00 # No final project
-        }
+    """Get grade component weights based on subject code
+    Standard PUP Grade Distribution:
+    - Activities: 50%
+    - Quizzes: 10%
+    - Midterm: 20%
+    - Final: 20%
+    """
+    # All subjects use the same standard PUP grade distribution
+    return {
+        'quizzes': 0.10,      # 10%
+        'activities': 0.50,   # 50%
+        'midterm': 0.20,      # 20%
+        'final': 0.20,        # 20%
+        'final_project': 0.00 # Included in activities if applicable
+    }
 
 # ==================== AUTH ROUTES ====================
 
@@ -198,7 +218,21 @@ def login():
         conn.close()
 
         if user and check_password_hash(user['password_hash'], password):
-            user_obj = User(user['id'], user['username'], user['full_name'], user['role'], user['student_id'], user['section'])
+            keys = user.keys()
+            is_approved = user['is_approved'] if 'is_approved' in keys else 1
+
+            # Check if student is approved (instructors are always approved)
+            if user['role'] == 'student' and not is_approved:
+                flash('Your enrollment is pending approval. Please wait for instructor approval.', 'warning')
+                return render_template('login.html')
+
+            user_obj = User(
+                user['id'], user['username'], user['full_name'], user['role'],
+                user['student_id'], user['section'],
+                user['photo'] if 'photo' in keys else 'default.png',
+                user['profile_completed'] if 'profile_completed' in keys else 1,
+                is_approved
+            )
             login_user(user_obj)
             flash('Logged in successfully!', 'success')
             if user['role'] == 'instructor':
@@ -206,6 +240,74 @@ def login():
             return redirect(url_for('student_dashboard'))
         flash('Invalid username or password', 'error')
     return render_template('login.html')
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if current_user.is_authenticated:
+        return redirect(url_for('student_dashboard'))
+
+    if request.method == 'POST':
+        email = request.form.get('email', '').strip().lower()
+        password = request.form.get('password', '')
+        confirm_password = request.form.get('confirm_password', '')
+        full_name = request.form.get('full_name', '').strip()
+        student_id = request.form.get('student_id', '').strip()
+        section = request.form.get('section', '').strip()
+
+        # Validation
+        errors = []
+        if not email or '@' not in email or '.' not in email:
+            errors.append('Please enter a valid email address.')
+        if not password or len(password) < 6:
+            errors.append('Password must be at least 6 characters.')
+        if password != confirm_password:
+            errors.append('Passwords do not match.')
+        if not full_name:
+            errors.append('Full name is required.')
+        if not student_id:
+            errors.append('Student ID is required.')
+        if not section:
+            errors.append('Section is required.')
+
+        if errors:
+            for error in errors:
+                flash(error, 'error')
+            return render_template('register.html')
+
+        conn = get_db()
+        cursor = conn.cursor()
+
+        # Check if email already exists
+        cursor.execute('SELECT id FROM users WHERE username = ?', (email,))
+        if cursor.fetchone():
+            flash('Email address already registered. Please use another or log in.', 'error')
+            conn.close()
+            return render_template('register.html')
+
+        # Check if student ID already exists
+        cursor.execute('SELECT id FROM users WHERE student_id = ?', (student_id,))
+        if cursor.fetchone():
+            flash('Student ID already registered. Please contact your instructor.', 'error')
+            conn.close()
+            return render_template('register.html')
+
+        # Create new student account (email is stored as username for login)
+        # is_approved defaults to 0, profile_completed defaults to 0
+        try:
+            cursor.execute('''
+                INSERT INTO users (username, password_hash, full_name, role, student_id, section, profile_completed, is_approved)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (email, generate_password_hash(password), full_name, 'student', student_id, section, 0, 0))
+            conn.commit()
+            flash('Registration successful! Please wait for instructor approval before logging in.', 'success')
+            conn.close()
+            return redirect(url_for('login'))
+        except Exception as e:
+            flash('Registration failed. Please try again.', 'error')
+            conn.close()
+            return render_template('register.html')
+
+    return render_template('register.html')
 
 @app.route('/logout')
 @login_required
@@ -640,8 +742,10 @@ def dashboard():
     cursor = conn.cursor()
     cursor.execute('SELECT * FROM subjects')
     subjects = cursor.fetchall()
-    cursor.execute('SELECT COUNT(*) as count FROM users WHERE role = "student"')
+    cursor.execute('SELECT COUNT(*) as count FROM users WHERE role = "student" AND is_approved = 1')
     student_count = cursor.fetchone()['count']
+    cursor.execute('SELECT COUNT(*) as count FROM users WHERE role = "student" AND (is_approved = 0 OR is_approved IS NULL)')
+    pending_count = cursor.fetchone()['count']
     cursor.execute('SELECT COUNT(*) as count FROM sessions')
     session_count = cursor.fetchone()['count']
     cursor.execute('SELECT COUNT(*) as count FROM activities')
@@ -652,6 +756,7 @@ def dashboard():
 
     stats = {
         'students': student_count,
+        'pending': pending_count,
         'subjects': len(subjects),
         'sessions': session_count,
         'activities': activity_count,
@@ -847,6 +952,342 @@ def delete_student(id):
     flash('Student deleted successfully!', 'success')
     return redirect(url_for('students'))
 
+# ==================== ENROLLMENT APPROVAL ====================
+
+@app.route('/enrollments')
+@login_required
+def enrollments():
+    """Enrollment approval page for instructors"""
+    if current_user.role != 'instructor':
+        return redirect(url_for('student_dashboard'))
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # Get pending (unapproved) students
+    cursor.execute('''
+        SELECT u.*, GROUP_CONCAT(s.code || ' - ' || s.section) as enrolled_subjects
+        FROM users u
+        LEFT JOIN enrollments e ON u.id = e.student_id
+        LEFT JOIN subjects s ON e.subject_id = s.id
+        WHERE u.role = 'student' AND (u.is_approved = 0 OR u.is_approved IS NULL)
+        GROUP BY u.id
+        ORDER BY u.created_at DESC
+    ''')
+    pending_students = cursor.fetchall()
+
+    # Get approved students
+    cursor.execute('''
+        SELECT u.*, GROUP_CONCAT(s.code || ' - ' || s.section) as enrolled_subjects
+        FROM users u
+        LEFT JOIN enrollments e ON u.id = e.student_id
+        LEFT JOIN subjects s ON e.subject_id = s.id
+        WHERE u.role = 'student' AND u.is_approved = 1
+        GROUP BY u.id
+        ORDER BY u.full_name
+    ''')
+    approved_students = cursor.fetchall()
+
+    # Get sections for filtering
+    cursor.execute('SELECT DISTINCT section FROM users WHERE role = "student" AND section IS NOT NULL ORDER BY section')
+    sections = [row['section'] for row in cursor.fetchall()]
+
+    # Get subjects for filtering
+    cursor.execute('SELECT id, code, section FROM subjects ORDER BY code, section')
+    subjects = cursor.fetchall()
+
+    # Count pending by section
+    cursor.execute('''
+        SELECT section, COUNT(*) as count
+        FROM users
+        WHERE role = 'student' AND (is_approved = 0 OR is_approved IS NULL)
+        GROUP BY section
+    ''')
+    pending_by_section = {row['section']: row['count'] for row in cursor.fetchall()}
+
+    conn.close()
+
+    return render_template('enrollments.html',
+                           pending_students=pending_students,
+                           approved_students=approved_students,
+                           sections=sections,
+                           subjects=subjects,
+                           pending_by_section=pending_by_section)
+
+def auto_enroll_student_in_matching_subjects(cursor, student_id, section):
+    """Helper function to auto-enroll a student in subjects matching their section"""
+    if not section:
+        return 0
+
+    # Find all subjects that match the student's section
+    cursor.execute('SELECT id FROM subjects WHERE section = ?', (section,))
+    matching_subjects = cursor.fetchall()
+
+    enrolled_count = 0
+    for subject in matching_subjects:
+        # Check if already enrolled
+        cursor.execute('''
+            SELECT id FROM enrollments WHERE student_id = ? AND subject_id = ?
+        ''', (student_id, subject['id']))
+        if not cursor.fetchone():
+            # Enroll the student
+            cursor.execute('''
+                INSERT INTO enrollments (student_id, subject_id)
+                VALUES (?, ?)
+            ''', (student_id, subject['id']))
+            enrolled_count += 1
+
+    return enrolled_count
+
+@app.route('/enrollments/approve/<int:student_id>', methods=['POST'])
+@login_required
+def approve_student(student_id):
+    """Approve a single student"""
+    if current_user.role != 'instructor':
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # Get student info including section
+    cursor.execute('SELECT full_name, section FROM users WHERE id = ?', (student_id,))
+    student = cursor.fetchone()
+
+    # Approve the student
+    cursor.execute('UPDATE users SET is_approved = 1 WHERE id = ? AND role = "student"', (student_id,))
+
+    # Auto-enroll in matching subjects
+    enrolled_count = auto_enroll_student_in_matching_subjects(cursor, student_id, student['section'])
+
+    # Create notification for the student
+    notification_msg = 'Your enrollment has been approved! You can now access the system.'
+    if enrolled_count > 0:
+        notification_msg += f' You have been enrolled in {enrolled_count} subject(s).'
+
+    cursor.execute('''
+        INSERT INTO notifications (user_id, type, icon, message, link)
+        VALUES (?, 'success', 'check-circle', ?, '/student/dashboard')
+    ''', (student_id, notification_msg))
+    conn.commit()
+    conn.close()
+
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify({'success': True, 'message': f'{student["full_name"]} approved!'})
+
+    flash(f'Student {student["full_name"]} approved!', 'success')
+    return redirect(url_for('enrollments'))
+
+@app.route('/enrollments/reject/<int:student_id>', methods=['POST'])
+@login_required
+def reject_student(student_id):
+    """Reject and delete a student enrollment"""
+    if current_user.role != 'instructor':
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # Get student info before deleting
+    cursor.execute('SELECT full_name FROM users WHERE id = ?', (student_id,))
+    student = cursor.fetchone()
+    student_name = student['full_name'] if student else 'Student'
+
+    # Delete enrollments first
+    cursor.execute('DELETE FROM enrollments WHERE student_id = ?', (student_id,))
+    # Delete the user
+    cursor.execute('DELETE FROM users WHERE id = ? AND role = "student"', (student_id,))
+    conn.commit()
+    conn.close()
+
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify({'success': True, 'message': f'{student_name} rejected and removed!'})
+
+    flash(f'Student {student_name} rejected and removed!', 'success')
+    return redirect(url_for('enrollments'))
+
+@app.route('/enrollments/approve-section/<section>', methods=['POST'])
+@login_required
+def approve_section(section):
+    """Approve all pending students in a section"""
+    if current_user.role != 'instructor':
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # Get pending students in this section
+    cursor.execute('''
+        SELECT id, full_name, section FROM users
+        WHERE role = 'student' AND section = ? AND (is_approved = 0 OR is_approved IS NULL)
+    ''', (section,))
+    students = cursor.fetchall()
+
+    # Approve all
+    cursor.execute('''
+        UPDATE users SET is_approved = 1
+        WHERE role = 'student' AND section = ? AND (is_approved = 0 OR is_approved IS NULL)
+    ''', (section,))
+    count = cursor.rowcount
+
+    # Auto-enroll each student and create notifications
+    for student in students:
+        enrolled_count = auto_enroll_student_in_matching_subjects(cursor, student['id'], student['section'])
+
+        notification_msg = 'Your enrollment has been approved! You can now access the system.'
+        if enrolled_count > 0:
+            notification_msg += f' You have been enrolled in {enrolled_count} subject(s).'
+
+        cursor.execute('''
+            INSERT INTO notifications (user_id, type, icon, message, link)
+            VALUES (?, 'success', 'check-circle', ?, '/student/dashboard')
+        ''', (student['id'], notification_msg))
+
+    conn.commit()
+    conn.close()
+
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify({'success': True, 'message': f'{count} students in {section} approved!'})
+
+    flash(f'{count} students in {section} approved!', 'success')
+    return redirect(url_for('enrollments'))
+
+@app.route('/enrollments/approve-all', methods=['POST'])
+@login_required
+def approve_all_students():
+    """Approve all pending students"""
+    if current_user.role != 'instructor':
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # Get all pending students with their sections
+    cursor.execute('''
+        SELECT id, full_name, section FROM users
+        WHERE role = 'student' AND (is_approved = 0 OR is_approved IS NULL)
+    ''')
+    students = cursor.fetchall()
+
+    # Approve all
+    cursor.execute('''
+        UPDATE users SET is_approved = 1
+        WHERE role = 'student' AND (is_approved = 0 OR is_approved IS NULL)
+    ''')
+    count = cursor.rowcount
+
+    # Auto-enroll each student and create notifications
+    for student in students:
+        enrolled_count = auto_enroll_student_in_matching_subjects(cursor, student['id'], student['section'])
+
+        notification_msg = 'Your enrollment has been approved! You can now access the system.'
+        if enrolled_count > 0:
+            notification_msg += f' You have been enrolled in {enrolled_count} subject(s).'
+
+        cursor.execute('''
+            INSERT INTO notifications (user_id, type, icon, message, link)
+            VALUES (?, 'success', 'check-circle', ?, '/student/dashboard')
+        ''', (student['id'], notification_msg))
+
+    conn.commit()
+    conn.close()
+
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify({'success': True, 'message': f'{count} students approved!'})
+
+    flash(f'{count} students approved!', 'success')
+    return redirect(url_for('enrollments'))
+
+@app.route('/enrollments/revoke/<int:student_id>', methods=['POST'])
+@login_required
+def revoke_approval(student_id):
+    """Revoke approval for a student"""
+    if current_user.role != 'instructor':
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('UPDATE users SET is_approved = 0 WHERE id = ? AND role = "student"', (student_id,))
+    conn.commit()
+
+    cursor.execute('SELECT full_name FROM users WHERE id = ?', (student_id,))
+    student = cursor.fetchone()
+    conn.close()
+
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify({'success': True, 'message': f'{student["full_name"]} approval revoked!'})
+
+    flash(f'Approval revoked for {student["full_name"]}!', 'success')
+    return redirect(url_for('enrollments'))
+
+@app.route('/enrollments/sync-subjects/<int:student_id>', methods=['POST'])
+@login_required
+def sync_student_subjects(student_id):
+    """Sync a student's enrollments with their section's subjects"""
+    if current_user.role != 'instructor':
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # Get student info
+    cursor.execute('SELECT full_name, section FROM users WHERE id = ?', (student_id,))
+    student = cursor.fetchone()
+
+    if not student:
+        conn.close()
+        return jsonify({'error': 'Student not found'}), 404
+
+    # Auto-enroll in matching subjects
+    enrolled_count = auto_enroll_student_in_matching_subjects(cursor, student_id, student['section'])
+    conn.commit()
+    conn.close()
+
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        if enrolled_count > 0:
+            return jsonify({'success': True, 'message': f'{student["full_name"]} enrolled in {enrolled_count} subject(s)!'})
+        else:
+            return jsonify({'success': True, 'message': f'{student["full_name"]} is already enrolled in all matching subjects.'})
+
+    if enrolled_count > 0:
+        flash(f'{student["full_name"]} enrolled in {enrolled_count} subject(s)!', 'success')
+    else:
+        flash(f'{student["full_name"]} is already enrolled in all matching subjects.', 'info')
+    return redirect(url_for('enrollments'))
+
+@app.route('/enrollments/sync-all-subjects', methods=['POST'])
+@login_required
+def sync_all_student_subjects():
+    """Sync all approved students' enrollments with their section's subjects"""
+    if current_user.role != 'instructor':
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # Get all approved students
+    cursor.execute('''
+        SELECT id, full_name, section FROM users
+        WHERE role = 'student' AND is_approved = 1
+    ''')
+    students = cursor.fetchall()
+
+    total_enrolled = 0
+    students_updated = 0
+    for student in students:
+        enrolled_count = auto_enroll_student_in_matching_subjects(cursor, student['id'], student['section'])
+        if enrolled_count > 0:
+            total_enrolled += enrolled_count
+            students_updated += 1
+
+    conn.commit()
+    conn.close()
+
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify({'success': True, 'message': f'{students_updated} student(s) enrolled in {total_enrolled} subject(s)!'})
+
+    flash(f'{students_updated} student(s) enrolled in {total_enrolled} subject(s)!', 'success')
+    return redirect(url_for('enrollments'))
+
 # ==================== SUBJECTS ====================
 
 @app.route('/subjects')
@@ -1022,21 +1463,63 @@ def submit_activity(activity_id):
         return redirect(url_for('student_dashboard'))
 
     content = request.form.get('content', '')
-    file_path = None
 
-    # Handle file upload
-    if 'submission_file' in request.files:
-        file = request.files['submission_file']
+    # Calculate late submission penalty
+    is_late = 0
+    late_days = 0
+    late_penalty = 0
+
+    due_date = activity['due_date'] if 'due_date' in keys else None
+    due_time = activity['due_time'] if 'due_time' in keys else '23:59'
+    late_penalty_per_day = activity['late_penalty_per_day'] if 'late_penalty_per_day' in keys else 1
+
+    if due_date:
+        # Combine due date and time
+        due_datetime_str = f"{due_date} {due_time or '23:59'}"
+        try:
+            due_datetime = datetime.strptime(due_datetime_str, '%Y-%m-%d %H:%M')
+            now = datetime.now()
+
+            if now > due_datetime:
+                is_late = 1
+                # Calculate days late (every 24 hours = 1 day)
+                time_diff = now - due_datetime
+                late_days = time_diff.days + (1 if time_diff.seconds > 0 else 0)
+                late_penalty = late_days * late_penalty_per_day
+        except ValueError:
+            pass  # If date parsing fails, don't apply penalty
+
+    # Handle multiple file uploads
+    uploaded_files = []
+    files = request.files.getlist('submission_files')
+
+    # Also check for single file upload (backwards compatibility)
+    if not files or (len(files) == 1 and not files[0].filename):
+        if 'submission_file' in request.files:
+            single_file = request.files['submission_file']
+            if single_file and single_file.filename:
+                files = [single_file]
+
+    # Create activity-specific folder
+    activity_folder = os.path.join(app.config['UPLOAD_FOLDER'], 'activity_submissions', f"activity_{activity_id}")
+    os.makedirs(activity_folder, exist_ok=True)
+
+    first_file_path = None
+    for file in files:
         if file and file.filename:
-            # Create activity-specific folder
-            activity_folder = os.path.join(app.config['UPLOAD_FOLDER'], 'activity_submissions', f"activity_{activity_id}")
-            os.makedirs(activity_folder, exist_ok=True)
-
-            ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else ''
             safe_filename = secure_filename(file.filename)
-            filename = f"student_{current_user.id}_{datetime.now().strftime('%Y%m%d%H%M%S')}_{safe_filename}"
+            timestamp = datetime.now().strftime('%Y%m%d%H%M%S%f')
+            filename = f"student_{current_user.id}_{timestamp}_{safe_filename}"
             file.save(os.path.join(activity_folder, filename))
             file_path = f"activity_{activity_id}/{filename}"
+
+            if first_file_path is None:
+                first_file_path = file_path
+
+            uploaded_files.append({
+                'file_path': file_path,
+                'file_name': file.filename
+            })
 
     # Check if already submitted
     cursor.execute('SELECT id FROM submissions WHERE activity_id = ? AND student_id = ?',
@@ -1044,25 +1527,37 @@ def submit_activity(activity_id):
     existing = cursor.fetchone()
 
     if existing:
-        if file_path:
-            cursor.execute('''
-                UPDATE submissions SET content = ?, file_path = ?, submitted_at = CURRENT_TIMESTAMP
-                WHERE activity_id = ? AND student_id = ?
-            ''', (content, file_path, activity_id, current_user.id))
-        else:
-            cursor.execute('''
-                UPDATE submissions SET content = ?, submitted_at = CURRENT_TIMESTAMP
-                WHERE activity_id = ? AND student_id = ?
-            ''', (content, activity_id, current_user.id))
+        submission_id = existing['id']
+        # Update existing submission with late info
+        cursor.execute('''
+            UPDATE submissions SET content = ?, file_path = ?, submitted_at = CURRENT_TIMESTAMP,
+            is_late = ?, late_days = ?, late_penalty = ?
+            WHERE activity_id = ? AND student_id = ?
+        ''', (content, first_file_path, is_late, late_days, late_penalty, activity_id, current_user.id))
+
+        # Delete old files from submission_files table
+        cursor.execute('DELETE FROM submission_files WHERE submission_id = ?', (submission_id,))
     else:
         cursor.execute('''
-            INSERT INTO submissions (activity_id, student_id, content, file_path)
-            VALUES (?, ?, ?, ?)
-        ''', (activity_id, current_user.id, content, file_path))
+            INSERT INTO submissions (activity_id, student_id, content, file_path, is_late, late_days, late_penalty)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (activity_id, current_user.id, content, first_file_path, is_late, late_days, late_penalty))
+        submission_id = cursor.lastrowid
+
+    # Insert all uploaded files into submission_files table
+    for file_info in uploaded_files:
+        cursor.execute('''
+            INSERT INTO submission_files (submission_id, file_path, file_name)
+            VALUES (?, ?, ?)
+        ''', (submission_id, file_info['file_path'], file_info['file_name']))
 
     conn.commit()
     conn.close()
-    flash('Activity submitted successfully!', 'success')
+
+    if is_late:
+        flash(f'Activity submitted successfully! Note: Your submission is {late_days} day(s) late with a penalty of {late_penalty} point(s).', 'warning')
+    else:
+        flash('Activity submitted successfully!', 'success')
     return redirect(url_for('student_dashboard'))
 
 @app.route('/activity/<int:activity_id>/grade', methods=['POST'])
@@ -1072,19 +1567,121 @@ def grade_activity(activity_id):
         return redirect(url_for('student_dashboard'))
 
     submission_id = request.form['submission_id']
-    score = request.form['score']
+    instructor_score = float(request.form['score'])
     feedback = request.form['feedback']
 
     conn = get_db()
     cursor = conn.cursor()
+
+    # Get the submission and activity info
     cursor.execute('''
-        UPDATE submissions SET score = ?, feedback = ?
-        WHERE id = ?
-    ''', (score, feedback, submission_id))
+        SELECT s.*, a.points, a.enable_peer_review
+        FROM submissions s
+        JOIN activities a ON s.activity_id = a.id
+        WHERE s.id = ?
+    ''', (submission_id,))
+    submission = cursor.fetchone()
+
+    if not submission:
+        flash('Submission not found', 'error')
+        conn.close()
+        return redirect(url_for('view_submissions', activity_id=activity_id))
+
+    student_id = submission['student_id']
+    max_points = submission['points']
+    enable_peer_review = submission['enable_peer_review'] if 'enable_peer_review' in submission.keys() else 0
+
+    # Calculate final score based on peer review enabled or not
+    if enable_peer_review:
+        # Get peer review score (25% weight) - now stored as percentage (60-100)
+        peer_review_score = submission['peer_review_score'] if submission['peer_review_score'] else 60
+
+        # Calculate participation score (25% weight) - returns percentage (0-100)
+        # Based on: completed reviews + quality of reviews
+        participation_score = calculate_participation_score(cursor, student_id, activity_id, max_points)
+
+        # Calculate weighted final score
+        # 25% peer review + 25% participation + 50% instructor
+        # peer_review_score is already 60-100 (percentage)
+        # participation_score is already 0-100 (percentage)
+        # instructor_score needs to be converted to percentage
+        peer_component = (peer_review_score / 100) * 25
+        participation_component = (participation_score / 100) * 25
+        instructor_component = (instructor_score / max_points) * 50 if max_points > 0 else 0
+
+        # Final score as percentage, then converted to points
+        final_percentage = peer_component + participation_component + instructor_component
+        final_score = (final_percentage / 100) * max_points
+
+        # Apply late penalty if any
+        late_penalty = submission['late_penalty'] if submission['late_penalty'] else 0
+        final_score = max(0, final_score - late_penalty)
+
+        cursor.execute('''
+            UPDATE submissions
+            SET score = ?, instructor_score = ?, participation_score = ?, final_score = ?, feedback = ?
+            WHERE id = ?
+        ''', (instructor_score, instructor_score, participation_score, final_score, feedback, submission_id))
+    else:
+        # No peer review - instructor score is the final score
+        late_penalty = submission['late_penalty'] if submission['late_penalty'] else 0
+        final_score = max(0, instructor_score - late_penalty)
+
+        cursor.execute('''
+            UPDATE submissions
+            SET score = ?, instructor_score = ?, final_score = ?, feedback = ?
+            WHERE id = ?
+        ''', (instructor_score, instructor_score, final_score, feedback, submission_id))
+
     conn.commit()
     conn.close()
     flash('Grade saved successfully!', 'success')
     return redirect(url_for('view_submissions', activity_id=activity_id))
+
+
+def calculate_participation_score(cursor, student_id, activity_id, max_points):
+    """
+    Calculate participation score for a student as a PERCENTAGE (0-100) based on:
+    1. Completing assigned peer reviews (50% of participation)
+    2. Quality of reviews - rated by instructor (50% of participation)
+
+    Returns: percentage score (0-100)
+    """
+    # Get all peer review assignments for this student for this activity
+    cursor.execute('''
+        SELECT pra.*, s.activity_id
+        FROM peer_review_assignments pra
+        JOIN submissions s ON pra.submission_id = s.id
+        WHERE pra.reviewer_id = ? AND s.activity_id = ?
+    ''', (student_id, activity_id))
+    assignments = cursor.fetchall()
+
+    if not assignments:
+        # No assignments = full participation score (they weren't required to review)
+        return 100  # Return 100%
+
+    total_assignments = len(assignments)
+    completed_assignments = sum(1 for a in assignments if a['is_completed'])
+
+    # Completion score (50% of participation = 50 percentage points max)
+    completion_rate = completed_assignments / total_assignments if total_assignments > 0 else 0
+    completion_score = completion_rate * 50  # 0-50 points
+
+    # Quality score (50% of participation = 50 percentage points max)
+    # Based on instructor-rated review quality (review_quality_score is 0-100)
+    quality_scores = []
+    for a in assignments:
+        if a['is_completed'] and 'review_quality_score' in a.keys() and a['review_quality_score'] is not None:
+            quality_scores.append(a['review_quality_score'])
+
+    if quality_scores:
+        avg_quality = sum(quality_scores) / len(quality_scores)
+        quality_score = (avg_quality / 100) * 50  # Convert to 0-50 range
+    else:
+        # If no quality ratings yet, give benefit of the doubt for completed reviews
+        quality_score = completion_rate * 50
+
+    return completion_score + quality_score  # Returns 0-100
 
 @app.route('/activity/<int:activity_id>/submissions')
 @login_required
@@ -1103,9 +1700,655 @@ def view_submissions(activity_id):
         WHERE s.activity_id = ?
         ORDER BY s.submitted_at
     ''', (activity_id,))
-    submissions = cursor.fetchall()
+    submissions_raw = cursor.fetchall()
+
+    # Fetch all files for each submission
+    submissions = []
+    for sub in submissions_raw:
+        sub_dict = dict(sub)
+        cursor.execute('''
+            SELECT * FROM submission_files WHERE submission_id = ?
+        ''', (sub['id'],))
+        sub_dict['files'] = cursor.fetchall()
+        submissions.append(sub_dict)
+
     conn.close()
     return render_template('submissions.html', activity=activity, submissions=submissions)
+
+# ==================== PEER REVIEW SYSTEM ====================
+
+@app.route('/instructor/peer-reviews')
+@login_required
+def instructor_peer_reviews():
+    """Instructor overview of all peer reviews across activities"""
+    if current_user.role != 'instructor':
+        return redirect(url_for('student_dashboard'))
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # Get all activities with peer review enabled
+    cursor.execute('''
+        SELECT a.*, ses.title as session_title, sub.name as subject_name, sub.section,
+               (SELECT COUNT(*) FROM submissions WHERE activity_id = a.id) as submission_count,
+               (SELECT COUNT(*) FROM peer_review_assignments pra
+                JOIN submissions s ON pra.submission_id = s.id
+                WHERE s.activity_id = a.id) as assignment_count,
+               (SELECT COUNT(*) FROM peer_review_assignments pra
+                JOIN submissions s ON pra.submission_id = s.id
+                WHERE s.activity_id = a.id AND pra.is_completed = 1) as completed_count
+        FROM activities a
+        JOIN sessions ses ON a.session_id = ses.id
+        JOIN subjects sub ON ses.subject_id = sub.id
+        WHERE a.enable_peer_review = 1
+        ORDER BY a.id DESC
+    ''')
+    activities = cursor.fetchall()
+
+    conn.close()
+    return render_template('instructor_peer_reviews.html', activities=activities)
+
+
+@app.route('/activity/<int:activity_id>/peer-review/settings', methods=['GET', 'POST'])
+@login_required
+def peer_review_settings(activity_id):
+    """Instructor page to configure peer review settings and criteria"""
+    if current_user.role != 'instructor':
+        return redirect(url_for('student_dashboard'))
+
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM activities WHERE id = ?', (activity_id,))
+    activity = cursor.fetchone()
+
+    if not activity:
+        flash('Activity not found', 'error')
+        conn.close()
+        return redirect(url_for('dashboard'))
+
+    if request.method == 'POST':
+        enable_peer_review = 1 if request.form.get('enable_peer_review') else 0
+        peer_reviewers_count = int(request.form.get('peer_reviewers_count', 1))
+
+        cursor.execute('''
+            UPDATE activities SET enable_peer_review = ?, peer_reviewers_count = ?
+            WHERE id = ?
+        ''', (enable_peer_review, peer_reviewers_count, activity_id))
+        conn.commit()
+        flash('Peer review settings updated!', 'success')
+
+    # Get existing criteria
+    cursor.execute('''
+        SELECT * FROM peer_review_criteria WHERE activity_id = ? ORDER BY order_num
+    ''', (activity_id,))
+    criteria = cursor.fetchall()
+
+    # Get activity with updated settings
+    cursor.execute('SELECT * FROM activities WHERE id = ?', (activity_id,))
+    activity = cursor.fetchone()
+
+    conn.close()
+    return render_template('peer_review_settings.html', activity=activity, criteria=criteria)
+
+
+@app.route('/activity/<int:activity_id>/peer-review/criteria', methods=['POST'])
+@login_required
+def add_peer_review_criteria(activity_id):
+    """Add a new peer review criterion"""
+    if current_user.role != 'instructor':
+        return redirect(url_for('student_dashboard'))
+
+    criterion = request.form.get('criterion', '').strip()
+    points = int(request.form.get('points', 1))
+
+    if not criterion:
+        flash('Criterion text is required', 'error')
+        return redirect(url_for('peer_review_settings', activity_id=activity_id))
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # Get next order number
+    cursor.execute('SELECT MAX(order_num) as max_order FROM peer_review_criteria WHERE activity_id = ?', (activity_id,))
+    result = cursor.fetchone()
+    next_order = (result['max_order'] or 0) + 1
+
+    cursor.execute('''
+        INSERT INTO peer_review_criteria (activity_id, criterion, points, order_num)
+        VALUES (?, ?, ?, ?)
+    ''', (activity_id, criterion, points, next_order))
+    conn.commit()
+    conn.close()
+
+    flash('Criterion added successfully!', 'success')
+    return redirect(url_for('peer_review_settings', activity_id=activity_id))
+
+
+@app.route('/activity/<int:activity_id>/peer-review/criteria/<int:criterion_id>/delete', methods=['POST'])
+@login_required
+def delete_peer_review_criteria(activity_id, criterion_id):
+    """Delete a peer review criterion"""
+    if current_user.role != 'instructor':
+        return redirect(url_for('student_dashboard'))
+
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('DELETE FROM peer_review_criteria WHERE id = ? AND activity_id = ?', (criterion_id, activity_id))
+    conn.commit()
+    conn.close()
+
+    flash('Criterion deleted', 'success')
+    return redirect(url_for('peer_review_settings', activity_id=activity_id))
+
+
+@app.route('/activity/<int:activity_id>/peer-review/assign', methods=['POST'])
+@login_required
+def assign_peer_reviewers(activity_id):
+    """Randomly assign peer reviewers to submissions - smart assignment that preserves completed reviews"""
+    if current_user.role != 'instructor':
+        return redirect(url_for('student_dashboard'))
+
+    import random
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # Get activity settings
+    cursor.execute('SELECT * FROM activities WHERE id = ?', (activity_id,))
+    activity = cursor.fetchone()
+
+    if not activity:
+        flash('Activity not found', 'error')
+        conn.close()
+        return redirect(url_for('dashboard'))
+
+    keys = activity.keys()
+    peer_reviewers_count = activity['peer_reviewers_count'] if 'peer_reviewers_count' in keys else 1
+
+    # Get all submissions for this activity
+    cursor.execute('''
+        SELECT s.id, s.student_id FROM submissions s
+        WHERE s.activity_id = ?
+    ''', (activity_id,))
+    submissions = cursor.fetchall()
+
+    if len(submissions) < 2:
+        flash('Need at least 2 submissions to assign peer reviews', 'error')
+        conn.close()
+        return redirect(url_for('peer_review_settings', activity_id=activity_id))
+
+    # Get existing assignments (both completed and pending) to avoid duplicates
+    submission_ids = [s['id'] for s in submissions]
+    placeholders = ','.join(['?' for _ in submission_ids])
+    cursor.execute(f'''
+        SELECT submission_id, reviewer_id, is_completed FROM peer_review_assignments
+        WHERE submission_id IN ({placeholders})
+    ''', submission_ids)
+    existing_assignments = cursor.fetchall()
+
+    # Build a set of existing (submission_id, reviewer_id) pairs
+    existing_pairs = set((a['submission_id'], a['reviewer_id']) for a in existing_assignments)
+
+    # Track completed assignments - these should not be removed
+    completed_pairs = set((a['submission_id'], a['reviewer_id']) for a in existing_assignments if a['is_completed'])
+
+    # Only delete PENDING (not completed) assignments for fresh reassignment
+    for sub_id in submission_ids:
+        cursor.execute('''
+            DELETE FROM peer_review_assignments
+            WHERE submission_id = ? AND is_completed = 0
+        ''', (sub_id,))
+
+    # Track how many reviews each student has already completed for this activity
+    cursor.execute(f'''
+        SELECT reviewer_id, COUNT(*) as review_count
+        FROM peer_review_assignments
+        WHERE submission_id IN ({placeholders}) AND is_completed = 1
+        GROUP BY reviewer_id
+    ''', submission_ids)
+    completed_counts = {row['reviewer_id']: row['review_count'] for row in cursor.fetchall()}
+
+    # Create assignment pool - each student should review X other submissions
+    assignments_made = 0
+
+    for submission in submissions:
+        submitter_id = submission['student_id']
+        submission_id = submission['id']
+
+        # Check how many reviewers this submission already has (completed)
+        existing_reviewers_for_sub = [p[1] for p in completed_pairs if p[0] == submission_id]
+        needed_reviewers = max(0, peer_reviewers_count - len(existing_reviewers_for_sub))
+
+        if needed_reviewers <= 0:
+            continue  # This submission already has enough reviews
+
+        # Get potential reviewers (all students who submitted, except the submitter)
+        # and who haven't already reviewed this submission
+        potential_reviewers = [
+            s['student_id'] for s in submissions
+            if s['student_id'] != submitter_id
+            and (submission_id, s['student_id']) not in completed_pairs
+        ]
+
+        # Sort by least reviews completed (so workload is distributed evenly)
+        potential_reviewers.sort(key=lambda r: completed_counts.get(r, 0))
+
+        # Add some randomness within similar workload groups
+        random.shuffle(potential_reviewers)
+
+        selected_reviewers = potential_reviewers[:min(needed_reviewers, len(potential_reviewers))]
+
+        for reviewer_id in selected_reviewers:
+            # Double check not already assigned
+            if (submission_id, reviewer_id) not in existing_pairs:
+                try:
+                    cursor.execute('''
+                        INSERT INTO peer_review_assignments (submission_id, reviewer_id)
+                        VALUES (?, ?)
+                    ''', (submission_id, reviewer_id))
+                    assignments_made += 1
+                    existing_pairs.add((submission_id, reviewer_id))
+                except:
+                    pass  # Skip duplicates
+
+    conn.commit()
+    conn.close()
+
+    flash(f'Peer review assignments updated! {assignments_made} new reviews assigned. Completed reviews preserved.', 'success')
+    return redirect(url_for('peer_review_settings', activity_id=activity_id))
+
+
+@app.route('/student/peer-reviews')
+@login_required
+def student_peer_reviews():
+    """Student page to see pending and completed peer reviews"""
+    if current_user.role != 'student':
+        return redirect(url_for('dashboard'))
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # Get pending peer reviews (assigned to this student but not completed)
+    cursor.execute('''
+        SELECT pra.*, s.content, s.file_path, a.title as activity_title, a.id as activity_id,
+               ses.title as session_title, sub.name as subject_name
+        FROM peer_review_assignments pra
+        JOIN submissions s ON pra.submission_id = s.id
+        JOIN activities a ON s.activity_id = a.id
+        JOIN sessions ses ON a.session_id = ses.id
+        JOIN subjects sub ON ses.subject_id = sub.id
+        WHERE pra.reviewer_id = ? AND pra.is_completed = 0
+        ORDER BY pra.assigned_at DESC
+    ''', (current_user.id,))
+    pending_reviews = cursor.fetchall()
+
+    # Get completed peer reviews
+    cursor.execute('''
+        SELECT pra.*, s.content, a.title as activity_title, a.id as activity_id,
+               ses.title as session_title, sub.name as subject_name
+        FROM peer_review_assignments pra
+        JOIN submissions s ON pra.submission_id = s.id
+        JOIN activities a ON s.activity_id = a.id
+        JOIN sessions ses ON a.session_id = ses.id
+        JOIN subjects sub ON ses.subject_id = sub.id
+        WHERE pra.reviewer_id = ? AND pra.is_completed = 1
+        ORDER BY pra.completed_at DESC
+    ''', (current_user.id,))
+    completed_reviews = cursor.fetchall()
+
+    conn.close()
+    return render_template('student_peer_reviews.html',
+                           pending_reviews=pending_reviews,
+                           completed_reviews=completed_reviews)
+
+
+@app.route('/peer-review/<int:assignment_id>')
+@login_required
+def do_peer_review(assignment_id):
+    """Page for student to complete a peer review"""
+    if current_user.role != 'student':
+        return redirect(url_for('dashboard'))
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # Get the assignment and verify it belongs to the current user
+    cursor.execute('''
+        SELECT pra.*, s.content, s.file_path, s.activity_id,
+               a.title as activity_title, a.instructions
+        FROM peer_review_assignments pra
+        JOIN submissions s ON pra.submission_id = s.id
+        JOIN activities a ON s.activity_id = a.id
+        WHERE pra.id = ? AND pra.reviewer_id = ?
+    ''', (assignment_id, current_user.id))
+    assignment = cursor.fetchone()
+
+    if not assignment:
+        flash('Peer review assignment not found', 'error')
+        conn.close()
+        return redirect(url_for('student_peer_reviews'))
+
+    # Get the submission files
+    cursor.execute('''
+        SELECT * FROM submission_files WHERE submission_id = ?
+    ''', (assignment['submission_id'],))
+    files = cursor.fetchall()
+
+    # Get review criteria for this activity
+    cursor.execute('''
+        SELECT * FROM peer_review_criteria WHERE activity_id = ? ORDER BY order_num
+    ''', (assignment['activity_id'],))
+    criteria = cursor.fetchall()
+
+    conn.close()
+    return render_template('do_peer_review.html',
+                           assignment=assignment,
+                           files=files,
+                           criteria=criteria)
+
+
+@app.route('/peer-review/<int:assignment_id>/submit', methods=['POST'])
+@login_required
+def submit_peer_review(assignment_id):
+    """Submit peer review responses"""
+    if current_user.role != 'student':
+        return redirect(url_for('dashboard'))
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # Verify assignment belongs to current user
+    cursor.execute('''
+        SELECT pra.*, s.activity_id FROM peer_review_assignments pra
+        JOIN submissions s ON pra.submission_id = s.id
+        WHERE pra.id = ? AND pra.reviewer_id = ?
+    ''', (assignment_id, current_user.id))
+    assignment = cursor.fetchone()
+
+    if not assignment:
+        flash('Peer review assignment not found', 'error')
+        conn.close()
+        return redirect(url_for('student_peer_reviews'))
+
+    # Get all criteria for this activity
+    cursor.execute('''
+        SELECT * FROM peer_review_criteria WHERE activity_id = ?
+    ''', (assignment['activity_id'],))
+    criteria = cursor.fetchall()
+
+    # New scoring system:
+    # Yes = 100, Somehow = 85, No = 70, No answer = 60
+    SCORE_YES = 100
+    SCORE_SOMEHOW = 85
+    SCORE_NO = 70
+    SCORE_NO_ANSWER = 60
+
+    total_score = 0
+    criteria_count = len(criteria)
+
+    # Process each criterion response
+    for criterion in criteria:
+        criterion_id = criterion['id']
+        response = request.form.get(f'criterion_{criterion_id}', '')
+
+        # Calculate score based on response
+        if response == 'yes':
+            points_awarded = SCORE_YES
+        elif response == 'somehow':
+            points_awarded = SCORE_SOMEHOW
+        elif response == 'no':
+            points_awarded = SCORE_NO
+        else:
+            points_awarded = SCORE_NO_ANSWER
+            response = 'no_answer'
+
+        total_score += points_awarded
+
+        # Save the response
+        cursor.execute('''
+            INSERT INTO peer_review_responses (assignment_id, criterion_id, response, points_awarded)
+            VALUES (?, ?, ?, ?)
+        ''', (assignment_id, criterion_id, response, points_awarded))
+
+    # Calculate average score for this review (percentage out of 100)
+    avg_review_score = total_score / criteria_count if criteria_count > 0 else SCORE_NO_ANSWER
+
+    # Mark assignment as completed
+    cursor.execute('''
+        UPDATE peer_review_assignments SET is_completed = 1, completed_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+    ''', (assignment_id,))
+
+    # Update the submission's peer review score (average of all reviewers)
+    submission_id = assignment['submission_id']
+
+    # Calculate average peer review score across all completed reviews for this submission
+    cursor.execute('''
+        SELECT AVG(
+            (SELECT AVG(points_awarded) FROM peer_review_responses WHERE assignment_id = pra.id)
+        ) as avg_score
+        FROM peer_review_assignments pra
+        WHERE pra.submission_id = ? AND pra.is_completed = 1
+    ''', (submission_id,))
+    result = cursor.fetchone()
+    avg_peer_score = result['avg_score'] if result and result['avg_score'] else avg_review_score
+
+    cursor.execute('''
+        UPDATE submissions SET peer_review_score = ? WHERE id = ?
+    ''', (avg_peer_score, submission_id))
+
+    conn.commit()
+    conn.close()
+
+    flash(f'Peer review submitted! Average score awarded: {avg_review_score:.1f}/100', 'success')
+    return redirect(url_for('student_peer_reviews'))
+
+
+@app.route('/activity/<int:activity_id>/peer-review/status')
+@login_required
+def peer_review_status(activity_id):
+    """Instructor view of peer review status and scores"""
+    if current_user.role != 'instructor':
+        return redirect(url_for('student_dashboard'))
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    cursor.execute('SELECT * FROM activities WHERE id = ?', (activity_id,))
+    activity = cursor.fetchone()
+
+    if not activity:
+        flash('Activity not found', 'error')
+        conn.close()
+        return redirect(url_for('dashboard'))
+
+    # Get all submissions with their peer review status
+    cursor.execute('''
+        SELECT s.*, u.full_name, u.student_id as sid,
+               (SELECT COUNT(*) FROM peer_review_assignments WHERE submission_id = s.id) as total_reviewers,
+               (SELECT COUNT(*) FROM peer_review_assignments WHERE submission_id = s.id AND is_completed = 1) as completed_reviews
+        FROM submissions s
+        JOIN users u ON s.student_id = u.id
+        WHERE s.activity_id = ?
+        ORDER BY u.full_name
+    ''', (activity_id,))
+    submissions = cursor.fetchall()
+
+    conn.close()
+    return render_template('peer_review_status.html', activity=activity, submissions=submissions)
+
+
+@app.route('/activity/<int:activity_id>/peer-review/reviews')
+@login_required
+def view_peer_reviews(activity_id):
+    """Instructor page to view all peer reviews and rate their quality"""
+    if current_user.role != 'instructor':
+        return redirect(url_for('student_dashboard'))
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    cursor.execute('SELECT * FROM activities WHERE id = ?', (activity_id,))
+    activity = cursor.fetchone()
+
+    if not activity:
+        flash('Activity not found', 'error')
+        conn.close()
+        return redirect(url_for('dashboard'))
+
+    # Get all completed peer review assignments with details
+    cursor.execute('''
+        SELECT pra.*,
+               reviewer.full_name as reviewer_name, reviewer.student_id as reviewer_sid,
+               submitter.full_name as submitter_name, submitter.student_id as submitter_sid,
+               s.content as submission_content
+        FROM peer_review_assignments pra
+        JOIN submissions s ON pra.submission_id = s.id
+        JOIN users reviewer ON pra.reviewer_id = reviewer.id
+        JOIN users submitter ON s.student_id = submitter.id
+        WHERE s.activity_id = ? AND pra.is_completed = 1
+        ORDER BY pra.completed_at DESC
+    ''', (activity_id,))
+    reviews = cursor.fetchall()
+
+    # Get criteria for this activity
+    cursor.execute('SELECT * FROM peer_review_criteria WHERE activity_id = ? ORDER BY order_num', (activity_id,))
+    criteria = cursor.fetchall()
+
+    # Get responses for each review
+    reviews_with_responses = []
+    for review in reviews:
+        review_dict = dict(review)
+        cursor.execute('''
+            SELECT prr.*, prc.criterion
+            FROM peer_review_responses prr
+            JOIN peer_review_criteria prc ON prr.criterion_id = prc.id
+            WHERE prr.assignment_id = ?
+            ORDER BY prc.order_num
+        ''', (review['id'],))
+        review_dict['responses'] = cursor.fetchall()
+        reviews_with_responses.append(review_dict)
+
+    conn.close()
+    return render_template('view_peer_reviews.html',
+                           activity=activity,
+                           reviews=reviews_with_responses,
+                           criteria=criteria)
+
+
+@app.route('/peer-review/<int:assignment_id>/rate', methods=['POST'])
+@login_required
+def rate_peer_review(assignment_id):
+    """Instructor rates the quality of a peer review"""
+    if current_user.role != 'instructor':
+        return redirect(url_for('student_dashboard'))
+
+    quality_score = float(request.form.get('quality_score', 0))
+    instructor_feedback = request.form.get('instructor_feedback', '')
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # Get the activity_id for redirect
+    cursor.execute('''
+        SELECT s.activity_id FROM peer_review_assignments pra
+        JOIN submissions s ON pra.submission_id = s.id
+        WHERE pra.id = ?
+    ''', (assignment_id,))
+    result = cursor.fetchone()
+
+    if not result:
+        flash('Review not found', 'error')
+        conn.close()
+        return redirect(url_for('dashboard'))
+
+    activity_id = result['activity_id']
+
+    cursor.execute('''
+        UPDATE peer_review_assignments
+        SET review_quality_score = ?, instructor_feedback = ?
+        WHERE id = ?
+    ''', (quality_score, instructor_feedback, assignment_id))
+    conn.commit()
+    conn.close()
+
+    flash('Review quality rating saved!', 'success')
+    return redirect(url_for('view_peer_reviews', activity_id=activity_id))
+
+
+@app.route('/activity/<int:activity_id>/recalculate-scores', methods=['POST'])
+@login_required
+def recalculate_activity_scores(activity_id):
+    """Recalculate all final scores for an activity using the 25-25-50 formula"""
+    if current_user.role != 'instructor':
+        return redirect(url_for('student_dashboard'))
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    cursor.execute('SELECT * FROM activities WHERE id = ?', (activity_id,))
+    activity = cursor.fetchone()
+
+    if not activity:
+        flash('Activity not found', 'error')
+        conn.close()
+        return redirect(url_for('dashboard'))
+
+    max_points = activity['points']
+    enable_peer_review = activity['enable_peer_review'] if 'enable_peer_review' in activity.keys() else 0
+
+    # Get all submissions for this activity
+    cursor.execute('SELECT * FROM submissions WHERE activity_id = ?', (activity_id,))
+    submissions = cursor.fetchall()
+
+    updated_count = 0
+    for sub in submissions:
+        if sub['instructor_score'] is None and sub['score'] is None:
+            continue  # Skip ungraded submissions
+
+        instructor_score = sub['instructor_score'] if sub['instructor_score'] else sub['score']
+        if instructor_score is None:
+            continue
+
+        student_id = sub['student_id']
+        late_penalty = sub['late_penalty'] if sub['late_penalty'] else 0
+
+        if enable_peer_review:
+            # peer_review_score is now a percentage (60-100)
+            peer_review_score = sub['peer_review_score'] if sub['peer_review_score'] else 60
+            # participation_score is now a percentage (0-100)
+            participation_score = calculate_participation_score(cursor, student_id, activity_id, max_points)
+
+            # Calculate weighted final score
+            # peer_review_score is 60-100 (percentage)
+            # participation_score is 0-100 (percentage)
+            # instructor_score is raw points, needs to be converted
+            peer_component = (peer_review_score / 100) * 25
+            participation_component = (participation_score / 100) * 25
+            instructor_component = (instructor_score / max_points) * 50 if max_points > 0 else 0
+
+            final_percentage = peer_component + participation_component + instructor_component
+            final_score = (final_percentage / 100) * max_points
+            final_score = max(0, final_score - late_penalty)
+
+            cursor.execute('''
+                UPDATE submissions
+                SET instructor_score = ?, participation_score = ?, final_score = ?
+                WHERE id = ?
+            ''', (instructor_score, participation_score, final_score, sub['id']))
+        else:
+            final_score = max(0, instructor_score - late_penalty)
+            cursor.execute('''
+                UPDATE submissions SET instructor_score = ?, final_score = ? WHERE id = ?
+            ''', (instructor_score, final_score, sub['id']))
+
+        updated_count += 1
+
+    conn.commit()
+    conn.close()
+
+    flash(f'Recalculated scores for {updated_count} submissions!', 'success')
+    return redirect(url_for('view_submissions', activity_id=activity_id))
 
 # ==================== LESSONS ====================
 
@@ -1205,9 +2448,18 @@ def add_quiz_question(quiz_id):
 
     question_text = request.form['question_text']
     question_type = request.form['question_type']
-    options = request.form.get('options', '')
+    options_raw = request.form.get('options', '')
     correct_answer = request.form['correct_answer']
     points = request.form.get('points', 1)
+
+    # Convert options from newline-separated to JSON array
+    if question_type == 'multiple_choice' and options_raw:
+        opts_list = [o.strip() for o in options_raw.strip().split('\n') if o.strip()]
+        options = json.dumps(opts_list)
+    elif question_type == 'true_false':
+        options = json.dumps(['True', 'False'])
+    else:
+        options = ''
 
     conn = get_db()
     cursor = conn.cursor()
@@ -1216,13 +2468,136 @@ def add_quiz_question(quiz_id):
         VALUES (?, ?, ?, ?, ?, ?)
     ''', (quiz_id, question_text, question_type, options, correct_answer, points))
 
-    cursor.execute('SELECT session_id FROM quizzes WHERE id = ?', (quiz_id,))
-    session_id = cursor.fetchone()['session_id']
-
     conn.commit()
     conn.close()
     flash('Question added successfully!', 'success')
+
+    # Redirect back to manage page if that's where we came from
+    if request.form.get('from_manage'):
+        return redirect(url_for('manage_quiz', quiz_id=quiz_id))
+
+    cursor2 = get_db()
+    c2 = cursor2.cursor()
+    c2.execute('SELECT session_id FROM quizzes WHERE id = ?', (quiz_id,))
+    session_id = c2.fetchone()['session_id']
+    cursor2.close()
     return redirect(url_for('session_quiz', session_id=session_id))
+
+
+@app.route('/quiz/<int:quiz_id>/manage')
+@login_required
+def manage_quiz(quiz_id):
+    """Instructor quiz management - edit/add/remove questions"""
+    if current_user.role != 'instructor':
+        return redirect(url_for('student_dashboard'))
+
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT q.*, s.title as session_title, s.session_number, s.subject_id,
+               sub.name as subject_name, sub.section
+        FROM quizzes q
+        JOIN sessions s ON q.session_id = s.id
+        JOIN subjects sub ON s.subject_id = sub.id
+        WHERE q.id = ?
+    ''', (quiz_id,))
+    quiz = cursor.fetchone()
+    if not quiz:
+        conn.close()
+        flash('Quiz not found.', 'error')
+        return redirect(url_for('student_performance'))
+
+    cursor.execute('SELECT * FROM quiz_questions WHERE quiz_id = ? ORDER BY id', (quiz_id,))
+    questions = cursor.fetchall()
+
+    conn.close()
+    return render_template('manage_quiz.html', quiz=quiz, questions=questions)
+
+
+@app.route('/quiz/<int:quiz_id>/edit-question/<int:question_id>', methods=['POST'])
+@login_required
+def edit_quiz_question(quiz_id, question_id):
+    if current_user.role != 'instructor':
+        return redirect(url_for('student_dashboard'))
+
+    question_text = request.form['question_text']
+    question_type = request.form['question_type']
+    correct_answer = request.form['correct_answer']
+    options = request.form.get('options', '')
+
+    # Convert options from newline-separated to JSON array
+    if question_type == 'multiple_choice' and options:
+        opts_list = [o.strip() for o in options.strip().split('\n') if o.strip()]
+        options = json.dumps(opts_list)
+    elif question_type == 'true_false':
+        options = json.dumps(['True', 'False'])
+    else:
+        options = ''
+
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('''
+        UPDATE quiz_questions SET question_text = ?, question_type = ?, options = ?, correct_answer = ?
+        WHERE id = ? AND quiz_id = ?
+    ''', (question_text, question_type, options, correct_answer, question_id, quiz_id))
+    conn.commit()
+    conn.close()
+    flash('Question updated successfully!', 'success')
+    return redirect(url_for('manage_quiz', quiz_id=quiz_id))
+
+
+@app.route('/quiz/<int:quiz_id>/delete-question/<int:question_id>', methods=['POST'])
+@login_required
+def delete_quiz_question(quiz_id, question_id):
+    if current_user.role != 'instructor':
+        return redirect(url_for('student_dashboard'))
+
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('DELETE FROM quiz_questions WHERE id = ? AND quiz_id = ?', (question_id, quiz_id))
+    conn.commit()
+    conn.close()
+    flash('Question deleted.', 'success')
+    return redirect(url_for('manage_quiz', quiz_id=quiz_id))
+
+
+@app.route('/quiz/<int:quiz_id>/edit', methods=['POST'])
+@login_required
+def edit_quiz(quiz_id):
+    """Edit quiz title and time limit"""
+    if current_user.role != 'instructor':
+        return redirect(url_for('student_dashboard'))
+
+    title = request.form['title']
+    time_limit = request.form.get('time_limit', 0)
+
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('UPDATE quizzes SET title = ?, time_limit = ? WHERE id = ?',
+                   (title, time_limit, quiz_id))
+    conn.commit()
+    conn.close()
+    flash('Quiz updated successfully!', 'success')
+    return redirect(url_for('manage_quiz', quiz_id=quiz_id))
+
+
+@app.route('/quiz/<int:quiz_id>/delete', methods=['POST'])
+@login_required
+def delete_quiz(quiz_id):
+    """Delete entire quiz and its questions"""
+    if current_user.role != 'instructor':
+        return redirect(url_for('student_dashboard'))
+
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('DELETE FROM quiz_questions WHERE quiz_id = ?', (quiz_id,))
+    cursor.execute('DELETE FROM quiz_attempts WHERE quiz_id = ?', (quiz_id,))
+    cursor.execute('DELETE FROM quizzes WHERE id = ?', (quiz_id,))
+    conn.commit()
+    conn.close()
+    flash('Quiz deleted successfully.', 'success')
+    return redirect(url_for('student_performance'))
+
 
 @app.route('/quiz/<int:quiz_id>/take')
 @login_required
@@ -1565,8 +2940,8 @@ def student_grades(student_id):
 
         midterm = None
         midterm_pending = False
-        final_project = None
-        final_project_pending = False
+        final_exam = None
+        final_pending = False
         for exam in exams:
             if exam['exam_type'] == 'midterm':
                 if exam['score_visible']:
@@ -1575,17 +2950,17 @@ def student_grades(student_id):
                     midterm_pending = True
             elif exam['exam_type'] == 'final':
                 if exam['score_visible']:
-                    final_project = exam['score']
+                    final_exam = exam['score']
                 else:
-                    final_project_pending = True
+                    final_pending = True
 
         # Calculate weighted grade based on subject-specific weights
+        # Activities: 50%, Quizzes: 10%, Midterm: 20%, Final: 20%
         weighted = (
-            (quiz_avg * weights['quizzes']) +
             (activity_avg * weights['activities']) +
+            (quiz_avg * weights['quizzes']) +
             ((midterm or 0) * weights['midterm']) +
-            ((final_project or 0) * weights['final']) +
-            ((final_project or 0) * weights['final_project'])
+            ((final_exam or 0) * weights['final'])
         )
 
         # Get PUP grade equivalent
@@ -1599,8 +2974,8 @@ def student_grades(student_id):
             'activity_avg': activity_avg,
             'midterm': midterm,
             'midterm_pending': midterm_pending,
-            'final_project': final_project,
-            'final_project_pending': final_project_pending,
+            'final': final_exam,
+            'final_pending': final_pending,
             'weighted': weighted,
             'pup_grade': pup_grade,
             'weights': weights
@@ -1721,7 +3096,15 @@ def student_session_activities(session_id):
             submissions[sub['activity_id']] = sub
 
     conn.close()
-    return render_template('student_activities.html', session=session_data, activities=activities, submissions=submissions)
+
+    # Current date string for due date comparison
+    now_str = datetime.now().strftime('%Y-%m-%d')
+
+    return render_template('student_activities.html',
+                           session=session_data,
+                           activities=activities,
+                           submissions=submissions,
+                           now_str=now_str)
 
 @app.route('/student/my-grades')
 @login_required
@@ -1729,6 +3112,99 @@ def my_grades():
     if current_user.role != 'student':
         return redirect(url_for('dashboard'))
     return redirect(url_for('student_grades', student_id=current_user.id))
+
+@app.route('/games')
+@login_required
+def games_hub():
+    """Combined games & quizzes hub - students play, instructors see performance"""
+    if current_user.role == 'instructor':
+        return redirect(url_for('student_performance'))
+    return render_template('games_hub.html')
+
+
+@app.route('/games/performance')
+@login_required
+def student_performance():
+    """Instructor view - student performance across games and quizzes"""
+    if current_user.role != 'instructor':
+        return redirect(url_for('games_hub'))
+
+    import json as json_mod
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # ---- QUIZ ANALYTICS: per-quiz breakdown ----
+    cursor.execute('''
+        SELECT q.id, q.title as quiz_title, s.title as session_title,
+               sub.name as subject_name, sub.section,
+               (SELECT COUNT(*) FROM quiz_questions WHERE quiz_id = q.id) as total_questions,
+               COUNT(qa.id) as attempts,
+               AVG(qa.score) as avg_score,
+               MAX(qa.score) as best_score,
+               MIN(qa.score) as worst_score,
+               AVG(qa.time_spent) as avg_time
+        FROM quizzes q
+        JOIN sessions s ON q.session_id = s.id
+        JOIN subjects sub ON s.subject_id = sub.id
+        LEFT JOIN quiz_attempts qa ON q.id = qa.quiz_id
+        GROUP BY q.id
+        ORDER BY sub.name, s.session_number
+    ''')
+    quizzes = [dict(row) for row in cursor.fetchall()]
+
+    # For each quiz, get student attempts with details
+    for quiz in quizzes:
+        cursor.execute('''
+            SELECT qa.*, u.full_name, u.student_id as sid, u.section, u.photo
+            FROM quiz_attempts qa
+            JOIN users u ON qa.student_id = u.id
+            WHERE qa.quiz_id = ?
+            ORDER BY qa.score DESC, qa.time_spent ASC
+        ''', (quiz['id'],))
+        attempts = [dict(r) for r in cursor.fetchall()]
+
+        # Parse missed questions
+        for a in attempts:
+            try:
+                a['missed_list'] = json_mod.loads(a.get('missed_questions') or '[]')
+            except:
+                a['missed_list'] = []
+            a['is_perfect'] = (a['score'] == quiz['total_questions'])
+            a['pct'] = round((a['score'] / quiz['total_questions'] * 100) if quiz['total_questions'] else 0)
+            time_mins = (a.get('time_spent') or 0) // 60
+            time_secs = (a.get('time_spent') or 0) % 60
+            a['time_display'] = f'{time_mins}m {time_secs}s' if time_mins else f'{time_secs}s'
+
+        quiz['attempt_count'] = len(attempts)
+        quiz['attempt_list'] = attempts
+        quiz['perfect_count'] = sum(1 for a in attempts if a['is_perfect'])
+        quiz['fail_count'] = sum(1 for a in attempts if a['pct'] < 50)
+
+    # ---- GAME ANALYTICS ----
+    cursor.execute('''
+        SELECT u.id, u.full_name, u.student_id, u.section, u.photo,
+               gs.total_games, gs.highest_score as game_high_score, gs.highest_level,
+               gs.total_codes_typed, gs.xp_points, gs.current_rank, gs.best_streak
+        FROM users u
+        LEFT JOIN game_user_stats gs ON u.id = gs.user_id
+        WHERE u.role = 'student' AND u.is_approved = 1 AND gs.total_games > 0
+        ORDER BY gs.highest_score DESC
+    ''')
+    game_players = [dict(row) for row in cursor.fetchall()]
+
+    # Get sections
+    cursor.execute('''
+        SELECT DISTINCT section FROM users WHERE role = 'student' AND section IS NOT NULL ORDER BY section
+    ''')
+    sections = [r['section'] for r in cursor.fetchall()]
+
+    conn.close()
+    return render_template('student_performance.html',
+                           quizzes=quizzes,
+                           game_players=game_players,
+                           sections=sections)
+
 
 @app.route('/typing-game')
 @login_required
@@ -1853,6 +3329,602 @@ def get_leaderboard():
             'photo': current_user.photo
         }
     })
+
+# ============== QUIZ JOURNEY GAME ==============
+
+@app.route('/quiz-journey')
+@login_required
+def quiz_journey():
+    """Quiz journey - level-based quiz game"""
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # For students, get enrolled subjects
+    if current_user.role == 'student':
+        cursor.execute('''
+            SELECT DISTINCT sub.* FROM subjects sub
+            JOIN enrollments e ON sub.id = e.subject_id
+            WHERE e.student_id = ?
+            ORDER BY sub.name
+        ''', (current_user.id,))
+    else:
+        # Instructors see all subjects
+        cursor.execute('SELECT * FROM subjects ORDER BY name')
+
+    subjects = cursor.fetchall()
+
+    # Get session/quiz data for each subject
+    subjects_data = []
+    for subject in subjects:
+        cursor.execute('''
+            SELECT s.*, COUNT(DISTINCT q.id) as quiz_count
+            FROM sessions s
+            LEFT JOIN quizzes q ON s.id = q.session_id
+            WHERE s.subject_id = ?
+            GROUP BY s.id
+            ORDER BY s.session_number
+        ''', (subject['id'],))
+        sessions = cursor.fetchall()
+
+        # Get completed quizzes for this student
+        cursor.execute('''
+            SELECT DISTINCT q.id FROM quiz_attempts qa
+            JOIN quizzes q ON qa.quiz_id = q.id
+            JOIN sessions s ON q.session_id = s.id
+            WHERE qa.student_id = ? AND s.subject_id = ?
+        ''', (current_user.id, subject['id']))
+        completed_quiz_ids = [r['id'] for r in cursor.fetchall()]
+
+        subjects_data.append({
+            'subject': subject,
+            'sessions': sessions,
+            'completed_quiz_ids': completed_quiz_ids
+        })
+
+    conn.close()
+    return render_template('quiz_journey.html', subjects_data=subjects_data)
+
+
+@app.route('/quiz-journey/subject/<int:subject_id>')
+@login_required
+def quiz_journey_subject(subject_id):
+    """Show sessions/levels for a subject"""
+    conn = get_db()
+    cursor = conn.cursor()
+
+    cursor.execute('SELECT * FROM subjects WHERE id = ?', (subject_id,))
+    subject = cursor.fetchone()
+
+    if not subject:
+        flash('Subject not found', 'error')
+        conn.close()
+        return redirect(url_for('quiz_journey'))
+
+    # Get sessions with quizzes
+    cursor.execute('''
+        SELECT s.*, COUNT(q.id) as quiz_count,
+               (SELECT COUNT(*) FROM quiz_attempts qa
+                JOIN quizzes q2 ON qa.quiz_id = q2.id
+                WHERE q2.session_id = s.id AND qa.student_id = ?) as completed_quizzes
+        FROM sessions s
+        LEFT JOIN quizzes q ON s.id = q.session_id
+        WHERE s.subject_id = ?
+        GROUP BY s.id
+        ORDER BY s.session_number
+    ''', (current_user.id, subject_id))
+    sessions = cursor.fetchall()
+
+    conn.close()
+    return render_template('quiz_journey_subject.html', subject=subject, sessions=sessions)
+
+
+@app.route('/quiz-journey/session/<int:session_id>')
+@login_required
+def quiz_journey_session(session_id):
+    """Show quizzes available in a session"""
+    conn = get_db()
+    cursor = conn.cursor()
+
+    cursor.execute('''
+        SELECT s.*, sub.name as subject_name, sub.id as subject_id
+        FROM sessions s
+        JOIN subjects sub ON s.subject_id = sub.id
+        WHERE s.id = ?
+    ''', (session_id,))
+    session = cursor.fetchone()
+
+    if not session:
+        flash('Session not found', 'error')
+        conn.close()
+        return redirect(url_for('quiz_journey'))
+
+    # Get quizzes for this session
+    cursor.execute('''
+        SELECT q.*,
+               (SELECT COUNT(*) FROM quiz_questions WHERE quiz_id = q.id) as question_count,
+               (SELECT score FROM quiz_attempts WHERE quiz_id = q.id AND student_id = ? ORDER BY submitted_at DESC LIMIT 1) as last_score,
+               (SELECT MAX(score) FROM quiz_attempts WHERE quiz_id = q.id AND student_id = ?) as best_score
+        FROM quizzes q
+        WHERE q.session_id = ?
+    ''', (current_user.id, current_user.id, session_id))
+    quizzes = cursor.fetchall()
+
+    conn.close()
+    return render_template('quiz_journey_session.html', session=session, quizzes=quizzes)
+
+
+@app.route('/quiz-journey/start/<int:quiz_id>')
+@login_required
+def start_quiz_journey_game(quiz_id):
+    """Start a timed quiz with randomized questions"""
+    import random
+    import hashlib
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # Get quiz info
+    cursor.execute('''
+        SELECT q.*, s.title as session_title, sub.name as subject_name
+        FROM quizzes q
+        JOIN sessions s ON q.session_id = s.id
+        JOIN subjects sub ON s.subject_id = sub.id
+        WHERE q.id = ?
+    ''', (quiz_id,))
+    quiz = cursor.fetchone()
+
+    if not quiz:
+        flash('Quiz not found', 'error')
+        conn.close()
+        return redirect(url_for('quiz_journey'))
+
+    # Get questions
+    cursor.execute('''
+        SELECT * FROM quiz_questions WHERE quiz_id = ?
+    ''', (quiz_id,))
+    questions = [dict(q) for q in cursor.fetchall()]
+
+    # Randomize questions based on user ID + quiz ID (consistent for same user)
+    seed = int(hashlib.md5(f"{current_user.id}-{quiz_id}".encode()).hexdigest(), 16)
+    random.seed(seed)
+    random.shuffle(questions)
+
+    # Randomize options for each multiple choice question
+    for q in questions:
+        if q['options']:
+            import json
+            try:
+                options = json.loads(q['options'])
+                random.shuffle(options)
+                q['options'] = json.dumps(options)
+            except:
+                pass
+
+    conn.close()
+    return render_template('quiz_journey_game.html', quiz=quiz, questions=questions)
+
+
+@app.route('/quiz-journey/submit/<int:quiz_id>', methods=['POST'])
+@login_required
+def submit_quiz_journey_game(quiz_id):
+    """Submit quiz answers and calculate score"""
+    import json
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # Get quiz questions
+    cursor.execute('''
+        SELECT * FROM quiz_questions WHERE quiz_id = ?
+    ''', (quiz_id,))
+    questions = cursor.fetchall()
+
+    # Get time spent from form
+    time_spent = int(request.form.get('time_spent', 0))
+
+    # Calculate score and track missed questions
+    answers = {}
+    score = 0
+    total_points = 0
+    missed = []
+
+    for q in questions:
+        question_id = q['id']
+        user_answer = request.form.get(f'question_{question_id}', '').strip()
+        answers[str(question_id)] = user_answer
+
+        total_points += q['points']
+        if user_answer.lower() == q['correct_answer'].lower():
+            score += q['points']
+        else:
+            missed.append({
+                'question_id': question_id,
+                'question': q['question_text'][:100],
+                'your_answer': user_answer or '(no answer)',
+                'correct_answer': q['correct_answer']
+            })
+
+    total_questions = len(questions)
+
+    # Check if already attempted (update or create)
+    cursor.execute('''
+        SELECT id FROM quiz_attempts WHERE quiz_id = ? AND student_id = ?
+    ''', (quiz_id, current_user.id))
+    existing = cursor.fetchone()
+
+    if existing:
+        cursor.execute('''
+            UPDATE quiz_attempts SET answers = ?, score = ?, time_spent = ?,
+                   missed_questions = ?, total_questions = ?, submitted_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        ''', (json.dumps(answers), score, time_spent, json.dumps(missed), total_questions, existing['id']))
+    else:
+        cursor.execute('''
+            INSERT INTO quiz_attempts (quiz_id, student_id, answers, score, time_spent, missed_questions, total_questions)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (quiz_id, current_user.id, json.dumps(answers), score, time_spent, json.dumps(missed), total_questions))
+
+    conn.commit()
+
+    # Get quiz info for result page
+    cursor.execute('''
+        SELECT q.*, s.title as session_title, sub.name as subject_name, s.subject_id
+        FROM quizzes q
+        JOIN sessions s ON q.session_id = s.id
+        JOIN subjects sub ON s.subject_id = sub.id
+        WHERE q.id = ?
+    ''', (quiz_id,))
+    quiz = cursor.fetchone()
+
+    conn.close()
+
+    percentage = (score / total_points * 100) if total_points > 0 else 0
+
+    return render_template('quiz_journey_result.html',
+                           quiz=quiz,
+                           score=score,
+                           total_points=total_points,
+                           percentage=percentage,
+                           answers=answers,
+                           missed=missed,
+                           time_spent=time_spent)
+
+
+@app.route('/api/quiz-journey/leaderboard/<int:quiz_id>')
+@login_required
+def quiz_journey_leaderboard(quiz_id):
+    """Get leaderboard for a specific quiz"""
+    conn = get_db()
+    cursor = conn.cursor()
+
+    cursor.execute('''
+        SELECT u.id, u.full_name, u.photo, u.section, qa.score, qa.submitted_at
+        FROM quiz_attempts qa
+        JOIN users u ON qa.student_id = u.id
+        WHERE qa.quiz_id = ?
+        ORDER BY qa.score DESC, qa.submitted_at ASC
+        LIMIT 10
+    ''', (quiz_id,))
+    leaderboard = [dict(row) for row in cursor.fetchall()]
+
+    conn.close()
+    return jsonify(leaderboard)
+
+
+# ============== MESSAGING SYSTEM ==============
+
+def time_ago(dt):
+    """Convert datetime to human-readable time ago string"""
+    if not dt:
+        return ''
+    now = datetime.now()
+    diff = now - dt
+    seconds = diff.total_seconds()
+
+    if seconds < 60:
+        return 'Just now'
+    elif seconds < 3600:
+        mins = int(seconds / 60)
+        return f'{mins}m ago'
+    elif seconds < 86400:
+        hours = int(seconds / 3600)
+        return f'{hours}h ago'
+    elif seconds < 604800:
+        days = int(seconds / 86400)
+        return f'{days}d ago'
+    else:
+        return dt.strftime('%b %d')
+
+@app.route('/api/messages/unread-count')
+@login_required
+def get_unread_counts():
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # Count unread messages for current user
+    if current_user.role == 'instructor':
+        # Instructors see replies to their messages
+        cursor.execute('''
+            SELECT COUNT(*) FROM messages
+            WHERE recipient_id = ? AND is_read = 0
+        ''', (current_user.id,))
+    else:
+        # Students see messages sent to them (individual, section, or all)
+        cursor.execute('''
+            SELECT COUNT(*) FROM messages
+            WHERE is_read = 0 AND (
+                recipient_id = ?
+                OR recipient_section = ?
+                OR recipient_all = 1
+            ) AND sender_id != ?
+        ''', (current_user.id, current_user.section, current_user.id))
+
+    msg_count = cursor.fetchone()[0]
+
+    # Count unread notifications
+    cursor.execute('''
+        SELECT COUNT(*) FROM notifications
+        WHERE user_id = ? AND is_read = 0
+    ''', (current_user.id,))
+    notif_count = cursor.fetchone()[0]
+
+    conn.close()
+
+    return jsonify({
+        'messages': msg_count,
+        'notifications': notif_count
+    })
+
+@app.route('/api/messages/preview')
+@login_required
+def get_messages_preview():
+    conn = get_db()
+    cursor = conn.cursor()
+
+    if current_user.role == 'instructor':
+        # Instructors see their sent messages
+        cursor.execute('''
+            SELECT m.*, u.full_name as sender_name, u.photo as sender_photo
+            FROM messages m
+            JOIN users u ON m.sender_id = u.id
+            WHERE m.sender_id = ?
+            ORDER BY m.created_at DESC
+            LIMIT 5
+        ''', (current_user.id,))
+    else:
+        # Students see messages sent to them
+        cursor.execute('''
+            SELECT m.*, u.full_name as sender_name, u.photo as sender_photo
+            FROM messages m
+            JOIN users u ON m.sender_id = u.id
+            WHERE (
+                m.recipient_id = ?
+                OR m.recipient_section = ?
+                OR m.recipient_all = 1
+            ) AND m.sender_id != ?
+            ORDER BY m.created_at DESC
+            LIMIT 5
+        ''', (current_user.id, current_user.section, current_user.id))
+
+    messages = []
+    for row in cursor.fetchall():
+        msg = dict(row)
+        created = datetime.strptime(msg['created_at'], '%Y-%m-%d %H:%M:%S') if msg['created_at'] else datetime.now()
+        msg['time_ago'] = time_ago(created)
+        msg['sender_photo'] = url_for('static', filename='uploads/photos/' + (msg['sender_photo'] or 'default.png'))
+        messages.append(msg)
+
+    conn.close()
+    return jsonify(messages)
+
+@app.route('/api/notifications')
+@login_required
+def get_notifications():
+    conn = get_db()
+    cursor = conn.cursor()
+
+    cursor.execute('''
+        SELECT * FROM notifications
+        WHERE user_id = ?
+        ORDER BY created_at DESC
+        LIMIT 10
+    ''', (current_user.id,))
+
+    notifications = []
+    for row in cursor.fetchall():
+        notif = dict(row)
+        created = datetime.strptime(notif['created_at'], '%Y-%m-%d %H:%M:%S') if notif['created_at'] else datetime.now()
+        notif['time_ago'] = time_ago(created)
+        notif['read'] = bool(notif['is_read'])
+        notifications.append(notif)
+
+    conn.close()
+    return jsonify(notifications)
+
+@app.route('/api/notifications/<int:id>/read', methods=['POST'])
+@login_required
+def mark_notification_read(id):
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('UPDATE notifications SET is_read = 1 WHERE id = ? AND user_id = ?', (id, current_user.id))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+
+@app.route('/api/notifications/mark-all-read', methods=['POST'])
+@login_required
+def mark_all_notifications_read():
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('UPDATE notifications SET is_read = 1 WHERE user_id = ?', (current_user.id,))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+
+@app.route('/messages')
+@login_required
+def messages():
+    conn = get_db()
+    cursor = conn.cursor()
+
+    if current_user.role == 'instructor':
+        # Get sent messages
+        cursor.execute('''
+            SELECT m.*,
+                   CASE
+                       WHEN m.recipient_all = 1 THEN 'All Students'
+                       WHEN m.recipient_section IS NOT NULL THEN m.recipient_section
+                       ELSE (SELECT full_name FROM users WHERE id = m.recipient_id)
+                   END as recipient_name
+            FROM messages m
+            WHERE m.sender_id = ?
+            ORDER BY m.created_at DESC
+        ''', (current_user.id,))
+        sent_messages = [dict(row) for row in cursor.fetchall()]
+
+        # Get list of sections and students for compose
+        cursor.execute('SELECT DISTINCT section FROM users WHERE section IS NOT NULL ORDER BY section')
+        sections = [row['section'] for row in cursor.fetchall()]
+
+        cursor.execute('SELECT id, full_name, section, student_id FROM users WHERE role = "student" ORDER BY section, full_name')
+        students = [dict(row) for row in cursor.fetchall()]
+
+        conn.close()
+        return render_template('messages_instructor.html',
+                               sent_messages=sent_messages,
+                               sections=sections,
+                               students=students)
+    else:
+        # Students: Get received messages
+        cursor.execute('''
+            SELECT m.*, u.full_name as sender_name, u.photo as sender_photo
+            FROM messages m
+            JOIN users u ON m.sender_id = u.id
+            WHERE (
+                m.recipient_id = ?
+                OR m.recipient_section = ?
+                OR m.recipient_all = 1
+            ) AND m.sender_id != ?
+            ORDER BY m.created_at DESC
+        ''', (current_user.id, current_user.section, current_user.id))
+        received_messages = [dict(row) for row in cursor.fetchall()]
+
+        conn.close()
+        return render_template('messages_student.html', messages=received_messages)
+
+@app.route('/messages/<int:id>')
+@login_required
+def view_message(id):
+    conn = get_db()
+    cursor = conn.cursor()
+
+    cursor.execute('''
+        SELECT m.*, u.full_name as sender_name, u.photo as sender_photo
+        FROM messages m
+        JOIN users u ON m.sender_id = u.id
+        WHERE m.id = ?
+    ''', (id,))
+    message = cursor.fetchone()
+
+    if not message:
+        flash('Message not found.', 'error')
+        conn.close()
+        return redirect(url_for('messages'))
+
+    message = dict(message)
+
+    # Mark as read if student viewing
+    if current_user.role == 'student':
+        cursor.execute('UPDATE messages SET is_read = 1 WHERE id = ?', (id,))
+        conn.commit()
+
+    conn.close()
+    return render_template('view_message.html', message=message)
+
+@app.route('/messages/send', methods=['POST'])
+@login_required
+def send_message():
+    if current_user.role != 'instructor':
+        flash('Only instructors can send messages.', 'error')
+        return redirect(url_for('messages'))
+
+    recipient_type = request.form.get('recipient_type')
+    subject = request.form.get('subject', '').strip()
+    content = request.form.get('content', '').strip()
+
+    if not subject or not content:
+        flash('Subject and message content are required.', 'error')
+        return redirect(url_for('messages'))
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    if recipient_type == 'all':
+        # Send to all students
+        cursor.execute('''
+            INSERT INTO messages (sender_id, recipient_all, subject, content)
+            VALUES (?, 1, ?, ?)
+        ''', (current_user.id, subject, content))
+
+        # Create notifications for all students
+        cursor.execute('SELECT id FROM users WHERE role = "student"')
+        students = cursor.fetchall()
+        for student in students:
+            cursor.execute('''
+                INSERT INTO notifications (user_id, type, icon, message, link)
+                VALUES (?, 'message', 'envelope', ?, ?)
+            ''', (student['id'], f'New message from {current_user.full_name}: {subject}', f'/messages/{cursor.lastrowid}'))
+
+        flash(f'Message sent to all students!', 'success')
+
+    elif recipient_type == 'section':
+        section = request.form.get('section')
+        if not section:
+            flash('Please select a section.', 'error')
+            conn.close()
+            return redirect(url_for('messages'))
+
+        cursor.execute('''
+            INSERT INTO messages (sender_id, recipient_section, subject, content)
+            VALUES (?, ?, ?, ?)
+        ''', (current_user.id, section, subject, content))
+        msg_id = cursor.lastrowid
+
+        # Create notifications for section students
+        cursor.execute('SELECT id FROM users WHERE role = "student" AND section = ?', (section,))
+        students = cursor.fetchall()
+        for student in students:
+            cursor.execute('''
+                INSERT INTO notifications (user_id, type, icon, message, link)
+                VALUES (?, 'message', 'envelope', ?, ?)
+            ''', (student['id'], f'New message from {current_user.full_name}: {subject}', f'/messages/{msg_id}'))
+
+        flash(f'Message sent to {section}!', 'success')
+
+    elif recipient_type == 'individual':
+        recipient_id = request.form.get('recipient_id')
+        if not recipient_id:
+            flash('Please select a student.', 'error')
+            conn.close()
+            return redirect(url_for('messages'))
+
+        cursor.execute('''
+            INSERT INTO messages (sender_id, recipient_id, subject, content)
+            VALUES (?, ?, ?, ?)
+        ''', (current_user.id, recipient_id, subject, content))
+        msg_id = cursor.lastrowid
+
+        # Create notification for the student
+        cursor.execute('''
+            INSERT INTO notifications (user_id, type, icon, message, link)
+            VALUES (?, 'message', 'envelope', ?, ?)
+        ''', (recipient_id, f'New message from {current_user.full_name}: {subject}', f'/messages/{msg_id}'))
+
+        flash('Message sent!', 'success')
+
+    conn.commit()
+    conn.close()
+    return redirect(url_for('messages'))
 
 if __name__ == '__main__':
     init_db()

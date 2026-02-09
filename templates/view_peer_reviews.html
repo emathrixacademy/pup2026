@@ -1,0 +1,291 @@
+{% extends 'base.html' %}
+
+{% block title %}Peer Reviews - {{ activity.title }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="fas fa-clipboard-check"></i> Peer Reviews</h1>
+    <div>
+        <a href="{{ url_for('peer_review_status', activity_id=activity.id) }}" class="btn btn-secondary">
+            <i class="fas fa-chart-bar"></i> Status
+        </a>
+        <a href="{{ url_for('view_submissions', activity_id=activity.id) }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Submissions
+        </a>
+    </div>
+</div>
+
+<div class="card mb-20">
+    <div class="card-header">
+        <span class="card-title">{{ activity.title }}</span>
+    </div>
+    <div class="card-body">
+        <div class="scoring-info">
+            <h4><i class="fas fa-info-circle"></i> Activity Scoring Breakdown</h4>
+            <div class="score-breakdown-grid">
+                <div class="score-item">
+                    <span class="score-percent">25%</span>
+                    <span class="score-label">Peer Review Score</span>
+                    <small>Average score from classmates</small>
+                </div>
+                <div class="score-item">
+                    <span class="score-percent">25%</span>
+                    <span class="score-label">Participation Score</span>
+                    <small>Quality of reviews given to others</small>
+                </div>
+                <div class="score-item">
+                    <span class="score-percent">50%</span>
+                    <span class="score-label">Instructor Score</span>
+                    <small>Your grading</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if reviews %}
+<div class="card">
+    <div class="card-header">
+        <span class="card-title"><i class="fas fa-user-check"></i> Completed Reviews ({{ reviews|length }})</span>
+    </div>
+    <div class="card-body">
+        {% for review in reviews %}
+        <div class="review-card {% if review.review_quality_score is not none %}rated{% endif %}">
+            <div class="review-header">
+                <div class="review-participants">
+                    <div class="participant">
+                        <span class="label">Reviewer:</span>
+                        <strong>{{ review.reviewer_name }}</strong> ({{ review.reviewer_sid }})
+                    </div>
+                    <i class="fas fa-arrow-right"></i>
+                    <div class="participant">
+                        <span class="label">Reviewed:</span>
+                        <strong>{{ review.submitter_name }}</strong> ({{ review.submitter_sid }})
+                    </div>
+                </div>
+                <div class="review-status">
+                    {% if review.review_quality_score is not none %}
+                    <span class="badge badge-success">
+                        <i class="fas fa-star"></i> Quality: {{ "%.0f"|format(review.review_quality_score) }}%
+                    </span>
+                    {% else %}
+                    <span class="badge badge-warning">
+                        <i class="fas fa-clock"></i> Not Rated
+                    </span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="review-responses">
+                <h5>Review Responses:</h5>
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>Criterion</th>
+                            <th>Response</th>
+                            <th>Points</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for response in review.responses %}
+                        <tr>
+                            <td>{{ response.criterion }}</td>
+                            <td>
+                                {% if response.response == 'yes' %}
+                                <span class="response-yes"><i class="fas fa-check-circle"></i> Yes (100)</span>
+                                {% elif response.response == 'somehow' %}
+                                <span class="response-somehow"><i class="fas fa-minus-circle"></i> Somehow (85)</span>
+                                {% elif response.response == 'no' %}
+                                <span class="response-no"><i class="fas fa-times-circle"></i> No (70)</span>
+                                {% else %}
+                                <span class="response-blank"><i class="fas fa-question-circle"></i> No Answer (60)</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ response.points_awarded }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            {% if review.instructor_feedback %}
+            <div class="instructor-feedback-display">
+                <strong><i class="fas fa-comment"></i> Your Feedback:</strong>
+                {{ review.instructor_feedback }}
+            </div>
+            {% endif %}
+
+            <form action="{{ url_for('rate_peer_review', assignment_id=review.id) }}" method="POST" class="rating-form">
+                <div class="flex gap-10 align-items-end">
+                    <div class="form-group" style="flex: 1;">
+                        <label>Review Quality Score (0-100%)</label>
+                        <input type="number" name="quality_score"
+                               value="{{ review.review_quality_score or '' }}"
+                               min="0" max="100" step="1" required
+                               placeholder="Rate 0-100%">
+                    </div>
+                    <div class="form-group" style="flex: 2;">
+                        <label>Feedback for Reviewer</label>
+                        <input type="text" name="instructor_feedback"
+                               value="{{ review.instructor_feedback or '' }}"
+                               placeholder="Optional feedback about their review quality">
+                    </div>
+                    <div class="form-group">
+                        <button type="submit" class="btn btn-sm">
+                            <i class="fas fa-save"></i> Save
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <div class="card-body">
+        <div class="empty-state">
+            <i class="fas fa-clipboard-list"></i>
+            <p>No completed peer reviews yet</p>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<style>
+.scoring-info {
+    background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+    padding: 20px;
+    border-radius: 12px;
+    border: 1px solid #bbf7d0;
+}
+.scoring-info h4 {
+    margin: 0 0 15px 0;
+    color: #166534;
+}
+.score-breakdown-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+}
+.score-item {
+    background: white;
+    padding: 15px;
+    border-radius: 8px;
+    text-align: center;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+.score-percent {
+    display: block;
+    font-size: 28px;
+    font-weight: 700;
+    color: #7c2d12;
+}
+.score-label {
+    display: block;
+    font-weight: 600;
+    color: #1f2937;
+    margin: 5px 0;
+}
+.score-item small {
+    color: #6b7280;
+    font-size: 12px;
+}
+.review-card {
+    border: 2px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+    background: #fff;
+}
+.review-card.rated {
+    border-color: #10b981;
+    background: #f0fdf4;
+}
+.review-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 15px;
+    margin-bottom: 15px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #e5e7eb;
+}
+.review-participants {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+.participant {
+    background: #f3f4f6;
+    padding: 8px 15px;
+    border-radius: 8px;
+}
+.participant .label {
+    font-size: 12px;
+    color: #6b7280;
+    display: block;
+}
+.review-participants .fa-arrow-right {
+    color: #9ca3af;
+}
+.review-responses {
+    margin: 15px 0;
+}
+.review-responses h5 {
+    margin: 0 0 10px 0;
+    color: #374151;
+}
+.table-sm td, .table-sm th {
+    padding: 8px 12px;
+}
+.response-yes { color: #10b981; font-weight: 500; }
+.response-somehow { color: #f59e0b; font-weight: 500; }
+.response-no { color: #ef4444; font-weight: 500; }
+.response-blank { color: #9ca3af; font-weight: 500; }
+.instructor-feedback-display {
+    background: #ede9fe;
+    padding: 12px 15px;
+    border-radius: 8px;
+    margin: 15px 0;
+    color: #5b21b6;
+}
+.rating-form {
+    background: #f9fafb;
+    padding: 15px;
+    border-radius: 8px;
+    margin-top: 15px;
+}
+.badge-success {
+    background: #10b981;
+    color: white;
+}
+.badge-warning {
+    background: #f59e0b;
+    color: white;
+}
+.badge {
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 13px;
+}
+.align-items-end {
+    align-items: flex-end;
+}
+.empty-state {
+    text-align: center;
+    padding: 60px;
+    color: #6b7280;
+}
+.empty-state i {
+    font-size: 48px;
+    margin-bottom: 15px;
+    color: #d1d5db;
+}
+.mb-20 {
+    margin-bottom: 20px;
+}
+</style>
+{% endblock %}

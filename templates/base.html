@@ -22,11 +22,17 @@
                 <a href="{{ url_for('dashboard') }}" class="{% if request.endpoint == 'dashboard' %}active{% endif %}">
                     <i class="fas fa-home"></i> Dashboard
                 </a>
+                <a href="{{ url_for('enrollments') }}" class="{% if request.endpoint == 'enrollments' %}active{% endif %}">
+                    <i class="fas fa-user-check"></i> Enrollments
+                </a>
                 <a href="{{ url_for('students') }}" class="{% if request.endpoint == 'students' %}active{% endif %}">
                     <i class="fas fa-users"></i> Students
                 </a>
                 <a href="{{ url_for('subjects') }}" class="{% if 'subject' in request.endpoint %}active{% endif %}">
                     <i class="fas fa-book"></i> Subjects
+                </a>
+                <a href="{{ url_for('instructor_peer_reviews') }}" class="{% if 'peer_review' in request.endpoint %}active{% endif %}">
+                    <i class="fas fa-user-friends"></i> Peer Reviews
                 </a>
                 <a href="{{ url_for('grades') }}" class="{% if 'grade' in request.endpoint %}active{% endif %}">
                     <i class="fas fa-chart-bar"></i> Grades
@@ -35,25 +41,85 @@
                 <a href="{{ url_for('student_dashboard') }}" class="{% if request.endpoint == 'student_dashboard' %}active{% endif %}">
                     <i class="fas fa-home"></i> Dashboard
                 </a>
+                <a href="{{ url_for('student_peer_reviews') }}" class="{% if 'peer_review' in request.endpoint %}active{% endif %}">
+                    <i class="fas fa-user-friends"></i> Peer Reviews
+                </a>
                 <a href="{{ url_for('my_grades') }}" class="{% if request.endpoint == 'my_grades' %}active{% endif %}">
                     <i class="fas fa-chart-bar"></i> My Grades
                 </a>
             {% endif %}
-            <a href="{{ url_for('typing_game') }}" class="{% if request.endpoint == 'typing_game' %}active{% endif %}" style="background: linear-gradient(135deg, #8B5CF6, #6D28D9); border-radius: 20px;">
-                <i class="fas fa-gamepad"></i> Python Game
-            </a>
-            <a href="{{ url_for('profile') }}" class="{% if request.endpoint == 'profile' %}active{% endif %}">
-                <i class="fas fa-user-cog"></i> Profile
-            </a>
-            <a href="{{ url_for('logout') }}" class="btn-logout">
-                <i class="fas fa-sign-out-alt"></i> Logout
+            <a href="{{ url_for('games_hub') }}" class="nav-game-btn {% if request.endpoint in ['games_hub', 'typing_game', 'quiz_journey', 'quiz_journey_subject', 'quiz_journey_session', 'start_quiz_journey_game', 'student_performance'] %}active{% endif %}">
+                <i class="fas fa-gamepad"></i> Games & Quizzes
             </a>
         </div>
-        <div class="nav-user">
-            <img src="{{ url_for('static', filename='uploads/photos/' + (current_user.photo or 'default.png')) }}"
-                 alt="Profile"
-                 onerror="this.src='https://ui-avatars.com/api/?name={{ current_user.full_name }}&background=0EA5E9&color=fff'">
-            <span>{{ current_user.full_name }}</span>
+
+        <div class="nav-right">
+            <!-- Notifications Bell -->
+            <div class="nav-icon-btn" id="notifications-btn">
+                <i class="fas fa-bell"></i>
+                <span class="badge" id="notification-badge" style="display: none;">0</span>
+            </div>
+            <div class="dropdown-menu notifications-dropdown" id="notifications-dropdown">
+                <div class="dropdown-header">
+                    <span><i class="fas fa-bell"></i> Notifications</span>
+                    <a href="#" onclick="markAllNotificationsRead()" class="mark-read-btn">Mark all read</a>
+                </div>
+                <div class="dropdown-content" id="notifications-list">
+                    <div class="empty-state">
+                        <i class="fas fa-check-circle"></i>
+                        <p>No new notifications</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Messages -->
+            <div class="nav-icon-btn" id="messages-btn">
+                <i class="fas fa-envelope"></i>
+                <span class="badge" id="message-badge" style="display: none;">0</span>
+            </div>
+            <div class="dropdown-menu messages-dropdown" id="messages-dropdown">
+                <div class="dropdown-header">
+                    <span><i class="fas fa-envelope"></i> Messages</span>
+                    <a href="{{ url_for('messages') }}" class="view-all-btn">View All</a>
+                </div>
+                <div class="dropdown-content" id="messages-list">
+                    <div class="empty-state">
+                        <i class="fas fa-inbox"></i>
+                        <p>No messages</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- User Account Dropdown -->
+            <div class="nav-user-dropdown" id="user-dropdown-btn">
+                <img src="{{ url_for('static', filename='uploads/photos/' + (current_user.photo or 'default.png')) }}"
+                     alt="Profile"
+                     onerror="this.src='https://ui-avatars.com/api/?name={{ current_user.full_name }}&background=8B5CF6&color=fff'">
+                <span>{{ current_user.full_name }}</span>
+                <i class="fas fa-chevron-down"></i>
+            </div>
+            <div class="dropdown-menu user-dropdown" id="user-dropdown">
+                <div class="dropdown-user-info">
+                    <img src="{{ url_for('static', filename='uploads/photos/' + (current_user.photo or 'default.png')) }}"
+                         alt="Profile"
+                         onerror="this.src='https://ui-avatars.com/api/?name={{ current_user.full_name }}&background=8B5CF6&color=fff'">
+                    <div>
+                        <strong>{{ current_user.full_name }}</strong>
+                        <small>{{ current_user.role|capitalize }}</small>
+                    </div>
+                </div>
+                <div class="dropdown-divider"></div>
+                <a href="{{ url_for('profile') }}" class="dropdown-item">
+                    <i class="fas fa-user-cog"></i> My Profile
+                </a>
+                <a href="{{ url_for('messages') }}" class="dropdown-item">
+                    <i class="fas fa-envelope"></i> Messages
+                </a>
+                <div class="dropdown-divider"></div>
+                <a href="{{ url_for('logout') }}" class="dropdown-item logout">
+                    <i class="fas fa-sign-out-alt"></i> Logout
+                </a>
+            </div>
         </div>
     </nav>
     {% endif %}
@@ -74,6 +140,156 @@
     </main>
 
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+
+    <script>
+    // Dropdown functionality
+    document.addEventListener('DOMContentLoaded', function() {
+        // Toggle dropdowns
+        const dropdowns = [
+            { btn: 'notifications-btn', menu: 'notifications-dropdown' },
+            { btn: 'messages-btn', menu: 'messages-dropdown' },
+            { btn: 'user-dropdown-btn', menu: 'user-dropdown' }
+        ];
+
+        dropdowns.forEach(({ btn, menu }) => {
+            const button = document.getElementById(btn);
+            const dropdown = document.getElementById(menu);
+
+            if (button && dropdown) {
+                button.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    // Close other dropdowns
+                    dropdowns.forEach(other => {
+                        if (other.menu !== menu) {
+                            document.getElementById(other.menu)?.classList.remove('show');
+                        }
+                    });
+                    dropdown.classList.toggle('show');
+
+                    // Load data when opened
+                    if (dropdown.classList.contains('show')) {
+                        if (menu === 'notifications-dropdown') loadNotifications();
+                        if (menu === 'messages-dropdown') loadMessages();
+                    }
+                });
+            }
+        });
+
+        // Close dropdowns when clicking outside
+        document.addEventListener('click', () => {
+            dropdowns.forEach(({ menu }) => {
+                document.getElementById(menu)?.classList.remove('show');
+            });
+        });
+
+        // Prevent dropdown close when clicking inside
+        document.querySelectorAll('.dropdown-menu').forEach(menu => {
+            menu.addEventListener('click', (e) => e.stopPropagation());
+        });
+
+        // Load initial counts
+        loadUnreadCounts();
+        setInterval(loadUnreadCounts, 30000); // Refresh every 30 seconds
+    });
+
+    // Load unread counts
+    async function loadUnreadCounts() {
+        try {
+            const response = await fetch('/api/messages/unread-count');
+            const data = await response.json();
+
+            const notifBadge = document.getElementById('notification-badge');
+            const msgBadge = document.getElementById('message-badge');
+
+            if (data.notifications > 0) {
+                notifBadge.textContent = data.notifications;
+                notifBadge.style.display = 'flex';
+            } else {
+                notifBadge.style.display = 'none';
+            }
+
+            if (data.messages > 0) {
+                msgBadge.textContent = data.messages;
+                msgBadge.style.display = 'flex';
+            } else {
+                msgBadge.style.display = 'none';
+            }
+        } catch (error) {
+            console.log('Could not load unread counts');
+        }
+    }
+
+    // Load notifications
+    async function loadNotifications() {
+        const container = document.getElementById('notifications-list');
+        try {
+            const response = await fetch('/api/notifications');
+            const notifications = await response.json();
+
+            if (notifications.length === 0) {
+                container.innerHTML = '<div class="empty-state"><i class="fas fa-check-circle"></i><p>No new notifications</p></div>';
+                return;
+            }
+
+            container.innerHTML = notifications.map(n => `
+                <a href="${n.link || '#'}" class="notification-item ${n.read ? '' : 'unread'}" onclick="markNotificationRead(${n.id})">
+                    <div class="notif-icon ${n.type}"><i class="fas fa-${n.icon || 'bell'}"></i></div>
+                    <div class="notif-content">
+                        <p>${n.message}</p>
+                        <small>${n.time_ago}</small>
+                    </div>
+                </a>
+            `).join('');
+        } catch (error) {
+            container.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-circle"></i><p>Could not load notifications</p></div>';
+        }
+    }
+
+    // Load messages preview
+    async function loadMessages() {
+        const container = document.getElementById('messages-list');
+        try {
+            const response = await fetch('/api/messages/preview');
+            const messages = await response.json();
+
+            if (messages.length === 0) {
+                container.innerHTML = '<div class="empty-state"><i class="fas fa-inbox"></i><p>No messages</p></div>';
+                return;
+            }
+
+            container.innerHTML = messages.map(m => `
+                <a href="/messages/${m.id}" class="message-item ${m.read ? '' : 'unread'}">
+                    <img src="${m.sender_photo}" alt="${m.sender_name}" onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(m.sender_name)}&background=8B5CF6&color=fff'">
+                    <div class="message-content">
+                        <div class="message-header">
+                            <strong>${m.sender_name}</strong>
+                            <small>${m.time_ago}</small>
+                        </div>
+                        <p>${m.subject}</p>
+                    </div>
+                </a>
+            `).join('');
+        } catch (error) {
+            container.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-circle"></i><p>Could not load messages</p></div>';
+        }
+    }
+
+    async function markNotificationRead(id) {
+        try {
+            await fetch(`/api/notifications/${id}/read`, { method: 'POST' });
+            loadUnreadCounts();
+        } catch (error) {}
+    }
+
+    async function markAllNotificationsRead() {
+        try {
+            await fetch('/api/notifications/mark-all-read', { method: 'POST' });
+            loadNotifications();
+            loadUnreadCounts();
+        } catch (error) {}
+    }
+    </script>
+
     {% block extra_js %}{% endblock %}
 </body>
 </html>

@@ -1,0 +1,281 @@
+{% extends 'base.html' %}
+
+{% block title %}Messages - Sangrenes LMS Portal{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1><i class="fas fa-envelope"></i> Messages</h1>
+        <p>Send messages to students individually, by section, or to all</p>
+    </div>
+</div>
+
+<div class="messages-grid">
+    <!-- Compose Message -->
+    <div class="card compose-card">
+        <div class="card-header">
+            <span class="card-title"><i class="fas fa-paper-plane"></i> Compose Message</span>
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('send_message') }}" id="compose-form">
+                <div class="form-group">
+                    <label><i class="fas fa-users"></i> Send To</label>
+                    <div class="recipient-options">
+                        <label class="radio-card">
+                            <input type="radio" name="recipient_type" value="all" checked onchange="toggleRecipientFields()">
+                            <div class="radio-content">
+                                <i class="fas fa-globe"></i>
+                                <span>All Students</span>
+                            </div>
+                        </label>
+                        <label class="radio-card">
+                            <input type="radio" name="recipient_type" value="section" onchange="toggleRecipientFields()">
+                            <div class="radio-content">
+                                <i class="fas fa-layer-group"></i>
+                                <span>Section</span>
+                            </div>
+                        </label>
+                        <label class="radio-card">
+                            <input type="radio" name="recipient_type" value="individual" onchange="toggleRecipientFields()">
+                            <div class="radio-content">
+                                <i class="fas fa-user"></i>
+                                <span>Individual</span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="form-group" id="section-field" style="display: none;">
+                    <label><i class="fas fa-layer-group"></i> Select Section</label>
+                    <select name="section" class="form-control">
+                        <option value="">Choose a section...</option>
+                        {% for section in sections %}
+                        <option value="{{ section }}">{{ section }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="form-group" id="student-field" style="display: none;">
+                    <label><i class="fas fa-user"></i> Select Student</label>
+                    <select name="recipient_id" class="form-control">
+                        <option value="">Choose a student...</option>
+                        {% for student in students %}
+                        <option value="{{ student.id }}">{{ student.full_name }} ({{ student.section }} - {{ student.student_id }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label><i class="fas fa-heading"></i> Subject</label>
+                    <input type="text" name="subject" required placeholder="Enter message subject..." class="form-control">
+                </div>
+
+                <div class="form-group">
+                    <label><i class="fas fa-align-left"></i> Message</label>
+                    <textarea name="content" required placeholder="Type your message here..." class="form-control" rows="6"></textarea>
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-lg btn-full">
+                    <i class="fas fa-paper-plane"></i> Send Message
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Sent Messages -->
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title"><i class="fas fa-history"></i> Sent Messages</span>
+            <span class="badge-count">{{ sent_messages|length }}</span>
+        </div>
+        <div class="card-body sent-messages-list">
+            {% if sent_messages %}
+                {% for msg in sent_messages %}
+                <a href="{{ url_for('view_message', id=msg.id) }}" class="sent-message-item">
+                    <div class="message-icon">
+                        {% if msg.recipient_all == 1 %}
+                        <i class="fas fa-globe"></i>
+                        {% elif msg.recipient_section %}
+                        <i class="fas fa-layer-group"></i>
+                        {% else %}
+                        <i class="fas fa-user"></i>
+                        {% endif %}
+                    </div>
+                    <div class="message-info">
+                        <div class="message-to">
+                            <strong>To:</strong> {{ msg.recipient_name }}
+                        </div>
+                        <div class="message-subject">{{ msg.subject }}</div>
+                        <div class="message-preview">{{ msg.content[:100] }}{% if msg.content|length > 100 %}...{% endif %}</div>
+                    </div>
+                    <div class="message-time">
+                        {{ msg.created_at }}
+                    </div>
+                </a>
+                {% endfor %}
+            {% else %}
+                <div class="empty-state">
+                    <i class="fas fa-paper-plane"></i>
+                    <p>No messages sent yet</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<style>
+.messages-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+}
+
+@media (max-width: 1000px) {
+    .messages-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.compose-card {
+    height: fit-content;
+}
+
+.recipient-options {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-top: 8px;
+}
+
+.radio-card {
+    cursor: pointer;
+}
+
+.radio-card input {
+    display: none;
+}
+
+.radio-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 15px;
+    background: #F9FAFB;
+    border: 2px solid #E5E7EB;
+    border-radius: 10px;
+    transition: all 0.2s ease;
+}
+
+.radio-card input:checked + .radio-content {
+    background: #EDE9FE;
+    border-color: #8B5CF6;
+    color: #6D28D9;
+}
+
+.radio-content i {
+    font-size: 1.5rem;
+}
+
+.radio-content span {
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.sent-messages-list {
+    max-height: 600px;
+    overflow-y: auto;
+}
+
+.sent-message-item {
+    display: flex;
+    gap: 15px;
+    padding: 15px;
+    border-bottom: 1px solid #F3F4F6;
+    text-decoration: none;
+    color: inherit;
+    transition: background 0.2s ease;
+}
+
+.sent-message-item:hover {
+    background: #F5F3FF;
+}
+
+.message-icon {
+    width: 45px;
+    height: 45px;
+    background: linear-gradient(135deg, #8B5CF6, #6D28D9);
+    color: white;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.message-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.message-to {
+    font-size: 0.85rem;
+    color: #6B7280;
+    margin-bottom: 4px;
+}
+
+.message-subject {
+    font-weight: 600;
+    color: #1F2937;
+    margin-bottom: 4px;
+}
+
+.message-preview {
+    font-size: 0.9rem;
+    color: #6B7280;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.message-time {
+    font-size: 0.75rem;
+    color: #9CA3AF;
+    white-space: nowrap;
+}
+
+.badge-count {
+    background: linear-gradient(135deg, #8B5CF6, #6D28D9);
+    color: white;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: #9CA3AF;
+}
+
+.empty-state i {
+    font-size: 3rem;
+    margin-bottom: 15px;
+    display: block;
+}
+
+textarea.form-control {
+    min-height: 150px;
+    resize: vertical;
+}
+</style>
+
+<script>
+function toggleRecipientFields() {
+    const type = document.querySelector('input[name="recipient_type"]:checked').value;
+    document.getElementById('section-field').style.display = type === 'section' ? 'block' : 'none';
+    document.getElementById('student-field').style.display = type === 'individual' ? 'block' : 'none';
+}
+</script>
+{% endblock %}

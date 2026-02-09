@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register - Sangrenes LMS Portal</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .register-box {
+            background: var(--white);
+            padding: 2.5rem;
+            border-radius: 20px;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.35);
+            width: 100%;
+            max-width: 500px;
+            position: relative;
+            z-index: 1;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .register-box h1 {
+            text-align: center;
+            background: linear-gradient(135deg, #8B5CF6, #6D28D9);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 0.5rem;
+            font-size: 1.75rem;
+            font-weight: 700;
+        }
+
+        .register-box .subtitle {
+            text-align: center;
+            color: var(--text-gray);
+            margin-bottom: 1.5rem;
+            font-size: 0.9rem;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+
+        @media (max-width: 500px) {
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .section-select {
+            position: relative;
+        }
+
+        .section-select select {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border: 1px solid var(--border-gray);
+            border-radius: 8px;
+            font-size: 0.95rem;
+            background: var(--white);
+            cursor: pointer;
+            appearance: none;
+        }
+
+        .section-select::after {
+            content: '\f078';
+            font-family: 'Font Awesome 6 Free';
+            font-weight: 900;
+            position: absolute;
+            right: 1rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-gray);
+            pointer-events: none;
+        }
+
+        .password-requirements {
+            font-size: 0.75rem;
+            color: var(--text-gray);
+            margin-top: 0.25rem;
+        }
+
+        .login-link {
+            text-align: center;
+            margin-top: 1.5rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid var(--border-gray);
+        }
+
+        .login-link a {
+            color: #8B5CF6;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .login-link a:hover {
+            text-decoration: underline;
+        }
+
+        .icon-header {
+            text-align: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .icon-header i {
+            font-size: 3rem;
+            background: linear-gradient(135deg, #8B5CF6, #6D28D9);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+    </style>
+</head>
+<body class="login-container">
+    <div class="register-box">
+        <div class="icon-header">
+            <i class="fas fa-user-plus"></i>
+        </div>
+        <h1>Student Registration</h1>
+        <p class="subtitle">Create your account to access the LMS</p>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}">
+                        <i class="fas {% if category == 'success' %}fa-check-circle{% elif category == 'error' %}fa-exclamation-circle{% else %}fa-info-circle{% endif %}"></i>
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <form method="POST" action="{{ url_for('register') }}">
+            <div class="form-group">
+                <label for="full_name"><i class="fas fa-user"></i> Full Name</label>
+                <input type="text" id="full_name" name="full_name" placeholder="e.g., Dela Cruz, Juan A." required>
+                <p class="password-requirements">Format: Last Name, First Name, Middle Initial</p>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="student_id"><i class="fas fa-id-card"></i> Student ID</label>
+                    <input type="text" id="student_id" name="student_id" placeholder="e.g., 2024-00001" required>
+                </div>
+                <div class="form-group section-select">
+                    <label for="section"><i class="fas fa-users"></i> Section</label>
+                    <select id="section" name="section" required>
+                        <option value="">Select Section</option>
+                        <optgroup label="BSIT-SR 3rd Year">
+                            <option value="BSIT-SR 3-1">BSIT-SR 3-1</option>
+                            <option value="BSIT-SR 3-2">BSIT-SR 3-2</option>
+                        </optgroup>
+                        <optgroup label="BSIT-SR 2nd Year">
+                            <option value="BSIT-SR 2-1">BSIT-SR 2-1</option>
+                            <option value="BSIT-SR 2-2">BSIT-SR 2-2</option>
+                            <option value="BSIT-SR 2-3">BSIT-SR 2-3</option>
+                        </optgroup>
+                        <optgroup label="BSCPE-BN">
+                            <option value="BSCPE-BN 3-1">BSCPE-BN 3-1</option>
+                            <option value="BSCPE-BN 4-1">BSCPE-BN 4-1</option>
+                        </optgroup>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="email"><i class="fas fa-envelope"></i> Email Address</label>
+                <input type="email" id="email" name="email" placeholder="e.g., juan.delacruz@example.com" required>
+                <p class="password-requirements">Use your school or personal email address</p>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="password"><i class="fas fa-lock"></i> Password</label>
+                    <input type="password" id="password" name="password" placeholder="Create password" required minlength="6">
+                </div>
+                <div class="form-group">
+                    <label for="confirm_password"><i class="fas fa-lock"></i> Confirm Password</label>
+                    <input type="password" id="confirm_password" name="confirm_password" placeholder="Confirm password" required minlength="6">
+                </div>
+            </div>
+            <p class="password-requirements" style="margin-top: -0.5rem; margin-bottom: 1rem;">Password must be at least 6 characters</p>
+
+            <button type="submit" class="btn btn-primary btn-lg btn-full">
+                <i class="fas fa-user-plus"></i> Create Account
+            </button>
+        </form>
+
+        <div class="login-link">
+            <p>Already have an account? <a href="{{ url_for('login') }}">Sign In</a></p>
+        </div>
+
+        <div style="text-align: center; margin-top: 1rem; color: var(--text-gray); font-size: 0.8rem;">
+            <p><i class="fas fa-university"></i> Sangrenes Educational Institution</p>
+        </div>
+    </div>
+
+    <script>
+        // Convert email to lowercase
+        document.getElementById('email').addEventListener('input', function() {
+            this.value = this.value.toLowerCase();
+        });
+
+        // Password match validation
+        document.querySelector('form').addEventListener('submit', function(e) {
+            const password = document.getElementById('password').value;
+            const confirmPassword = document.getElementById('confirm_password').value;
+            const email = document.getElementById('email').value;
+
+            if (password !== confirmPassword) {
+                e.preventDefault();
+                alert('Passwords do not match!');
+                return;
+            }
+
+            // Basic email validation
+            if (!email.includes('@') || !email.includes('.')) {
+                e.preventDefault();
+                alert('Please enter a valid email address!');
+            }
+        });
+    </script>
+</body>
+</html>

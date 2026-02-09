@@ -1,0 +1,217 @@
+{% extends 'base.html' %}
+
+{% block title %}Peer Reviews - Sangrenes LMS Portal{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1><i class="fas fa-user-friends"></i> Peer Review Management</h1>
+        <p>Monitor and manage peer reviews across all activities</p>
+    </div>
+</div>
+
+<!-- Summary Stats -->
+<div class="stats-grid">
+    <div class="stat-card purple">
+        <div class="stat-icon"><i class="fas fa-tasks"></i></div>
+        <div class="stat-info">
+            <h3>{{ activities|length }}</h3>
+            <p>Activities with Peer Review</p>
+        </div>
+    </div>
+    <div class="stat-card blue">
+        <div class="stat-icon"><i class="fas fa-clipboard-list"></i></div>
+        <div class="stat-info">
+            <h3>{{ activities|sum(attribute='assignment_count') }}</h3>
+            <p>Total Assignments</p>
+        </div>
+    </div>
+    <div class="stat-card green">
+        <div class="stat-icon"><i class="fas fa-check-circle"></i></div>
+        <div class="stat-info">
+            <h3>{{ activities|sum(attribute='completed_count') }}</h3>
+            <p>Completed Reviews</p>
+        </div>
+    </div>
+</div>
+
+{% if activities %}
+<div class="card">
+    <div class="card-header">
+        <span class="card-title"><i class="fas fa-list"></i> Activities with Peer Review</span>
+    </div>
+    <div class="card-body">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Activity</th>
+                    <th>Subject/Section</th>
+                    <th>Submissions</th>
+                    <th>Assignments</th>
+                    <th>Progress</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for activity in activities %}
+                <tr>
+                    <td>
+                        <strong>{{ activity.title }}</strong>
+                        <br><small class="text-muted">{{ activity.session_title }}</small>
+                    </td>
+                    <td>
+                        <span class="badge badge-primary">{{ activity.subject_name }}</span>
+                        <br><small>{{ activity.section }}</small>
+                    </td>
+                    <td>
+                        <span class="badge badge-info">{{ activity.submission_count }}</span>
+                    </td>
+                    <td>
+                        <span class="badge badge-warning">{{ activity.assignment_count }}</span>
+                    </td>
+                    <td>
+                        {% set progress = (activity.completed_count / activity.assignment_count * 100) if activity.assignment_count > 0 else 0 %}
+                        <div class="progress-bar-container">
+                            <div class="progress-bar" style="width: {{ progress }}%"></div>
+                        </div>
+                        <small>{{ activity.completed_count }}/{{ activity.assignment_count }} ({{ "%.0f"|format(progress) }}%)</small>
+                    </td>
+                    <td>
+                        <div class="btn-group">
+                            <a href="{{ url_for('peer_review_settings', activity_id=activity.id) }}" class="btn btn-sm btn-primary" title="Settings">
+                                <i class="fas fa-cog"></i>
+                            </a>
+                            <a href="{{ url_for('peer_review_status', activity_id=activity.id) }}" class="btn btn-sm btn-info" title="View Status">
+                                <i class="fas fa-eye"></i>
+                            </a>
+                            <a href="{{ url_for('view_peer_reviews', activity_id=activity.id) }}" class="btn btn-sm btn-success" title="View Reviews">
+                                <i class="fas fa-clipboard-check"></i>
+                            </a>
+                            <a href="{{ url_for('view_submissions', activity_id=activity.id) }}" class="btn btn-sm btn-secondary" title="Submissions">
+                                <i class="fas fa-file-alt"></i>
+                            </a>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="empty-state-card">
+    <i class="fas fa-user-friends"></i>
+    <h3>No Peer Review Activities</h3>
+    <p>Enable peer review on an activity to get started. Go to any activity's submissions page and click "Peer Review" to configure.</p>
+</div>
+{% endif %}
+
+<style>
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.stat-card {
+    background: white;
+    border-radius: 12px;
+    padding: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+}
+
+.stat-card.purple { border-left: 4px solid #8B5CF6; }
+.stat-card.blue { border-left: 4px solid #0EA5E9; }
+.stat-card.green { border-left: 4px solid #10B981; }
+
+.stat-icon {
+    width: 50px;
+    height: 50px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+}
+
+.stat-card.purple .stat-icon { background: #EDE9FE; color: #7C3AED; }
+.stat-card.blue .stat-icon { background: #E0F2FE; color: #0284C7; }
+.stat-card.green .stat-icon { background: #D1FAE5; color: #059669; }
+
+.stat-info h3 {
+    margin: 0;
+    font-size: 1.75rem;
+    color: #1F2937;
+}
+
+.stat-info p {
+    margin: 0;
+    color: #6B7280;
+    font-size: 0.9rem;
+}
+
+.progress-bar-container {
+    width: 100%;
+    height: 8px;
+    background: #E5E7EB;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 5px;
+}
+
+.progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #8B5CF6, #6D28D9);
+    border-radius: 4px;
+    transition: width 0.3s ease;
+}
+
+.btn-group {
+    display: flex;
+    gap: 5px;
+}
+
+.btn-sm {
+    padding: 6px 10px;
+    font-size: 0.85rem;
+}
+
+.badge-info {
+    background: #E0F2FE;
+    color: #0284C7;
+}
+
+.badge-warning {
+    background: #FEF3C7;
+    color: #D97706;
+}
+
+.empty-state-card {
+    background: white;
+    border-radius: 12px;
+    padding: 60px 20px;
+    text-align: center;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+}
+
+.empty-state-card i {
+    font-size: 4rem;
+    color: #D1D5DB;
+    margin-bottom: 1rem;
+}
+
+.empty-state-card h3 {
+    color: #6B7280;
+    margin-bottom: 0.5rem;
+}
+
+.empty-state-card p {
+    color: #9CA3AF;
+    margin: 0;
+}
+</style>
+{% endblock %}

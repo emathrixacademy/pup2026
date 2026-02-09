@@ -1,0 +1,309 @@
+{% extends 'base.html' %}
+
+{% block title %}Peer Review - {{ assignment.activity_title }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="fas fa-user-check"></i> Peer Review</h1>
+    <a href="{{ url_for('student_peer_reviews') }}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back</a>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <span class="card-title">{{ assignment.activity_title }}</span>
+    </div>
+    <div class="card-body">
+        <div class="activity-instructions">
+            <h4><i class="fas fa-info-circle"></i> Activity Instructions</h4>
+            <div class="instructions-content">
+                {{ assignment.instructions|safe }}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mt-20">
+    <div class="card-header">
+        <span class="card-title"><i class="fas fa-file-alt"></i> Classmate's Submission</span>
+    </div>
+    <div class="card-body">
+        {% if assignment.content %}
+        <div class="submission-content">
+            <h4>Text Response:</h4>
+            <div class="content-box">
+                {{ assignment.content }}
+            </div>
+        </div>
+        {% endif %}
+
+        {% if files %}
+        <div class="submission-files mt-20">
+            <h4>Uploaded Files:</h4>
+            <div class="file-list">
+                {% for file in files %}
+                <div class="file-item">
+                    <i class="fas fa-file-alt"></i>
+                    <a href="{{ url_for('static', filename='uploads/activity_submissions/' + file.file_path) }}" target="_blank">
+                        {{ file.file_name }}
+                    </a>
+                    <a href="{{ url_for('static', filename='uploads/activity_submissions/' + file.file_path) }}"
+                       download class="btn btn-sm btn-secondary">
+                        <i class="fas fa-download"></i>
+                    </a>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% elif assignment.file_path %}
+        <div class="submission-files mt-20">
+            <h4>Uploaded File:</h4>
+            <a href="{{ url_for('static', filename='uploads/activity_submissions/' + assignment.file_path) }}"
+               target="_blank" class="btn btn-secondary">
+                <i class="fas fa-download"></i> Download Submission
+            </a>
+        </div>
+        {% endif %}
+
+        {% if not assignment.content and not files and not assignment.file_path %}
+        <div class="empty-state">
+            <i class="fas fa-inbox"></i>
+            <p>No content submitted</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card mt-20">
+    <div class="card-header">
+        <span class="card-title"><i class="fas fa-clipboard-check"></i> Review Criteria</span>
+    </div>
+    <div class="card-body">
+        <p class="mb-20">Please review the submission above and answer each question below:</p>
+
+        <form action="{{ url_for('submit_peer_review', assignment_id=assignment.id) }}" method="POST">
+            {% if criteria %}
+            {% for c in criteria %}
+            <div class="criterion-card">
+                <div class="criterion-question">
+                    <span class="criterion-number">{{ loop.index }}.</span>
+                    {{ c.criterion }}
+                    <span class="criterion-points">({{ c.points }} pts)</span>
+                </div>
+                <div class="criterion-options">
+                    <label class="radio-option yes">
+                        <input type="radio" name="criterion_{{ c.id }}" value="yes" required>
+                        <span class="radio-btn"></span>
+                        <span class="option-text"><i class="fas fa-check-circle"></i> Yes</span>
+                    </label>
+                    <label class="radio-option somehow">
+                        <input type="radio" name="criterion_{{ c.id }}" value="somehow">
+                        <span class="radio-btn"></span>
+                        <span class="option-text"><i class="fas fa-minus-circle"></i> Somehow</span>
+                    </label>
+                    <label class="radio-option no">
+                        <input type="radio" name="criterion_{{ c.id }}" value="no">
+                        <span class="radio-btn"></span>
+                        <span class="option-text"><i class="fas fa-times-circle"></i> No</span>
+                    </label>
+                </div>
+            </div>
+            {% endfor %}
+
+            <div class="scoring-guide mt-20">
+                <h5><i class="fas fa-info-circle"></i> Scoring Guide</h5>
+                <div class="score-values">
+                    <div class="score-item yes"><span class="score-num">100</span> Yes - Criterion is clearly met</div>
+                    <div class="score-item somehow"><span class="score-num">85</span> Somehow - Partially met</div>
+                    <div class="score-item no"><span class="score-num">70</span> No - Not met</div>
+                    <div class="score-item no-answer"><span class="score-num">60</span> No Answer - If left blank</div>
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-lg mt-20" onclick="return confirm('Submit your peer review? This cannot be changed.')">
+                <i class="fas fa-paper-plane"></i> Submit Review
+            </button>
+            {% else %}
+            <div class="empty-state">
+                <i class="fas fa-exclamation-triangle"></i>
+                <p>No review criteria set for this activity</p>
+            </div>
+            {% endif %}
+        </form>
+    </div>
+</div>
+
+<style>
+.activity-instructions {
+    background: #f8fafc;
+    padding: 20px;
+    border-radius: 8px;
+    border-left: 4px solid #7c2d12;
+}
+.activity-instructions h4 {
+    margin: 0 0 15px 0;
+    color: #7c2d12;
+}
+.content-box {
+    background: #fff;
+    padding: 15px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    white-space: pre-wrap;
+}
+.file-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+.file-item {
+    display: inline-flex;
+    align-items: center;
+    padding: 10px 15px;
+    background: #f1f5f9;
+    border-radius: 8px;
+    gap: 10px;
+}
+.file-item i {
+    color: #7c2d12;
+}
+.file-item a {
+    color: #7c2d12;
+}
+.criterion-card {
+    background: #fff;
+    border: 2px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 15px;
+    transition: all 0.3s ease;
+}
+.criterion-card:hover {
+    border-color: #7c2d12;
+    box-shadow: 0 4px 12px rgba(124, 45, 18, 0.1);
+}
+.criterion-question {
+    font-size: 16px;
+    font-weight: 500;
+    margin-bottom: 15px;
+    color: #1e293b;
+}
+.criterion-number {
+    color: #7c2d12;
+    font-weight: bold;
+}
+.criterion-points {
+    color: #64748b;
+    font-size: 14px;
+    font-weight: normal;
+}
+.criterion-options {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+.radio-option {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    padding: 10px 20px;
+    border: 2px solid #e2e8f0;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+}
+.radio-option input {
+    display: none;
+}
+.radio-option .radio-btn {
+    width: 20px;
+    height: 20px;
+    border: 2px solid #cbd5e1;
+    border-radius: 50%;
+    margin-right: 10px;
+    transition: all 0.2s ease;
+}
+.radio-option input:checked + .radio-btn {
+    border-width: 6px;
+}
+.radio-option.yes input:checked + .radio-btn {
+    border-color: #10b981;
+}
+.radio-option.somehow input:checked + .radio-btn {
+    border-color: #f59e0b;
+}
+.radio-option.no input:checked + .radio-btn {
+    border-color: #ef4444;
+}
+.radio-option.yes:hover, .radio-option.yes:has(input:checked) {
+    border-color: #10b981;
+    background: #ecfdf5;
+}
+.radio-option.somehow:hover, .radio-option.somehow:has(input:checked) {
+    border-color: #f59e0b;
+    background: #fffbeb;
+}
+.radio-option.no:hover, .radio-option.no:has(input:checked) {
+    border-color: #ef4444;
+    background: #fef2f2;
+}
+.option-text {
+    font-weight: 500;
+}
+.option-text i {
+    margin-right: 5px;
+}
+.radio-option.yes .option-text i { color: #10b981; }
+.radio-option.somehow .option-text i { color: #f59e0b; }
+.radio-option.no .option-text i { color: #ef4444; }
+.scoring-guide {
+    background: #f0fdf4;
+    padding: 15px 20px;
+    border-radius: 8px;
+    border-left: 4px solid #10b981;
+}
+.scoring-guide h5 {
+    margin: 0 0 15px 0;
+    color: #10b981;
+}
+.score-values {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 10px;
+}
+.score-values .score-item {
+    background: white;
+    padding: 12px 15px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 14px;
+}
+.score-values .score-num {
+    font-size: 20px;
+    font-weight: 700;
+    min-width: 40px;
+}
+.score-values .score-item.yes { border-left: 4px solid #10b981; }
+.score-values .score-item.yes .score-num { color: #10b981; }
+.score-values .score-item.somehow { border-left: 4px solid #f59e0b; }
+.score-values .score-item.somehow .score-num { color: #f59e0b; }
+.score-values .score-item.no { border-left: 4px solid #ef4444; }
+.score-values .score-item.no .score-num { color: #ef4444; }
+.score-values .score-item.no-answer { border-left: 4px solid #9ca3af; }
+.score-values .score-item.no-answer .score-num { color: #9ca3af; }
+.empty-state {
+    text-align: center;
+    padding: 40px;
+    color: #666;
+}
+.empty-state i {
+    font-size: 48px;
+    margin-bottom: 15px;
+    color: #f59e0b;
+}
+.btn-lg {
+    padding: 15px 30px;
+    font-size: 16px;
+}
+</style>
+{% endblock %}

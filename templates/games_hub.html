@@ -1,0 +1,215 @@
+{% extends 'base.html' %}
+
+{% block title %}Games & Quizzes - Sangrenes LMS Portal{% endblock %}
+
+{% block content %}
+<div class="games-hub-wrapper">
+    <div class="hub-header">
+        <h1><i class="fas fa-gamepad"></i> Games & Quizzes</h1>
+        <p>Level up your skills! Choose a game or start your quiz journey.</p>
+    </div>
+
+    <div class="games-grid">
+        <!-- Python Code Blaster -->
+        <a href="{{ url_for('typing_game') }}" class="game-card code-blaster">
+            <div class="game-glow"></div>
+            <div class="game-icon">
+                <i class="fas fa-bomb"></i>
+            </div>
+            <div class="game-info">
+                <h2>Python Code Blaster</h2>
+                <p>Type Python code before the bomb explodes! Test your speed and accuracy.</p>
+                <div class="game-features">
+                    <span><i class="fas fa-keyboard"></i> Typing Speed</span>
+                    <span><i class="fas fa-trophy"></i> Leaderboard</span>
+                    <span><i class="fas fa-bolt"></i> XP System</span>
+                </div>
+            </div>
+            <div class="play-btn">
+                <i class="fas fa-play"></i> Play Now
+            </div>
+        </a>
+
+        <!-- Quiz Journey -->
+        <a href="{{ url_for('quiz_journey') }}" class="game-card quiz-journey">
+            <div class="game-glow"></div>
+            <div class="game-icon">
+                <i class="fas fa-map-marked-alt"></i>
+            </div>
+            <div class="game-info">
+                <h2>Quiz Journey</h2>
+                <p>Embark on a level-by-level quiz adventure based on your lessons!</p>
+                <div class="game-features">
+                    <span><i class="fas fa-clock"></i> Timed</span>
+                    <span><i class="fas fa-random"></i> Randomized</span>
+                    <span><i class="fas fa-layer-group"></i> Level-Based</span>
+                </div>
+            </div>
+            <div class="play-btn">
+                <i class="fas fa-play"></i> Start Journey
+            </div>
+        </a>
+    </div>
+</div>
+
+<style>
+.games-hub-wrapper {
+    min-height: calc(100vh - 70px);
+    background: linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #1e1b4b 100%);
+    padding: 3rem 2rem;
+}
+
+.hub-header {
+    text-align: center;
+    margin-bottom: 3rem;
+}
+
+.hub-header h1 {
+    color: white;
+    font-size: 2.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.hub-header h1 i {
+    color: #fbbf24;
+}
+
+.hub-header p {
+    color: #a5b4fc;
+    font-size: 1.1rem;
+}
+
+.games-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    gap: 2rem;
+    max-width: 1000px;
+    margin: 0 auto;
+}
+
+.game-card {
+    position: relative;
+    background: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(10px);
+    border-radius: 24px;
+    padding: 2.5rem;
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    text-decoration: none;
+    overflow: hidden;
+    transition: all 0.4s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+.game-card:hover {
+    transform: translateY(-10px);
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+.game-card.code-blaster:hover { border-color: #ef4444; }
+.game-card.quiz-journey:hover { border-color: #8b5cf6; }
+
+.game-glow {
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    opacity: 0;
+    transition: opacity 0.4s ease;
+    pointer-events: none;
+}
+
+.code-blaster .game-glow {
+    background: radial-gradient(circle, rgba(239, 68, 68, 0.15) 0%, transparent 70%);
+}
+
+.quiz-journey .game-glow {
+    background: radial-gradient(circle, rgba(139, 92, 246, 0.15) 0%, transparent 70%);
+}
+
+.game-card:hover .game-glow { opacity: 1; }
+
+.game-icon {
+    width: 100px;
+    height: 100px;
+    border-radius: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2.5rem;
+    margin-bottom: 1.5rem;
+    position: relative;
+}
+
+.code-blaster .game-icon {
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+    color: white;
+}
+
+.quiz-journey .game-icon {
+    background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+    color: white;
+}
+
+.game-info h2 {
+    color: white;
+    font-size: 1.5rem;
+    margin: 0 0 10px 0;
+}
+
+.game-info p {
+    color: #a5b4fc;
+    margin: 0 0 1.5rem 0;
+    line-height: 1.5;
+}
+
+.game-features {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-bottom: 1.5rem;
+}
+
+.game-features span {
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.8);
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.game-features span i {
+    color: #fbbf24;
+}
+
+.play-btn {
+    background: linear-gradient(135deg, #fbbf24, #f59e0b);
+    color: #1e1b4b;
+    padding: 12px 30px;
+    border-radius: 12px;
+    font-weight: 700;
+    font-size: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.3s ease;
+}
+
+.game-card:hover .play-btn {
+    transform: scale(1.05);
+}
+
+@media (max-width: 768px) {
+    .games-grid {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+{% endblock %}

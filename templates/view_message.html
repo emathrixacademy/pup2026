@@ -1,0 +1,168 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ message.subject }} - Sangrenes LMS Portal{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <a href="{{ url_for('messages') }}" class="back-link">
+            <i class="fas fa-arrow-left"></i> Back to Messages
+        </a>
+    </div>
+</div>
+
+<div class="message-view-card">
+    <div class="message-view-header">
+        <div class="sender-info">
+            <img src="{{ url_for('static', filename='uploads/photos/' + (message.sender_photo or 'default.png')) }}"
+                 alt="{{ message.sender_name }}"
+                 onerror="this.src='https://ui-avatars.com/api/?name={{ message.sender_name }}&background=8B5CF6&color=fff'"
+                 class="sender-avatar">
+            <div>
+                <h3 class="sender-name">{{ message.sender_name }}</h3>
+                <p class="message-meta">
+                    <span><i class="fas fa-clock"></i> {{ message.created_at }}</span>
+                    {% if message.recipient_all == 1 %}
+                    <span class="recipient-tag all"><i class="fas fa-globe"></i> Sent to all students</span>
+                    {% elif message.recipient_section %}
+                    <span class="recipient-tag section"><i class="fas fa-layer-group"></i> Sent to {{ message.recipient_section }}</span>
+                    {% else %}
+                    <span class="recipient-tag individual"><i class="fas fa-user"></i> Direct message</span>
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <div class="message-subject-line">
+        <h2>{{ message.subject }}</h2>
+    </div>
+
+    <div class="message-body">
+        {{ message.content|safe|nl2br }}
+    </div>
+</div>
+
+<style>
+.back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: #6B7280;
+    text-decoration: none;
+    font-weight: 500;
+    transition: color 0.2s ease;
+}
+
+.back-link:hover {
+    color: #8B5CF6;
+}
+
+.message-view-card {
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+}
+
+.message-view-header {
+    background: linear-gradient(135deg, #8B5CF6, #6D28D9);
+    padding: 25px 30px;
+    color: white;
+}
+
+.sender-info {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.sender-avatar {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 3px solid rgba(255, 255, 255, 0.5);
+}
+
+.sender-name {
+    margin: 0 0 5px 0;
+    font-size: 1.25rem;
+    font-weight: 600;
+}
+
+.message-meta {
+    margin: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 15px;
+    font-size: 0.9rem;
+    opacity: 0.9;
+}
+
+.recipient-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 12px;
+    border-radius: 15px;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.recipient-tag.all {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.recipient-tag.section {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.recipient-tag.individual {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.message-subject-line {
+    padding: 25px 30px;
+    border-bottom: 1px solid #F3F4F6;
+}
+
+.message-subject-line h2 {
+    margin: 0;
+    color: #1F2937;
+    font-size: 1.5rem;
+    font-weight: 600;
+}
+
+.message-body {
+    padding: 30px;
+    color: #374151;
+    font-size: 1rem;
+    line-height: 1.8;
+    min-height: 200px;
+    white-space: pre-wrap;
+}
+
+@media (max-width: 600px) {
+    .message-view-header {
+        padding: 20px;
+    }
+
+    .sender-avatar {
+        width: 50px;
+        height: 50px;
+    }
+
+    .message-meta {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+
+    .message-subject-line, .message-body {
+        padding: 20px;
+    }
+}
+</style>
+{% endblock %}

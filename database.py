@@ -26,6 +26,7 @@ def init_db():
             contact_number TEXT,
             address TEXT,
             profile_completed INTEGER DEFAULT 0,
+            is_approved INTEGER DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
@@ -245,6 +246,91 @@ def init_db():
         )
     ''')
 
+    # Messages table for instructor-student communication
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sender_id INTEGER NOT NULL,
+            recipient_id INTEGER,
+            recipient_section TEXT,
+            recipient_all INTEGER DEFAULT 0,
+            subject TEXT NOT NULL,
+            content TEXT NOT NULL,
+            is_read INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (sender_id) REFERENCES users (id),
+            FOREIGN KEY (recipient_id) REFERENCES users (id)
+        )
+    ''')
+
+    # Notifications table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS notifications (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            type TEXT DEFAULT 'info',
+            icon TEXT DEFAULT 'bell',
+            message TEXT NOT NULL,
+            link TEXT,
+            is_read INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (id)
+        )
+    ''')
+
+    # Submission files table - for multiple file uploads
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS submission_files (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            submission_id INTEGER NOT NULL,
+            file_path TEXT NOT NULL,
+            file_name TEXT NOT NULL,
+            uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (submission_id) REFERENCES submissions (id)
+        )
+    ''')
+
+    # Peer review criteria table - defines what to check for each activity
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS peer_review_criteria (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            activity_id INTEGER NOT NULL,
+            criterion TEXT NOT NULL,
+            points INTEGER DEFAULT 1,
+            order_num INTEGER DEFAULT 0,
+            FOREIGN KEY (activity_id) REFERENCES activities (id)
+        )
+    ''')
+
+    # Peer review assignments table - randomly assigns reviewers
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS peer_review_assignments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            submission_id INTEGER NOT NULL,
+            reviewer_id INTEGER NOT NULL,
+            assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            completed_at TIMESTAMP,
+            is_completed INTEGER DEFAULT 0,
+            FOREIGN KEY (submission_id) REFERENCES submissions (id),
+            FOREIGN KEY (reviewer_id) REFERENCES users (id),
+            UNIQUE(submission_id, reviewer_id)
+        )
+    ''')
+
+    # Peer review responses table - stores reviewer answers
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS peer_review_responses (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            assignment_id INTEGER NOT NULL,
+            criterion_id INTEGER NOT NULL,
+            response TEXT NOT NULL,
+            points_awarded INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (assignment_id) REFERENCES peer_review_assignments (id),
+            FOREIGN KEY (criterion_id) REFERENCES peer_review_criteria (id)
+        )
+    ''')
+
     conn.commit()
 
     # Migration: Add new columns to existing tables if they don't exist
@@ -260,6 +346,7 @@ def init_db():
         ("users", "messenger", "TEXT"),
         ("users", "pup_id_photo", "TEXT"),
         ("users", "cor_photo", "TEXT"),
+        ("users", "is_approved", "INTEGER DEFAULT 0"),
         # KYS (Know Your Student) fields
         ("users", "programming_languages", "TEXT"),
         ("users", "databases_known", "TEXT"),
@@ -275,10 +362,26 @@ def init_db():
         ("activities", "visible_until", "TEXT"),
         ("activities", "file_path", "TEXT"),
         ("activities", "due_date", "TEXT"),
+        ("activities", "due_time", "TEXT"),
         ("activities", "is_active", "INTEGER DEFAULT 1"),
         ("activities", "allow_file_upload", "INTEGER DEFAULT 1"),
+        ("activities", "allow_multiple_files", "INTEGER DEFAULT 1"),
+        ("activities", "max_files", "INTEGER DEFAULT 5"),
+        ("activities", "late_penalty_per_day", "INTEGER DEFAULT 1"),
+        ("activities", "enable_peer_review", "INTEGER DEFAULT 0"),
+        ("activities", "peer_reviewers_count", "INTEGER DEFAULT 1"),
         # Submissions table migrations
         ("submissions", "score_visible", "INTEGER DEFAULT 0"),
+        ("submissions", "is_late", "INTEGER DEFAULT 0"),
+        ("submissions", "late_days", "INTEGER DEFAULT 0"),
+        ("submissions", "late_penalty", "INTEGER DEFAULT 0"),
+        ("submissions", "peer_review_score", "REAL"),
+        ("submissions", "participation_score", "REAL"),
+        ("submissions", "instructor_score", "REAL"),
+        ("submissions", "final_score", "REAL"),
+        # Peer review assignment quality tracking
+        ("peer_review_assignments", "review_quality_score", "REAL"),
+        ("peer_review_assignments", "instructor_feedback", "TEXT"),
         # Subjects table migrations
         ("subjects", "color_theme", "TEXT DEFAULT 'blue'"),
         # Quizzes visibility
@@ -289,6 +392,10 @@ def init_db():
         ("quiz_attempts", "score_visible", "INTEGER DEFAULT 0"),
         # Exam attempts score visibility
         ("exam_attempts", "score_visible", "INTEGER DEFAULT 0"),
+        # Quiz attempt tracking
+        ("quiz_attempts", "time_spent", "INTEGER DEFAULT 0"),
+        ("quiz_attempts", "missed_questions", "TEXT"),
+        ("quiz_attempts", "total_questions", "INTEGER DEFAULT 0"),
     ]
 
     for table, column, col_type in migrations:
@@ -298,15 +405,19 @@ def init_db():
         except sqlite3.OperationalError:
             pass  # Column already exists
 
-    # Seed default instructor
+    # Seed default instructor (always approved)
     try:
         cursor.execute('''
-            INSERT INTO users (username, password_hash, full_name, role)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO users (username, password_hash, full_name, role, is_approved, profile_completed)
+            VALUES (?, ?, ?, ?, 1, 1)
         ''', ('instructor', generate_password_hash('instructor123'), 'Instructor', 'instructor'))
         conn.commit()
     except sqlite3.IntegrityError:
         pass
+
+    # Ensure all instructors are approved
+    cursor.execute('UPDATE users SET is_approved = 1, profile_completed = 1 WHERE role = "instructor"')
+    conn.commit()
 
     # Seed default student account
     try:

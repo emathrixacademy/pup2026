@@ -1,0 +1,276 @@
+{% extends 'base.html' %}
+
+{% block title %}Quiz Journey - Sangrenes LMS Portal{% endblock %}
+
+{% block content %}
+<div class="quiz-journey-wrapper">
+    <div class="journey-header">
+        <h1><i class="fas fa-map-marked-alt"></i> Quiz Journey</h1>
+        <p>Embark on your learning adventure! Complete quizzes level by level.</p>
+    </div>
+
+    <div class="journey-subjects">
+        {% for item in subjects_data %}
+        <div class="subject-journey-card">
+            <div class="subject-header">
+                <div class="subject-icon">
+                    <i class="fas fa-book-open"></i>
+                </div>
+                <div class="subject-info">
+                    <h3>{{ item.subject.name }}</h3>
+                    <span class="section-badge">{{ item.subject.section }}</span>
+                </div>
+                <div class="subject-progress">
+                    {% set total_quizzes = item.sessions|sum(attribute='quiz_count') %}
+                    {% set completed = item.completed_quiz_ids|length %}
+                    <div class="progress-circle" data-progress="{{ (completed / total_quizzes * 100) if total_quizzes > 0 else 0 }}">
+                        <span>{{ completed }}/{{ total_quizzes }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="session-levels">
+                {% for session in item.sessions %}
+                {% if session.quiz_count > 0 %}
+                <a href="{{ url_for('quiz_journey_subject', subject_id=item.subject.id) }}" class="level-node {% if session.id in item.completed_quiz_ids %}completed{% endif %}">
+                    <div class="level-number">{{ session.session_number }}</div>
+                    <div class="level-title">{{ session.title[:20] }}{% if session.title|length > 20 %}...{% endif %}</div>
+                    <div class="level-quizzes"><i class="fas fa-question-circle"></i> {{ session.quiz_count }} quiz(es)</div>
+                </a>
+                {% endif %}
+                {% endfor %}
+            </div>
+
+            <a href="{{ url_for('quiz_journey_subject', subject_id=item.subject.id) }}" class="btn btn-journey">
+                <i class="fas fa-play"></i> Start Journey
+            </a>
+        </div>
+        {% endfor %}
+    </div>
+
+    {% if not subjects_data %}
+    <div class="empty-journey">
+        <i class="fas fa-compass"></i>
+        <h3>No Subjects Available</h3>
+        <p>Enroll in subjects to start your quiz journey!</p>
+    </div>
+    {% endif %}
+</div>
+
+<style>
+.quiz-journey-wrapper {
+    padding: 2rem;
+    background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%);
+    min-height: calc(100vh - 70px);
+}
+
+.journey-header {
+    text-align: center;
+    margin-bottom: 2rem;
+    color: white;
+}
+
+.journey-header h1 {
+    font-size: 2.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.journey-header h1 i {
+    color: #fbbf24;
+    margin-right: 10px;
+}
+
+.journey-header p {
+    color: #a5b4fc;
+    font-size: 1.1rem;
+}
+
+.journey-subjects {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+    gap: 1.5rem;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.subject-journey-card {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    border-radius: 20px;
+    padding: 1.5rem;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.subject-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.subject-icon {
+    width: 60px;
+    height: 60px;
+    background: linear-gradient(135deg, #fbbf24, #f59e0b);
+    border-radius: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    color: white;
+}
+
+.subject-info {
+    flex: 1;
+}
+
+.subject-info h3 {
+    color: white;
+    margin: 0 0 5px 0;
+    font-size: 1.2rem;
+}
+
+.section-badge {
+    background: rgba(139, 92, 246, 0.5);
+    color: white;
+    padding: 3px 10px;
+    border-radius: 10px;
+    font-size: 0.8rem;
+}
+
+.subject-progress {
+    text-align: center;
+}
+
+.progress-circle {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: conic-gradient(#10b981 calc(var(--progress) * 1%), rgba(255,255,255,0.2) 0);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+
+.progress-circle::before {
+    content: '';
+    position: absolute;
+    width: 40px;
+    height: 40px;
+    background: rgba(30, 27, 75, 1);
+    border-radius: 50%;
+}
+
+.progress-circle span {
+    position: relative;
+    z-index: 1;
+    color: white;
+    font-size: 0.75rem;
+    font-weight: bold;
+}
+
+.session-levels {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 1.5rem;
+}
+
+.level-node {
+    background: rgba(255, 255, 255, 0.1);
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-radius: 12px;
+    padding: 10px 15px;
+    text-decoration: none;
+    color: white;
+    transition: all 0.3s ease;
+    min-width: 100px;
+    text-align: center;
+}
+
+.level-node:hover {
+    background: rgba(139, 92, 246, 0.3);
+    border-color: #8b5cf6;
+    transform: translateY(-2px);
+}
+
+.level-node.completed {
+    background: rgba(16, 185, 129, 0.3);
+    border-color: #10b981;
+}
+
+.level-number {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: #fbbf24;
+}
+
+.level-title {
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.7);
+    margin: 3px 0;
+}
+
+.level-quizzes {
+    font-size: 0.7rem;
+    color: #a5b4fc;
+}
+
+.btn-journey {
+    width: 100%;
+    padding: 12px;
+    background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.btn-journey:hover {
+    background: linear-gradient(135deg, #7c3aed, #5b21b6);
+    transform: translateY(-2px);
+}
+
+.empty-journey {
+    text-align: center;
+    padding: 4rem;
+    color: white;
+}
+
+.empty-journey i {
+    font-size: 4rem;
+    color: #6b7280;
+    margin-bottom: 1rem;
+}
+
+.empty-journey h3 {
+    margin-bottom: 0.5rem;
+}
+
+.empty-journey p {
+    color: #a5b4fc;
+}
+
+@media (max-width: 768px) {
+    .journey-subjects {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+
+<script>
+document.querySelectorAll('.progress-circle').forEach(circle => {
+    const progress = circle.dataset.progress;
+    circle.style.setProperty('--progress', progress);
+});
+</script>
+{% endblock %}

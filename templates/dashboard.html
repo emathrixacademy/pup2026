@@ -10,12 +10,34 @@
     </div>
 </div>
 
+<!-- Pending Enrollments Alert -->
+{% if stats.pending > 0 %}
+<div class="pending-alert">
+    <div class="pending-alert-content">
+        <div class="pending-alert-icon">
+            <i class="fas fa-user-clock"></i>
+        </div>
+        <div class="pending-alert-text">
+            <strong>{{ stats.pending }} pending enrollment{{ 's' if stats.pending != 1 else '' }}</strong>
+            <p>New students are waiting for your approval</p>
+        </div>
+        <a href="{{ url_for('enrollments') }}" class="btn btn-warning">
+            <i class="fas fa-user-check"></i> Review Now
+        </a>
+    </div>
+</div>
+{% endif %}
+
 <!-- Statistics Cards -->
 <div class="stats-grid">
     <div class="stat-card blue">
         <div class="stat-number">{{ stats.students }}</div>
-        <div class="stat-label"><i class="fas fa-user-graduate"></i> Total Students</div>
+        <div class="stat-label"><i class="fas fa-user-graduate"></i> Approved Students</div>
     </div>
+    <a href="{{ url_for('enrollments') }}" class="stat-card yellow clickable">
+        <div class="stat-number">{{ stats.pending }}</div>
+        <div class="stat-label"><i class="fas fa-user-clock"></i> Pending Approval</div>
+    </a>
     <div class="stat-card green">
         <div class="stat-number">{{ stats.subjects }}</div>
         <div class="stat-label"><i class="fas fa-chalkboard"></i> Classes</div>
@@ -76,4 +98,79 @@
         </div>
     </div>
 </div>
+
+<style>
+.pending-alert {
+    background: linear-gradient(135deg, #FEF3C7, #FDE68A);
+    border: 2px solid #F59E0B;
+    border-radius: 12px;
+    padding: 1rem 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.pending-alert-content {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.pending-alert-icon {
+    width: 50px;
+    height: 50px;
+    background: #F59E0B;
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    flex-shrink: 0;
+}
+
+.pending-alert-text {
+    flex: 1;
+}
+
+.pending-alert-text strong {
+    color: #92400E;
+    font-size: 1.1rem;
+}
+
+.pending-alert-text p {
+    margin: 0;
+    color: #B45309;
+    font-size: 0.9rem;
+}
+
+.stat-card.yellow {
+    background: linear-gradient(135deg, #FEF3C7, #FDE68A);
+    border-left: 4px solid #F59E0B;
+}
+
+.stat-card.yellow .stat-number {
+    color: #92400E;
+}
+
+.stat-card.yellow .stat-label {
+    color: #B45309;
+}
+
+.stat-card.clickable {
+    text-decoration: none;
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.stat-card.clickable:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 25px rgba(245, 158, 11, 0.3);
+}
+
+@media (max-width: 600px) {
+    .pending-alert-content {
+        flex-direction: column;
+        text-align: center;
+    }
+}
+</style>
 {% endblock %}

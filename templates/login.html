@@ -6,11 +6,35 @@
     <title>Login - Sangrenes LMS Portal</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .register-link {
+            text-align: center;
+            margin-top: 1.5rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid var(--border-gray);
+        }
+        .register-link a {
+            color: #8B5CF6;
+            text-decoration: none;
+            font-weight: 600;
+        }
+        .register-link a:hover {
+            text-decoration: underline;
+        }
+        .login-icon {
+            font-size: 3rem;
+            background: linear-gradient(135deg, #8B5CF6, #6D28D9);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 1rem;
+        }
+    </style>
 </head>
 <body class="login-container">
     <div class="login-box">
         <div style="text-align: center; margin-bottom: 2rem;">
-            <i class="fas fa-graduation-cap" style="font-size: 3rem; color: #0EA5E9; margin-bottom: 1rem;"></i>
+            <i class="fas fa-graduation-cap login-icon"></i>
             <h1>Sangrenes LMS Portal</h1>
             <p class="subtitle">Learning Management System 2026</p>
         </div>
@@ -28,8 +52,8 @@
 
         <form method="POST" action="{{ url_for('login') }}">
             <div class="form-group">
-                <label for="username"><i class="fas fa-user"></i> Username</label>
-                <input type="text" id="username" name="username" placeholder="Enter your username" required>
+                <label for="username"><i class="fas fa-envelope"></i> Email Address</label>
+                <input type="email" id="username" name="username" placeholder="Enter your email address" required>
             </div>
             <div class="form-group">
                 <label for="password"><i class="fas fa-lock"></i> Password</label>
@@ -40,7 +64,11 @@
             </button>
         </form>
 
-        <div style="text-align: center; margin-top: 1.5rem; color: var(--text-gray); font-size: 0.85rem;">
+        <div class="register-link">
+            <p>Don't have an account? <a href="{{ url_for('register') }}"><i class="fas fa-user-plus"></i> Register here</a></p>
+        </div>
+
+        <div style="text-align: center; margin-top: 1rem; color: var(--text-gray); font-size: 0.85rem;">
             <p><i class="fas fa-university"></i> Sangrenes Educational Institution</p>
         </div>
     </div>

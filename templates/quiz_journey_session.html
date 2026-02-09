@@ -1,0 +1,264 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ session.title }} - Quiz Journey{% endblock %}
+
+{% block content %}
+<div class="quiz-journey-wrapper">
+    <div class="journey-breadcrumb">
+        <a href="{{ url_for('quiz_journey_subject', subject_id=session.subject_id) }}">
+            <i class="fas fa-arrow-left"></i> Back to {{ session.subject_name }}
+        </a>
+    </div>
+
+    <div class="session-banner">
+        <div class="session-number">Session {{ session.session_number }}</div>
+        <h1>{{ session.title }}</h1>
+    </div>
+
+    <div class="quizzes-grid">
+        {% for quiz in quizzes %}
+        <div class="quiz-card {% if quiz.best_score is not none %}completed{% endif %}">
+            <div class="quiz-header">
+                <div class="quiz-icon">
+                    <i class="fas fa-clipboard-question"></i>
+                </div>
+                <div class="quiz-title">
+                    <h3>{{ quiz.title }}</h3>
+                    <p>{{ quiz.question_count }} questions</p>
+                </div>
+            </div>
+
+            <div class="quiz-info">
+                <div class="info-item">
+                    <i class="fas fa-clock"></i>
+                    <span>Timed: 60s (Q1-5), 30s (Q6-10)</span>
+                </div>
+                <div class="info-item">
+                    <i class="fas fa-random"></i>
+                    <span>Randomized questions</span>
+                </div>
+                <div class="info-item">
+                    <i class="fas fa-ban"></i>
+                    <span>No going back</span>
+                </div>
+            </div>
+
+            {% if quiz.best_score is not none %}
+            <div class="quiz-scores">
+                <div class="score-item">
+                    <span class="score-label">Best Score</span>
+                    <span class="score-value">{{ "%.0f"|format(quiz.best_score) }}</span>
+                </div>
+                <div class="score-item">
+                    <span class="score-label">Last Score</span>
+                    <span class="score-value">{{ "%.0f"|format(quiz.last_score) if quiz.last_score else '-' }}</span>
+                </div>
+            </div>
+            {% endif %}
+
+            <a href="{{ url_for('start_quiz_journey_game', quiz_id=quiz.id) }}" class="btn-start-quiz">
+                <i class="fas fa-play"></i>
+                {% if quiz.best_score is not none %}Retry Quiz{% else %}Start Quiz{% endif %}
+            </a>
+        </div>
+        {% endfor %}
+    </div>
+
+    {% if not quizzes %}
+    <div class="empty-quizzes">
+        <i class="fas fa-clipboard"></i>
+        <h3>No Quizzes Available</h3>
+        <p>No quizzes have been created for this session yet.</p>
+    </div>
+    {% endif %}
+</div>
+
+<style>
+.quiz-journey-wrapper {
+    padding: 2rem;
+    background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%);
+    min-height: calc(100vh - 70px);
+}
+
+.journey-breadcrumb a {
+    color: #a5b4fc;
+    text-decoration: none;
+    font-size: 0.9rem;
+}
+
+.journey-breadcrumb a:hover {
+    color: white;
+}
+
+.session-banner {
+    text-align: center;
+    padding: 2rem;
+    margin-bottom: 2rem;
+}
+
+.session-number {
+    display: inline-block;
+    background: linear-gradient(135deg, #fbbf24, #f59e0b);
+    color: #1e1b4b;
+    padding: 5px 20px;
+    border-radius: 20px;
+    font-weight: bold;
+    font-size: 0.9rem;
+    margin-bottom: 10px;
+}
+
+.session-banner h1 {
+    color: white;
+    margin: 0;
+    font-size: 1.8rem;
+}
+
+.quizzes-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    gap: 1.5rem;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.quiz-card {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    border-radius: 16px;
+    padding: 1.5rem;
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    transition: all 0.3s ease;
+}
+
+.quiz-card:hover {
+    border-color: #8b5cf6;
+    transform: translateY(-5px);
+}
+
+.quiz-card.completed {
+    border-color: #10b981;
+}
+
+.quiz-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.quiz-icon {
+    width: 50px;
+    height: 50px;
+    background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.3rem;
+    color: white;
+}
+
+.quiz-card.completed .quiz-icon {
+    background: linear-gradient(135deg, #10b981, #059669);
+}
+
+.quiz-title h3 {
+    color: white;
+    margin: 0;
+    font-size: 1.1rem;
+}
+
+.quiz-title p {
+    color: #a5b4fc;
+    margin: 5px 0 0 0;
+    font-size: 0.85rem;
+}
+
+.quiz-info {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 10px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+
+.info-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 0.85rem;
+    margin-bottom: 8px;
+}
+
+.info-item:last-child {
+    margin-bottom: 0;
+}
+
+.info-item i {
+    color: #fbbf24;
+    width: 20px;
+}
+
+.quiz-scores {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.score-item {
+    flex: 1;
+    background: rgba(16, 185, 129, 0.2);
+    padding: 10px;
+    border-radius: 8px;
+    text-align: center;
+}
+
+.score-label {
+    display: block;
+    color: #a5b4fc;
+    font-size: 0.75rem;
+    margin-bottom: 3px;
+}
+
+.score-value {
+    display: block;
+    color: #10b981;
+    font-size: 1.2rem;
+    font-weight: bold;
+}
+
+.btn-start-quiz {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    padding: 12px;
+    background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.3s ease;
+}
+
+.btn-start-quiz:hover {
+    background: linear-gradient(135deg, #7c3aed, #5b21b6);
+}
+
+.empty-quizzes {
+    text-align: center;
+    padding: 4rem;
+    color: white;
+}
+
+.empty-quizzes i {
+    font-size: 4rem;
+    color: #6b7280;
+    margin-bottom: 1rem;
+}
+</style>
+{% endblock %}

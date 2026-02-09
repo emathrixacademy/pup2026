@@ -1,0 +1,639 @@
+{% extends 'base.html' %}
+
+{% block title %}Student Performance - Sangrenes LMS Portal{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1><i class="fas fa-chart-line"></i> Student Performance Analytics</h1>
+        <p>Monitor quiz scores, time spent, missed questions, and game activity</p>
+    </div>
+</div>
+
+<!-- Tab Navigation -->
+<div class="perf-tabs">
+    <button class="perf-tab active" onclick="switchPerfTab('quiz', this)">
+        <i class="fas fa-clipboard-check"></i> Quiz Analytics
+    </button>
+    <button class="perf-tab" onclick="switchPerfTab('game', this)">
+        <i class="fas fa-gamepad"></i> Python Game
+    </button>
+</div>
+
+<!-- QUIZ ANALYTICS TAB -->
+<div id="quiz-tab" class="perf-content active">
+    <!-- Section Filter + Search -->
+    <div class="filter-bar-perf">
+        <div class="filter-group">
+            <label><i class="fas fa-filter"></i> Section:</label>
+            <select id="section-filter-quiz" onchange="filterQuizCards()">
+                <option value="all">All Sections</option>
+                {% for section in sections %}
+                <option value="{{ section }}">{{ section }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="search-box-perf">
+            <i class="fas fa-search"></i>
+            <input type="text" id="search-quiz" placeholder="Search quiz or subject..." onkeyup="filterQuizCards()">
+        </div>
+    </div>
+
+    {% if quizzes %}
+    {% for quiz in quizzes %}
+    <div class="quiz-analytics-card" data-section="{{ quiz.section or '' }}" data-search="{{ quiz.quiz_title|lower }} {{ quiz.subject_name|lower }} {{ quiz.session_title|lower }}">
+        <div class="qac-header" onclick="toggleQuizCard({{ quiz.id }})">
+            <div class="qac-title-area">
+                <h3><i class="fas fa-clipboard-check"></i> {{ quiz.quiz_title }}</h3>
+                <div class="qac-meta">
+                    <span class="tag purple">{{ quiz.subject_name }}</span>
+                    <span class="tag blue">{{ quiz.session_title }}</span>
+                    <span class="tag gray">{{ quiz.section }}</span>
+                    <span class="tag dark">{{ quiz.total_questions }} questions</span>
+                </div>
+            </div>
+            <div class="qac-right">
+                <div class="qac-stats-mini">
+                    <div class="mini-stat">
+                        <span class="mini-val">{{ quiz.attempt_count }}</span>
+                        <span class="mini-label">Took</span>
+                    </div>
+                    <div class="mini-stat green">
+                        <span class="mini-val">{{ quiz.perfect_count }}</span>
+                        <span class="mini-label">Perfect</span>
+                    </div>
+                    <div class="mini-stat red">
+                        <span class="mini-val">{{ quiz.fail_count }}</span>
+                        <span class="mini-label">Failed</span>
+                    </div>
+                    <div class="mini-stat orange">
+                        <span class="mini-val">{{ "%.1f"|format(quiz.avg_score or 0) }}</span>
+                        <span class="mini-label">Avg Score</span>
+                    </div>
+                    <div class="mini-stat blue">
+                        <span class="mini-val">{{ "%.0f"|format((quiz.avg_time or 0) / 60) }}m</span>
+                        <span class="mini-label">Avg Time</span>
+                    </div>
+                </div>
+                <div class="qac-actions-row">
+                    <a href="{{ url_for('manage_quiz', quiz_id=quiz.id) }}" class="qac-manage-btn" onclick="event.stopPropagation();">
+                        <i class="fas fa-cog"></i> Manage
+                    </a>
+                    <i class="fas fa-chevron-down toggle-icon"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- Expanded Details -->
+        <div class="qac-details" id="quiz-details-{{ quiz.id }}" style="display:none;">
+            {% if quiz.attempt_list %}
+            <!-- Summary Bar -->
+            <div class="qac-summary">
+                <div class="qac-summary-item">
+                    <i class="fas fa-users"></i>
+                    <span>{{ quiz.attempt_count }} student{{ 's' if quiz.attempt_count != 1 }} took this quiz</span>
+                </div>
+                {% if quiz.attempt_count > 0 %}
+                <div class="qac-summary-item green">
+                    <i class="fas fa-trophy"></i>
+                    <span>{{ quiz.perfect_count }} perfect score{{ 's' if quiz.perfect_count != 1 }}</span>
+                </div>
+                <div class="qac-summary-item red">
+                    <i class="fas fa-exclamation-circle"></i>
+                    <span>{{ quiz.fail_count }} need{{ 's' if quiz.fail_count == 1 }} help</span>
+                </div>
+                {% endif %}
+            </div>
+
+            <div class="table-responsive">
+                <table class="perf-table">
+                    <thead>
+                        <tr>
+                            <th style="width:40px;">#</th>
+                            <th>Student</th>
+                            <th>Section</th>
+                            <th style="text-align:center;">Score</th>
+                            <th style="text-align:center;">%</th>
+                            <th style="text-align:center;">Time</th>
+                            <th>Missed</th>
+                            <th style="text-align:center;">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for attempt in quiz.attempt_list %}
+                        <tr class="{% if attempt.is_perfect %}row-perfect{% elif attempt.pct < 50 %}row-fail{% endif %}">
+                            <td style="text-align:center;">
+                                {% if loop.index <= 3 and attempt.is_perfect %}
+                                <span class="rank-badge rank-{{ loop.index }}">{{ loop.index }}</span>
+                                {% else %}
+                                {{ loop.index }}
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="student-cell">
+                                    <img src="{{ url_for('static', filename='uploads/photos/' + (attempt.photo or 'default.png')) }}"
+                                         onerror="this.src='https://ui-avatars.com/api/?name={{ attempt.full_name }}&background=8B5CF6&color=fff&size=32'"
+                                         class="mini-avatar">
+                                    <div>
+                                        <strong>{{ attempt.full_name }}</strong>
+                                        <div class="student-sid">{{ attempt.sid or '' }}</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td><span class="tag-sm">{{ attempt.section }}</span></td>
+                            <td style="text-align:center;">
+                                <strong>{{ "%.0f"|format(attempt.score) }}</strong><span class="score-total">/{{ quiz.total_questions }}</span>
+                            </td>
+                            <td style="text-align:center;">
+                                <span class="pct-pill {% if attempt.pct >= 80 %}high{% elif attempt.pct >= 50 %}mid{% else %}low{% endif %}">
+                                    {{ attempt.pct }}%
+                                </span>
+                            </td>
+                            <td style="text-align:center;">
+                                <span class="time-display">
+                                    <i class="fas fa-clock"></i> {{ attempt.time_display }}
+                                </span>
+                            </td>
+                            <td>
+                                {% if attempt.missed_list %}
+                                <button class="btn-missed" onclick="showMissed({{ attempt.missed_list|tojson|e }}, '{{ attempt.full_name }}')">
+                                    <i class="fas fa-exclamation-triangle"></i> {{ attempt.missed_list|length }} missed
+                                </button>
+                                {% else %}
+                                <span class="all-correct"><i class="fas fa-check-circle"></i> All correct</span>
+                                {% endif %}
+                            </td>
+                            <td style="text-align:center;">
+                                {% if attempt.is_perfect %}
+                                <span class="status-badge status-perfect"><i class="fas fa-crown"></i> Perfect</span>
+                                {% elif attempt.pct >= 80 %}
+                                <span class="status-badge status-good"><i class="fas fa-thumbs-up"></i> Good</span>
+                                {% elif attempt.pct >= 50 %}
+                                <span class="status-badge status-avg"><i class="fas fa-minus-circle"></i> Average</span>
+                                {% else %}
+                                <span class="status-badge status-fail"><i class="fas fa-times-circle"></i> Needs Help</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="empty-msg">
+                <i class="fas fa-inbox"></i>
+                <p>No students have taken this quiz yet.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+    {% else %}
+    <div class="empty-state-card">
+        <i class="fas fa-clipboard"></i>
+        <h3>No Quiz Data</h3>
+        <p>No quizzes have been created or attempted yet.</p>
+    </div>
+    {% endif %}
+</div>
+
+<!-- GAME PERFORMANCE TAB -->
+<div id="game-tab" class="perf-content" style="display:none;">
+    <div class="filter-bar-perf">
+        <div class="filter-group">
+            <label><i class="fas fa-filter"></i> Section:</label>
+            <select id="section-filter-game" onchange="filterGameTable()">
+                <option value="all">All Sections</option>
+                {% for section in sections %}
+                <option value="{{ section }}">{{ section }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="search-box-perf">
+            <i class="fas fa-search"></i>
+            <input type="text" id="search-game" placeholder="Search student..." onkeyup="filterGameTable()">
+        </div>
+    </div>
+
+    {% if game_players %}
+    <div class="card">
+        <div class="table-responsive">
+            <table class="perf-table" id="game-table">
+                <thead>
+                    <tr>
+                        <th style="width:40px;">#</th>
+                        <th>Student</th>
+                        <th>Section</th>
+                        <th style="text-align:center;">Games</th>
+                        <th style="text-align:center;">High Score</th>
+                        <th style="text-align:center;">Level</th>
+                        <th style="text-align:center;">Codes Typed</th>
+                        <th style="text-align:center;">Best Streak</th>
+                        <th style="text-align:center;">XP</th>
+                        <th style="text-align:center;">Rank</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for player in game_players %}
+                    <tr data-section="{{ player.section or '' }}">
+                        <td style="text-align:center;">
+                            {% if loop.index <= 3 %}
+                            <span class="rank-badge rank-{{ loop.index }}">{{ loop.index }}</span>
+                            {% else %}
+                            {{ loop.index }}
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="student-cell">
+                                <img src="{{ url_for('static', filename='uploads/photos/' + (player.photo or 'default.png')) }}"
+                                     onerror="this.src='https://ui-avatars.com/api/?name={{ player.full_name }}&background=8B5CF6&color=fff&size=32'"
+                                     class="mini-avatar">
+                                <div>
+                                    <strong>{{ player.full_name }}</strong>
+                                    <div class="student-sid">{{ player.student_id or '' }}</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td><span class="tag-sm">{{ player.section or 'N/A' }}</span></td>
+                        <td style="text-align:center;">{{ player.total_games }}</td>
+                        <td style="text-align:center;"><strong>{{ player.game_high_score }}</strong></td>
+                        <td style="text-align:center;">{{ player.highest_level }}</td>
+                        <td style="text-align:center;">{{ player.total_codes_typed }}</td>
+                        <td style="text-align:center;">{{ player.best_streak }}</td>
+                        <td style="text-align:center;"><span class="xp-badge">{{ player.xp_points }} XP</span></td>
+                        <td style="text-align:center;"><span class="rank-label">{{ player.current_rank }}</span></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% else %}
+    <div class="empty-state-card">
+        <i class="fas fa-gamepad"></i>
+        <h3>No Game Data</h3>
+        <p>No students have played the Python Code Blaster yet.</p>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Missed Questions Modal -->
+<div class="modal-overlay" id="missed-modal" style="display:none;" onclick="if(event.target===this)this.style.display='none'">
+    <div class="modal-box" onclick="event.stopPropagation()">
+        <div class="modal-header">
+            <h3><i class="fas fa-exclamation-triangle"></i> <span id="missed-modal-title">Missed Questions</span></h3>
+            <button onclick="document.getElementById('missed-modal').style.display='none'" class="modal-close">&times;</button>
+        </div>
+        <div class="modal-body" id="missed-modal-body"></div>
+    </div>
+</div>
+
+<style>
+/* Tabs */
+.perf-tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.perf-tab {
+    padding: 12px 24px;
+    border: none;
+    background: #F3F4F6;
+    color: #6B7280;
+    border-radius: 10px;
+    cursor: pointer;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s ease;
+    font-size: 0.95rem;
+}
+
+.perf-tab:hover { background: #E5E7EB; }
+.perf-tab.active { background: linear-gradient(135deg, #8B5CF6, #6D28D9); color: white; box-shadow: 0 4px 12px rgba(139,92,246,0.3); }
+
+.perf-content { display: none; }
+.perf-content.active { display: block; }
+
+/* Filter */
+.filter-bar-perf {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.2rem;
+    flex-wrap: wrap;
+    gap: 10px;
+    background: white;
+    padding: 12px 18px;
+    border-radius: 10px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+}
+
+.filter-group { display: flex; align-items: center; gap: 10px; }
+.filter-group label { color: #6B7280; font-size: 0.9rem; white-space: nowrap; font-weight: 600; }
+.filter-group select { padding: 8px 15px; border: 1px solid #E5E7EB; border-radius: 8px; font-size: 0.9rem; background: white; }
+.filter-group select:focus { outline: none; border-color: #8B5CF6; }
+
+.search-box-perf { position: relative; }
+.search-box-perf i { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #9CA3AF; }
+.search-box-perf input { padding: 8px 15px 8px 35px; border: 1px solid #E5E7EB; border-radius: 8px; font-size: 0.9rem; width: 250px; }
+.search-box-perf input:focus { outline: none; border-color: #8B5CF6; box-shadow: 0 0 0 3px rgba(139,92,246,0.1); }
+
+/* Quiz Analytics Card */
+.quiz-analytics-card {
+    background: white;
+    border-radius: 12px;
+    margin-bottom: 0.75rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    overflow: hidden;
+    border: 1px solid #E5E7EB;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.quiz-analytics-card:hover { border-color: #C4B5FD; box-shadow: 0 4px 14px rgba(139,92,246,0.08); }
+
+.qac-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.25rem;
+    cursor: pointer;
+    transition: background 0.2s;
+    gap: 15px;
+}
+
+.qac-header:hover { background: #FAFAFA; }
+
+.qac-title-area { flex: 1; min-width: 0; }
+.qac-title-area h3 { margin: 0 0 6px 0; font-size: 1rem; color: #1F2937; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.qac-title-area h3 i { color: #8B5CF6; margin-right: 8px; }
+
+.qac-meta { display: flex; flex-wrap: wrap; gap: 5px; }
+
+.tag { padding: 3px 10px; border-radius: 10px; font-size: 0.72rem; font-weight: 600; }
+.tag.purple { background: #EDE9FE; color: #7C3AED; }
+.tag.blue { background: #E0F2FE; color: #0284C7; }
+.tag.gray { background: #F3F4F6; color: #6B7280; }
+.tag.dark { background: #374151; color: white; }
+
+.tag-sm { background: #EDE9FE; color: #7C3AED; padding: 2px 8px; border-radius: 8px; font-size: 0.75rem; font-weight: 600; }
+
+.qac-right { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+
+.qac-stats-mini { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+.mini-stat { text-align: center; min-width: 45px; }
+.mini-val { display: block; font-size: 1.15rem; font-weight: 700; color: #1F2937; }
+.mini-label { display: block; font-size: 0.68rem; color: #9CA3AF; text-transform: uppercase; letter-spacing: 0.3px; }
+.mini-stat.green .mini-val { color: #059669; }
+.mini-stat.red .mini-val { color: #DC2626; }
+.mini-stat.orange .mini-val { color: #D97706; }
+.mini-stat.blue .mini-val { color: #0284C7; }
+
+.qac-actions-row { display: flex; align-items: center; gap: 8px; }
+
+.qac-manage-btn {
+    padding: 5px 12px;
+    background: #F3F4F6;
+    color: #6B7280;
+    border-radius: 6px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.qac-manage-btn:hover { background: #EDE9FE; color: #7C3AED; }
+
+.toggle-icon { color: #9CA3AF; transition: transform 0.3s; font-size: 0.85rem; }
+.qac-header.open .toggle-icon { transform: rotate(180deg); }
+
+/* Details */
+.qac-details { border-top: 1px solid #F3F4F6; }
+
+.qac-summary {
+    display: flex;
+    gap: 20px;
+    padding: 12px 1.25rem;
+    background: #F9FAFB;
+    flex-wrap: wrap;
+}
+
+.qac-summary-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.85rem;
+    color: #6B7280;
+}
+
+.qac-summary-item i { font-size: 0.8rem; }
+.qac-summary-item.green { color: #059669; }
+.qac-summary-item.red { color: #DC2626; }
+
+.table-responsive { overflow-x: auto; padding: 0 0.5rem 1rem; }
+
+/* Table */
+.perf-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.perf-table th {
+    background: #F9FAFB;
+    padding: 10px 12px;
+    text-align: left;
+    font-weight: 600;
+    color: #374151;
+    border-bottom: 2px solid #E5E7EB;
+    white-space: nowrap;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+.perf-table td { padding: 10px 12px; border-bottom: 1px solid #F3F4F6; vertical-align: middle; }
+.perf-table tbody tr { transition: background 0.15s; }
+.perf-table tbody tr:hover { background: #FAFAFE; }
+
+.row-perfect { background: rgba(16,185,129,0.04) !important; }
+.row-fail { background: rgba(239,68,68,0.04) !important; }
+
+.student-cell { display: flex; align-items: center; gap: 10px; }
+.mini-avatar { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 2px solid #E5E7EB; }
+.student-sid { font-size: 0.75rem; color: #9CA3AF; }
+
+.score-total { color: #9CA3AF; font-weight: 400; font-size: 0.8rem; }
+
+.pct-pill { padding: 4px 12px; border-radius: 20px; font-weight: 700; font-size: 0.8rem; display: inline-block; }
+.pct-pill.high { background: #D1FAE5; color: #059669; }
+.pct-pill.mid { background: #FEF3C7; color: #D97706; }
+.pct-pill.low { background: #FEE2E2; color: #DC2626; }
+
+.time-display { color: #6B7280; font-size: 0.83rem; white-space: nowrap; }
+.time-display i { color: #9CA3AF; margin-right: 3px; font-size: 0.75rem; }
+
+.btn-missed {
+    background: #FEF3C7;
+    color: #D97706;
+    border: 1px solid #FDE68A;
+    padding: 5px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-weight: 600;
+    transition: all 0.2s;
+}
+
+.btn-missed:hover { background: #FDE68A; transform: translateY(-1px); }
+
+.all-correct { color: #059669; font-weight: 600; font-size: 0.83rem; }
+
+/* Status badges */
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: 8px;
+    font-weight: 700;
+    font-size: 0.75rem;
+    white-space: nowrap;
+}
+
+.status-perfect { background: #FEF3C7; color: #D97706; }
+.status-perfect i { color: #FBBF24; }
+.status-good { background: #D1FAE5; color: #059669; }
+.status-avg { background: #FEF3C7; color: #D97706; }
+.status-fail { background: #FEE2E2; color: #DC2626; }
+
+/* Game Table */
+.rank-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    font-weight: bold;
+    font-size: 0.75rem;
+    color: white;
+}
+.rank-badge.rank-1 { background: linear-gradient(135deg, #fbbf24, #f59e0b); box-shadow: 0 2px 6px rgba(251,191,36,0.4); }
+.rank-badge.rank-2 { background: linear-gradient(135deg, #94a3b8, #64748b); box-shadow: 0 2px 6px rgba(148,163,184,0.4); }
+.rank-badge.rank-3 { background: linear-gradient(135deg, #d97706, #b45309); box-shadow: 0 2px 6px rgba(217,119,6,0.4); }
+
+.rank-label { background: #EDE9FE; color: #7C3AED; padding: 4px 12px; border-radius: 10px; font-size: 0.8rem; font-weight: 600; }
+.xp-badge { background: linear-gradient(135deg, #fbbf24, #f59e0b); color: white; padding: 4px 12px; border-radius: 10px; font-size: 0.8rem; font-weight: 600; }
+
+/* Modal */
+.modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; backdrop-filter: blur(2px); }
+.modal-box { background: white; border-radius: 16px; max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto; box-shadow: 0 25px 50px rgba(0,0,0,0.15); }
+.modal-header { display: flex; justify-content: space-between; align-items: center; padding: 1.2rem 1.5rem; border-bottom: 1px solid #E5E7EB; }
+.modal-header h3 { margin: 0; color: #D97706; font-size: 1.05rem; display: flex; align-items: center; gap: 8px; }
+.modal-close { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #9CA3AF; padding: 0; line-height: 1; }
+.modal-close:hover { color: #374151; }
+.modal-body { padding: 1.5rem; }
+
+.missed-item {
+    padding: 14px;
+    background: #FEF2F2;
+    border-left: 4px solid #EF4444;
+    border-radius: 0 10px 10px 0;
+    margin-bottom: 10px;
+}
+
+.missed-item .missed-q { color: #1F2937; font-weight: 600; margin-bottom: 8px; font-size: 0.9rem; line-height: 1.4; }
+.missed-item .missed-answers { display: flex; gap: 20px; font-size: 0.85rem; flex-wrap: wrap; }
+.missed-item .wrong-ans { color: #DC2626; display: flex; align-items: center; gap: 5px; }
+.missed-item .right-ans { color: #059669; font-weight: 600; display: flex; align-items: center; gap: 5px; }
+
+/* Empty */
+.empty-msg { text-align: center; color: #9CA3AF; padding: 2.5rem 1rem; }
+.empty-msg i { font-size: 2.5rem; display: block; margin-bottom: 0.8rem; color: #D1D5DB; }
+.empty-msg p { margin: 0; }
+
+.empty-state-card { background: white; border-radius: 12px; padding: 60px 20px; text-align: center; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+.empty-state-card i { font-size: 4rem; color: #D1D5DB; margin-bottom: 1rem; display: block; }
+.empty-state-card h3 { color: #6B7280; margin-bottom: 0.5rem; }
+.empty-state-card p { color: #9CA3AF; margin: 0; }
+
+.card { background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); border: 1px solid #E5E7EB; overflow: hidden; }
+
+@media (max-width: 768px) {
+    .qac-header { flex-direction: column; align-items: flex-start; }
+    .qac-right { width: 100%; align-items: flex-start; }
+    .qac-stats-mini { width: 100%; }
+    .perf-table { font-size: 0.78rem; }
+    .search-box-perf input { width: 180px; }
+    .filter-bar-perf { flex-direction: column; align-items: flex-start; }
+}
+</style>
+
+<script>
+function switchPerfTab(tab, btn) {
+    document.querySelectorAll('.perf-content').forEach(c => { c.style.display = 'none'; c.classList.remove('active'); });
+    document.querySelectorAll('.perf-tab').forEach(t => t.classList.remove('active'));
+    document.getElementById(tab + '-tab').style.display = 'block';
+    document.getElementById(tab + '-tab').classList.add('active');
+    btn.classList.add('active');
+}
+
+function toggleQuizCard(quizId) {
+    const details = document.getElementById('quiz-details-' + quizId);
+    const card = details.closest('.quiz-analytics-card');
+    const header = card.querySelector('.qac-header');
+
+    if (details.style.display === 'none') {
+        details.style.display = 'block';
+        header.classList.add('open');
+    } else {
+        details.style.display = 'none';
+        header.classList.remove('open');
+    }
+}
+
+function showMissed(missedList, studentName) {
+    const body = document.getElementById('missed-modal-body');
+    document.getElementById('missed-modal-title').textContent = 'Missed Questions - ' + studentName;
+    let html = '';
+
+    missedList.forEach((m, i) => {
+        html += `
+            <div class="missed-item">
+                <div class="missed-q">${i+1}. ${m.question || 'Question ' + (i+1)}</div>
+                <div class="missed-answers">
+                    <span class="wrong-ans"><i class="fas fa-times"></i> Student: ${m.your_answer || '(no answer)'}</span>
+                    <span class="right-ans"><i class="fas fa-check"></i> Correct: ${m.correct_answer}</span>
+                </div>
+            </div>`;
+    });
+
+    body.innerHTML = html || '<p style="text-align:center;color:#9CA3AF;">No details available.</p>';
+    document.getElementById('missed-modal').style.display = 'flex';
+}
+
+function filterQuizCards() {
+    const section = document.getElementById('section-filter-quiz').value;
+    const search = document.getElementById('search-quiz').value.toLowerCase();
+    document.querySelectorAll('.quiz-analytics-card').forEach(card => {
+        const cardSection = card.dataset.section;
+        const cardSearch = card.dataset.search || '';
+        const sectionMatch = section === 'all' || cardSection === section;
+        const searchMatch = !search || cardSearch.includes(search);
+        card.style.display = (sectionMatch && searchMatch) ? '' : 'none';
+    });
+}
+
+function filterGameTable() {
+    const section = document.getElementById('section-filter-game').value;
+    const search = document.getElementById('search-game').value.toLowerCase();
+    document.querySelectorAll('#game-table tbody tr').forEach(row => {
+        const rowSection = row.dataset.section;
+        const text = row.textContent.toLowerCase();
+        const sectionMatch = section === 'all' || rowSection === section;
+        row.style.display = (sectionMatch && text.includes(search)) ? '' : 'none';
+    });
+}
+</script>
+{% endblock %}

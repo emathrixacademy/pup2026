@@ -1,0 +1,406 @@
+{% extends 'base.html' %}
+
+{% block title %}Manage Quiz - {{ quiz.title }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1><i class="fas fa-cog"></i> Manage Quiz</h1>
+        <p>{{ quiz.subject_name }} &bull; {{ quiz.session_title }} &bull; {{ quiz.section }}</p>
+    </div>
+    <a href="{{ url_for('student_performance') }}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back to Performance</a>
+</div>
+
+<!-- Quiz Info Card -->
+<div class="mq-info-card">
+    <form action="{{ url_for('edit_quiz', quiz_id=quiz.id) }}" method="POST" class="mq-info-form">
+        <div class="mq-info-row">
+            <div class="mq-field">
+                <label>Quiz Title</label>
+                <input type="text" name="title" value="{{ quiz.title }}" required>
+            </div>
+            <div class="mq-field" style="max-width:150px;">
+                <label>Time Limit (min)</label>
+                <input type="number" name="time_limit" value="{{ quiz.time_limit or 0 }}" min="0">
+            </div>
+            <div class="mq-field" style="max-width:auto; align-self:flex-end;">
+                <button type="submit" class="mq-btn mq-btn-save"><i class="fas fa-save"></i> Save</button>
+            </div>
+        </div>
+    </form>
+    <div class="mq-danger-zone">
+        <form action="{{ url_for('delete_quiz', quiz_id=quiz.id) }}" method="POST"
+              onsubmit="return confirm('DELETE this entire quiz and all its questions and attempts? This cannot be undone!')">
+            <button type="submit" class="mq-btn mq-btn-danger"><i class="fas fa-trash-alt"></i> Delete Entire Quiz</button>
+        </form>
+    </div>
+</div>
+
+<!-- Questions List -->
+<div class="mq-section-header">
+    <h2><i class="fas fa-list-ol"></i> Questions ({{ questions|length }})</h2>
+</div>
+
+{% for q in questions %}
+<div class="mq-question-card" id="question-{{ q.id }}">
+    <div class="mq-q-header">
+        <div class="mq-q-num">{{ loop.index }}</div>
+        <div class="mq-q-info">
+            <span class="mq-q-type {% if q.question_type == 'multiple_choice' %}type-mc{% elif q.question_type == 'true_false' %}type-tf{% else %}type-fib{% endif %}">
+                {% if q.question_type == 'multiple_choice' %}Multiple Choice{% elif q.question_type == 'true_false' %}True/False{% else %}Fill in Blank{% endif %}
+            </span>
+            <span class="mq-q-answer">Answer: <strong>{{ q.correct_answer }}</strong></span>
+        </div>
+        <div class="mq-q-actions">
+            <button class="mq-btn mq-btn-edit" onclick="toggleEditQuestion({{ q.id }})"><i class="fas fa-edit"></i> Edit</button>
+            <form action="{{ url_for('delete_quiz_question', quiz_id=quiz.id, question_id=q.id) }}" method="POST" style="display:inline;"
+                  onsubmit="return confirm('Delete this question?')">
+                <button type="submit" class="mq-btn mq-btn-del"><i class="fas fa-trash"></i></button>
+            </form>
+        </div>
+    </div>
+    <div class="mq-q-text">{{ q.question_text }}</div>
+
+    {% if q.question_type == 'multiple_choice' %}
+    <div class="mq-q-options">
+        {% set opts = q.options | from_json if q.options else [] %}
+        {% for opt in opts %}
+        <div class="mq-opt {% if ['A','B','C','D'][loop.index0] == q.correct_answer %}mq-opt-correct{% endif %}">
+            <span class="mq-opt-letter">{{ ['A','B','C','D'][loop.index0] }}</span>
+            <span>{{ opt }}</span>
+            {% if ['A','B','C','D'][loop.index0] == q.correct_answer %}
+            <i class="fas fa-check-circle" style="color:#059669; margin-left:auto;"></i>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% elif q.question_type == 'true_false' %}
+    <div class="mq-q-options">
+        <div class="mq-opt {% if q.correct_answer == 'True' %}mq-opt-correct{% endif %}">
+            <span class="mq-opt-letter">A</span> True
+            {% if q.correct_answer == 'True' %}<i class="fas fa-check-circle" style="color:#059669; margin-left:auto;"></i>{% endif %}
+        </div>
+        <div class="mq-opt {% if q.correct_answer == 'False' %}mq-opt-correct{% endif %}">
+            <span class="mq-opt-letter">B</span> False
+            {% if q.correct_answer == 'False' %}<i class="fas fa-check-circle" style="color:#059669; margin-left:auto;"></i>{% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Edit Form (hidden by default) -->
+    <div class="mq-edit-form" id="edit-form-{{ q.id }}" style="display:none;">
+        <form action="{{ url_for('edit_quiz_question', quiz_id=quiz.id, question_id=q.id) }}" method="POST">
+            <div class="mq-form-group">
+                <label>Question Text</label>
+                <textarea name="question_text" rows="3" required>{{ q.question_text }}</textarea>
+            </div>
+            <div class="mq-form-row">
+                <div class="mq-form-group">
+                    <label>Type</label>
+                    <select name="question_type" onchange="toggleMqOptions(this, {{ q.id }})">
+                        <option value="multiple_choice" {% if q.question_type == 'multiple_choice' %}selected{% endif %}>Multiple Choice</option>
+                        <option value="true_false" {% if q.question_type == 'true_false' %}selected{% endif %}>True/False</option>
+                        <option value="fill_in_blank" {% if q.question_type == 'fill_in_blank' %}selected{% endif %}>Fill in Blank</option>
+                    </select>
+                </div>
+                <div class="mq-form-group">
+                    <label>Correct Answer</label>
+                    <input type="text" name="correct_answer" value="{{ q.correct_answer }}" required>
+                </div>
+            </div>
+            <div class="mq-form-group" id="edit-options-{{ q.id }}" {% if q.question_type != 'multiple_choice' %}style="display:none;"{% endif %}>
+                <label>Options (one per line)</label>
+                <textarea name="options" rows="4">{% set opts = q.options | from_json if q.options else [] %}{% for opt in opts %}{{ opt }}{% if not loop.last %}
+{% endif %}{% endfor %}</textarea>
+            </div>
+            <div class="mq-form-actions">
+                <button type="submit" class="mq-btn mq-btn-save"><i class="fas fa-check"></i> Save Changes</button>
+                <button type="button" class="mq-btn mq-btn-cancel" onclick="toggleEditQuestion({{ q.id }})">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endfor %}
+
+{% if not questions %}
+<div class="mq-empty">
+    <i class="fas fa-question-circle"></i>
+    <p>No questions yet. Add your first question below.</p>
+</div>
+{% endif %}
+
+<!-- Add New Question -->
+<div class="mq-add-section">
+    <h3><i class="fas fa-plus-circle"></i> Add New Question</h3>
+    <form action="{{ url_for('add_quiz_question', quiz_id=quiz.id) }}" method="POST">
+        <input type="hidden" name="from_manage" value="1">
+        <div class="mq-form-group">
+            <label>Question Text</label>
+            <textarea name="question_text" rows="3" required placeholder="Enter your question here..."></textarea>
+        </div>
+        <div class="mq-form-row">
+            <div class="mq-form-group">
+                <label>Type</label>
+                <select name="question_type" id="newQType" onchange="toggleNewOptions()">
+                    <option value="multiple_choice">Multiple Choice</option>
+                    <option value="true_false">True/False</option>
+                    <option value="fill_in_blank">Fill in Blank</option>
+                </select>
+            </div>
+            <div class="mq-form-group">
+                <label>Correct Answer</label>
+                <input type="text" name="correct_answer" required placeholder="e.g., B or True or answer text">
+            </div>
+            <div class="mq-form-group" style="max-width:100px;">
+                <label>Points</label>
+                <input type="number" name="points" value="1" min="1">
+            </div>
+        </div>
+        <div class="mq-form-group" id="newOptionsGroup">
+            <label>Options (one per line)</label>
+            <textarea name="options" rows="4" placeholder="Option A&#10;Option B&#10;Option C&#10;Option D"></textarea>
+        </div>
+        <button type="submit" class="mq-btn mq-btn-add"><i class="fas fa-plus"></i> Add Question</button>
+    </form>
+</div>
+
+<style>
+/* Manage Quiz Styles */
+.mq-info-card {
+    background: white;
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+    border: 1px solid #E5E7EB;
+}
+
+.mq-info-form { margin-bottom: 1rem; }
+
+.mq-info-row {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-end;
+    flex-wrap: wrap;
+}
+
+.mq-field { flex: 1; min-width: 200px; }
+.mq-field label { display: block; font-size: 0.85rem; color: #6B7280; margin-bottom: 5px; font-weight: 600; }
+.mq-field input { width: 100%; padding: 10px 14px; border: 1px solid #D1D5DB; border-radius: 8px; font-size: 0.95rem; }
+.mq-field input:focus { outline: none; border-color: #8B5CF6; box-shadow: 0 0 0 3px rgba(139,92,246,0.1); }
+
+.mq-danger-zone { border-top: 1px solid #FEE2E2; padding-top: 1rem; }
+
+.mq-btn {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s;
+}
+
+.mq-btn-save { background: #8B5CF6; color: white; }
+.mq-btn-save:hover { background: #7C3AED; }
+.mq-btn-danger { background: #FEE2E2; color: #DC2626; }
+.mq-btn-danger:hover { background: #FCA5A5; color: #991B1B; }
+.mq-btn-edit { background: #E0F2FE; color: #0284C7; }
+.mq-btn-edit:hover { background: #BAE6FD; }
+.mq-btn-del { background: #FEE2E2; color: #DC2626; padding: 8px 10px; }
+.mq-btn-del:hover { background: #FCA5A5; }
+.mq-btn-cancel { background: #F3F4F6; color: #6B7280; }
+.mq-btn-cancel:hover { background: #E5E7EB; }
+.mq-btn-add { background: linear-gradient(135deg, #8B5CF6, #6D28D9); color: white; padding: 10px 24px; font-size: 0.9rem; }
+.mq-btn-add:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(139,92,246,0.4); }
+
+.mq-section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.mq-section-header h2 {
+    font-size: 1.2rem;
+    color: #1F2937;
+    margin: 0;
+}
+
+.mq-section-header h2 i { color: #8B5CF6; margin-right: 8px; }
+
+/* Question Card */
+.mq-question-card {
+    background: white;
+    border-radius: 12px;
+    padding: 1.2rem 1.5rem;
+    margin-bottom: 0.75rem;
+    box-shadow: 0 1px 6px rgba(0,0,0,0.04);
+    border: 1px solid #E5E7EB;
+    transition: border-color 0.2s;
+}
+
+.mq-question-card:hover { border-color: #C4B5FD; }
+
+.mq-q-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.mq-q-num {
+    background: linear-gradient(135deg, #8B5CF6, #7C3AED);
+    color: white;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.85rem;
+    flex-shrink: 0;
+}
+
+.mq-q-info { display: flex; align-items: center; gap: 10px; flex: 1; flex-wrap: wrap; }
+
+.mq-q-type {
+    padding: 3px 10px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.type-mc { background: #EDE9FE; color: #7C3AED; }
+.type-tf { background: #E0F2FE; color: #0284C7; }
+.type-fib { background: #FEF3C7; color: #D97706; }
+
+.mq-q-answer { font-size: 0.8rem; color: #059669; }
+.mq-q-actions { display: flex; gap: 6px; }
+
+.mq-q-text {
+    font-size: 0.95rem;
+    color: #374151;
+    line-height: 1.6;
+    margin-bottom: 10px;
+    padding-left: 44px;
+}
+
+.mq-q-options {
+    padding-left: 44px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.mq-opt {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 14px;
+    background: #F9FAFB;
+    border-radius: 8px;
+    font-size: 0.88rem;
+    color: #374151;
+    border: 1px solid #E5E7EB;
+}
+
+.mq-opt-correct { background: #F0FDF4; border-color: #86EFAC; }
+
+.mq-opt-letter {
+    background: #8B5CF6;
+    color: white;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.75rem;
+    flex-shrink: 0;
+}
+
+/* Edit Form */
+.mq-edit-form {
+    margin-top: 1rem;
+    padding: 1.2rem;
+    background: #F9FAFB;
+    border-radius: 10px;
+    border: 1px dashed #C4B5FD;
+}
+
+.mq-form-group { margin-bottom: 1rem; }
+.mq-form-group label { display: block; font-size: 0.85rem; color: #6B7280; margin-bottom: 5px; font-weight: 600; }
+.mq-form-group input, .mq-form-group select, .mq-form-group textarea {
+    width: 100%;
+    padding: 9px 14px;
+    border: 1px solid #D1D5DB;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-family: inherit;
+}
+
+.mq-form-group input:focus, .mq-form-group select:focus, .mq-form-group textarea:focus {
+    outline: none;
+    border-color: #8B5CF6;
+    box-shadow: 0 0 0 3px rgba(139,92,246,0.1);
+}
+
+.mq-form-row { display: flex; gap: 1rem; flex-wrap: wrap; }
+.mq-form-row .mq-form-group { flex: 1; min-width: 180px; }
+
+.mq-form-actions { display: flex; gap: 8px; margin-top: 0.5rem; }
+
+.mq-empty {
+    text-align: center;
+    padding: 3rem;
+    color: #9CA3AF;
+}
+.mq-empty i { font-size: 3rem; margin-bottom: 1rem; display: block; }
+
+/* Add Question Section */
+.mq-add-section {
+    background: white;
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-top: 2rem;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+    border: 2px dashed #C4B5FD;
+}
+
+.mq-add-section h3 {
+    margin: 0 0 1.2rem 0;
+    color: #7C3AED;
+    font-size: 1.1rem;
+}
+
+@media (max-width: 768px) {
+    .mq-info-row { flex-direction: column; }
+    .mq-q-header { flex-wrap: wrap; }
+    .mq-q-text, .mq-q-options { padding-left: 0; }
+    .mq-form-row { flex-direction: column; }
+}
+</style>
+
+<script>
+function toggleEditQuestion(qid) {
+    const form = document.getElementById('edit-form-' + qid);
+    form.style.display = form.style.display === 'none' ? 'block' : 'none';
+}
+
+function toggleMqOptions(select, qid) {
+    const group = document.getElementById('edit-options-' + qid);
+    group.style.display = select.value === 'multiple_choice' ? 'block' : 'none';
+}
+
+function toggleNewOptions() {
+    const type = document.getElementById('newQType').value;
+    document.getElementById('newOptionsGroup').style.display = type === 'multiple_choice' ? 'block' : 'none';
+}
+</script>
+{% endblock %}

@@ -1,0 +1,651 @@
+{% extends 'base.html' %}
+
+{% block title %}Enrollment Approvals - Sangrenes LMS Portal{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1><i class="fas fa-user-check"></i> Enrollment Approvals</h1>
+        <p>Manage student enrollment requests</p>
+    </div>
+    <div class="header-actions">
+        {% if pending_students|length > 0 %}
+        <button class="btn btn-success" onclick="approveAll()">
+            <i class="fas fa-check-double"></i> Approve All ({{ pending_students|length }})
+        </button>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Summary Stats -->
+<div class="stats-grid" style="margin-bottom: 1.5rem;">
+    <div class="stat-card pending">
+        <div class="stat-icon"><i class="fas fa-clock"></i></div>
+        <div class="stat-info">
+            <h3>{{ pending_students|length }}</h3>
+            <p>Pending Approvals</p>
+        </div>
+    </div>
+    <div class="stat-card approved">
+        <div class="stat-icon"><i class="fas fa-check-circle"></i></div>
+        <div class="stat-info">
+            <h3>{{ approved_students|length }}</h3>
+            <p>Approved Students</p>
+        </div>
+    </div>
+    <div class="stat-card sections">
+        <div class="stat-icon"><i class="fas fa-layer-group"></i></div>
+        <div class="stat-info">
+            <h3>{{ sections|length }}</h3>
+            <p>Active Sections</p>
+        </div>
+    </div>
+</div>
+
+<!-- Tabs -->
+<div class="tabs">
+    <button class="tab-btn active" onclick="showTab('pending')">
+        <i class="fas fa-clock"></i> Pending
+        {% if pending_students|length > 0 %}
+        <span class="tab-badge">{{ pending_students|length }}</span>
+        {% endif %}
+    </button>
+    <button class="tab-btn" onclick="showTab('approved')">
+        <i class="fas fa-check-circle"></i> Approved
+    </button>
+</div>
+
+<!-- Pending Students Tab -->
+<div id="pending-tab" class="tab-content active">
+    {% if pending_students %}
+    <!-- Section Filter -->
+    <div class="filter-bar">
+        <div class="section-filters">
+            {% for section, count in pending_by_section.items() %}
+            {% if section %}
+            <button class="section-filter-btn" onclick="approveSection('{{ section }}')">
+                <i class="fas fa-check"></i> Approve {{ section }} ({{ count }})
+            </button>
+            {% endif %}
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th><input type="checkbox" id="select-all-pending" onchange="toggleSelectAll(this)"></th>
+                        <th>Student</th>
+                        <th>Student ID</th>
+                        <th>Section</th>
+                        <th>Email</th>
+                        <th>Registered</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for student in pending_students %}
+                    <tr id="pending-row-{{ student.id }}">
+                        <td><input type="checkbox" class="student-checkbox" value="{{ student.id }}"></td>
+                        <td>
+                            <div class="student-info">
+                                <img src="{{ url_for('static', filename='uploads/photos/' + (student.photo or 'default.png')) }}"
+                                     alt="{{ student.full_name }}"
+                                     onerror="this.src='https://ui-avatars.com/api/?name={{ student.full_name }}&background=8B5CF6&color=fff'"
+                                     class="student-avatar">
+                                <div>
+                                    <strong>{{ student.full_name }}</strong>
+                                    {% if not student.profile_completed %}
+                                    <span class="badge badge-warning"><i class="fas fa-exclamation-triangle"></i> Profile Incomplete</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </td>
+                        <td>{{ student.student_id or 'N/A' }}</td>
+                        <td><span class="section-badge">{{ student.section or 'N/A' }}</span></td>
+                        <td>{{ student.username }}</td>
+                        <td>{{ student.created_at[:10] if student.created_at else 'N/A' }}</td>
+                        <td class="actions">
+                            <button class="btn btn-sm btn-success" onclick="approveStudent({{ student.id }})" title="Approve">
+                                <i class="fas fa-check"></i>
+                            </button>
+                            <button class="btn btn-sm btn-danger" onclick="rejectStudent({{ student.id }}, '{{ student.full_name }}')" title="Reject">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% else %}
+    <div class="empty-state-card">
+        <i class="fas fa-check-circle"></i>
+        <h3>No Pending Enrollments</h3>
+        <p>All student enrollments have been processed.</p>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Approved Students Tab -->
+<div id="approved-tab" class="tab-content" style="display: none;">
+    {% if approved_students %}
+    <div class="card">
+        <div class="card-body">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 10px;">
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="search-approved" placeholder="Search approved students..." onkeyup="filterApproved()">
+                </div>
+                <button class="btn btn-info" onclick="syncAllSubjects()" title="Enroll all approved students in their section's subjects">
+                    <i class="fas fa-sync"></i> Sync All Subjects
+                </button>
+            </div>
+            <table class="data-table" id="approved-table">
+                <thead>
+                    <tr>
+                        <th>Student</th>
+                        <th>Student ID</th>
+                        <th>Section</th>
+                        <th>Email</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for student in approved_students %}
+                    <tr id="approved-row-{{ student.id }}">
+                        <td>
+                            <div class="student-info">
+                                <img src="{{ url_for('static', filename='uploads/photos/' + (student.photo or 'default.png')) }}"
+                                     alt="{{ student.full_name }}"
+                                     onerror="this.src='https://ui-avatars.com/api/?name={{ student.full_name }}&background=8B5CF6&color=fff'"
+                                     class="student-avatar">
+                                <div>
+                                    <strong>{{ student.full_name }}</strong>
+                                    {% if student.enrolled_subjects %}
+                                    <small class="text-muted">{{ student.enrolled_subjects }}</small>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </td>
+                        <td>{{ student.student_id or 'N/A' }}</td>
+                        <td><span class="section-badge">{{ student.section or 'N/A' }}</span></td>
+                        <td>{{ student.username }}</td>
+                        <td>
+                            {% if student.profile_completed %}
+                            <span class="status-badge active"><i class="fas fa-check"></i> Active</span>
+                            {% else %}
+                            <span class="status-badge pending"><i class="fas fa-hourglass-half"></i> Profile Pending</span>
+                            {% endif %}
+                        </td>
+                        <td class="actions">
+                            <button class="btn btn-sm btn-info" onclick="syncSubjects({{ student.id }})" title="Sync Subjects">
+                                <i class="fas fa-sync"></i>
+                            </button>
+                            <button class="btn btn-sm btn-warning" onclick="revokeApproval({{ student.id }}, '{{ student.full_name }}')" title="Revoke Approval">
+                                <i class="fas fa-undo"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% else %}
+    <div class="empty-state-card">
+        <i class="fas fa-users"></i>
+        <h3>No Approved Students</h3>
+        <p>Approve students from the Pending tab to see them here.</p>
+    </div>
+    {% endif %}
+</div>
+
+<style>
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+}
+
+.stat-card {
+    background: white;
+    border-radius: 12px;
+    padding: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+}
+
+.stat-card.pending { border-left: 4px solid #F59E0B; }
+.stat-card.approved { border-left: 4px solid #10B981; }
+.stat-card.sections { border-left: 4px solid #8B5CF6; }
+
+.stat-icon {
+    width: 50px;
+    height: 50px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+}
+
+.stat-card.pending .stat-icon { background: #FEF3C7; color: #D97706; }
+.stat-card.approved .stat-icon { background: #D1FAE5; color: #059669; }
+.stat-card.sections .stat-icon { background: #EDE9FE; color: #7C3AED; }
+
+.stat-info h3 {
+    margin: 0;
+    font-size: 1.75rem;
+    color: #1F2937;
+}
+
+.stat-info p {
+    margin: 0;
+    color: #6B7280;
+    font-size: 0.9rem;
+}
+
+.tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.tab-btn {
+    padding: 12px 24px;
+    border: none;
+    background: #F3F4F6;
+    color: #6B7280;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s ease;
+}
+
+.tab-btn:hover {
+    background: #E5E7EB;
+}
+
+.tab-btn.active {
+    background: linear-gradient(135deg, #8B5CF6, #6D28D9);
+    color: white;
+}
+
+.tab-badge {
+    background: rgba(255, 255, 255, 0.3);
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.8rem;
+}
+
+.filter-bar {
+    margin-bottom: 1rem;
+}
+
+.section-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.section-filter-btn {
+    padding: 8px 16px;
+    border: 1px solid #D1D5DB;
+    background: white;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    color: #374151;
+    transition: all 0.2s ease;
+}
+
+.section-filter-btn:hover {
+    background: #10B981;
+    color: white;
+    border-color: #10B981;
+}
+
+.student-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.student-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.section-badge {
+    background: #EDE9FE;
+    color: #7C3AED;
+    padding: 4px 12px;
+    border-radius: 15px;
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 12px;
+    border-radius: 15px;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.status-badge.active {
+    background: #D1FAE5;
+    color: #059669;
+}
+
+.status-badge.pending {
+    background: #FEF3C7;
+    color: #D97706;
+}
+
+.badge-warning {
+    background: #FEF3C7;
+    color: #D97706;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.7rem;
+    margin-left: 5px;
+}
+
+.actions {
+    display: flex;
+    gap: 5px;
+}
+
+.btn-sm {
+    padding: 6px 10px;
+    font-size: 0.85rem;
+}
+
+.btn-info {
+    background: #0EA5E9;
+    color: white;
+}
+
+.btn-info:hover {
+    background: #0284C7;
+}
+
+.empty-state-card {
+    background: white;
+    border-radius: 12px;
+    padding: 60px 20px;
+    text-align: center;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+}
+
+.empty-state-card i {
+    font-size: 4rem;
+    color: #D1D5DB;
+    margin-bottom: 1rem;
+}
+
+.empty-state-card h3 {
+    color: #6B7280;
+    margin-bottom: 0.5rem;
+}
+
+.empty-state-card p {
+    color: #9CA3AF;
+    margin: 0;
+}
+
+.search-box {
+    position: relative;
+    max-width: 300px;
+}
+
+.search-box i {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #9CA3AF;
+}
+
+.search-box input {
+    width: 100%;
+    padding: 10px 15px 10px 40px;
+    border: 1px solid #E5E7EB;
+    border-radius: 8px;
+    font-size: 0.9rem;
+}
+
+.search-box input:focus {
+    outline: none;
+    border-color: #8B5CF6;
+}
+
+.header-actions {
+    display: flex;
+    gap: 10px;
+}
+
+@media (max-width: 768px) {
+    .data-table {
+        display: block;
+        overflow-x: auto;
+    }
+
+    .section-filters {
+        overflow-x: auto;
+        flex-wrap: nowrap;
+        padding-bottom: 10px;
+    }
+}
+</style>
+
+<script>
+function showTab(tab) {
+    document.querySelectorAll('.tab-content').forEach(t => t.style.display = 'none');
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+
+    document.getElementById(tab + '-tab').style.display = 'block';
+    event.target.closest('.tab-btn').classList.add('active');
+}
+
+function toggleSelectAll(checkbox) {
+    document.querySelectorAll('.student-checkbox').forEach(cb => {
+        cb.checked = checkbox.checked;
+    });
+}
+
+async function approveStudent(studentId) {
+    try {
+        const response = await fetch(`/enrollments/approve/${studentId}`, {
+            method: 'POST',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        });
+        const data = await response.json();
+        if (data.success) {
+            document.getElementById(`pending-row-${studentId}`).remove();
+            showToast(data.message, 'success');
+            updateCounts();
+        }
+    } catch (error) {
+        showToast('Error approving student', 'error');
+    }
+}
+
+async function rejectStudent(studentId, name) {
+    if (!confirm(`Are you sure you want to reject and remove ${name}? This cannot be undone.`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/enrollments/reject/${studentId}`, {
+            method: 'POST',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        });
+        const data = await response.json();
+        if (data.success) {
+            document.getElementById(`pending-row-${studentId}`).remove();
+            showToast(data.message, 'success');
+            updateCounts();
+        }
+    } catch (error) {
+        showToast('Error rejecting student', 'error');
+    }
+}
+
+async function approveSection(section) {
+    if (!confirm(`Approve all pending students in ${section}?`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/enrollments/approve-section/${encodeURIComponent(section)}`, {
+            method: 'POST',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        });
+        const data = await response.json();
+        if (data.success) {
+            showToast(data.message, 'success');
+            setTimeout(() => location.reload(), 1000);
+        }
+    } catch (error) {
+        showToast('Error approving section', 'error');
+    }
+}
+
+async function approveAll() {
+    if (!confirm('Approve ALL pending students?')) {
+        return;
+    }
+
+    try {
+        const response = await fetch('/enrollments/approve-all', {
+            method: 'POST',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        });
+        const data = await response.json();
+        if (data.success) {
+            showToast(data.message, 'success');
+            setTimeout(() => location.reload(), 1000);
+        }
+    } catch (error) {
+        showToast('Error approving all students', 'error');
+    }
+}
+
+async function revokeApproval(studentId, name) {
+    if (!confirm(`Revoke approval for ${name}? They will not be able to access the system.`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/enrollments/revoke/${studentId}`, {
+            method: 'POST',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        });
+        const data = await response.json();
+        if (data.success) {
+            showToast(data.message, 'success');
+            setTimeout(() => location.reload(), 1000);
+        }
+    } catch (error) {
+        showToast('Error revoking approval', 'error');
+    }
+}
+
+function filterApproved() {
+    const search = document.getElementById('search-approved').value.toLowerCase();
+    const rows = document.querySelectorAll('#approved-table tbody tr');
+
+    rows.forEach(row => {
+        const text = row.textContent.toLowerCase();
+        row.style.display = text.includes(search) ? '' : 'none';
+    });
+}
+
+function updateCounts() {
+    const pendingCount = document.querySelectorAll('#pending-tab tbody tr').length;
+    const pendingBadge = document.querySelector('.tab-btn:first-child .tab-badge');
+    if (pendingBadge) {
+        if (pendingCount > 0) {
+            pendingBadge.textContent = pendingCount;
+        } else {
+            pendingBadge.remove();
+        }
+    }
+}
+
+async function syncSubjects(studentId) {
+    try {
+        const response = await fetch(`/enrollments/sync-subjects/${studentId}`, {
+            method: 'POST',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        });
+        const data = await response.json();
+        if (data.success) {
+            showToast(data.message, 'success');
+            setTimeout(() => location.reload(), 1000);
+        }
+    } catch (error) {
+        showToast('Error syncing subjects', 'error');
+    }
+}
+
+async function syncAllSubjects() {
+    if (!confirm('Sync all approved students with their section subjects?')) {
+        return;
+    }
+
+    try {
+        const response = await fetch('/enrollments/sync-all-subjects', {
+            method: 'POST',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        });
+        const data = await response.json();
+        if (data.success) {
+            showToast(data.message, 'success');
+            setTimeout(() => location.reload(), 1000);
+        }
+    } catch (error) {
+        showToast('Error syncing all subjects', 'error');
+    }
+}
+
+function showToast(message, type) {
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.innerHTML = `<i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'}"></i> ${message}`;
+    toast.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 15px 25px;
+        border-radius: 8px;
+        color: white;
+        font-weight: 500;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        z-index: 9999;
+        animation: slideIn 0.3s ease;
+        background: ${type === 'success' ? '#10B981' : '#EF4444'};
+    `;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+}
+</script>
+{% endblock %}

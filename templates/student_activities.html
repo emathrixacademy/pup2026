@@ -15,66 +15,178 @@
 
     {% if activities %}
     {% for activity in activities %}
-    <div class="question-card" style="border-left: 4px solid {% if activity.is_active %}#10B981{% else %}#EF4444{% endif %};">
-        <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 10px;">
-            <h4 style="margin: 0;">Activity {{ activity.activity_number }}: {{ activity.title }}</h4>
-            {% if not activity.is_active %}
-            <span class="badge badge-danger"><i class="fas fa-lock"></i> Closed</span>
-            {% elif activity.due_date %}
-            <span class="badge badge-warning"><i class="fas fa-clock"></i> Due: {{ activity.due_date }}</span>
+    {% set is_past_due = activity.due_date and activity.due_date < now_str %}
+    <div class="question-card activity-card" style="border-left: 4px solid {% if not activity.is_active %}#EF4444{% elif is_past_due %}#F59E0B{% else %}#10B981{% endif %};">
+        <div class="activity-header">
+            <h4>Activity {{ activity.activity_number }}: {{ activity.title }}</h4>
+            <div class="activity-badges">
+                {% if not activity.is_active %}
+                <span class="badge badge-danger"><i class="fas fa-lock"></i> Closed</span>
+                {% elif activity.due_date %}
+                    {% if is_past_due %}
+                    <span class="badge badge-danger"><i class="fas fa-exclamation-triangle"></i> Past Due</span>
+                    {% else %}
+                    <span class="badge badge-warning countdown-badge" data-due="{{ activity.due_date }}{% if activity.due_time %} {{ activity.due_time }}{% else %} 23:59{% endif %}">
+                        <i class="fas fa-clock"></i> <span class="countdown-text">Loading...</span>
+                    </span>
+                    {% endif %}
+                {% endif %}
+            </div>
+        </div>
+
+        {% if activity.due_date %}
+        <div class="due-date-info">
+            <i class="fas fa-calendar-alt"></i>
+            <span>Due: {{ activity.due_date }}{% if activity.due_time %} at {{ activity.due_time }}{% else %} at 11:59 PM{% endif %}</span>
+            {% if activity.late_penalty_per_day %}
+            <span class="late-penalty-info">
+                <i class="fas fa-info-circle"></i> Late penalty: -{{ activity.late_penalty_per_day }} point(s) per day
+            </span>
             {% endif %}
         </div>
-        <p style="margin-top: 0.75rem;">{{ activity.instructions }}</p>
-        <p><strong>Points:</strong> {{ activity.points }}</p>
+        {% endif %}
+
+        <div class="activity-content">
+            {{ activity.instructions|safe }}
+        </div>
+        <p class="points-display"><strong>Points:</strong> {{ activity.points }}</p>
 
         {% if activity.id in submissions %}
         <div class="mt-20 submission-box">
-            <p><strong><i class="fas fa-check-circle" style="color: #10B981;"></i> Your Submission:</strong></p>
+            <div class="submission-header">
+                <p><strong><i class="fas fa-check-circle" style="color: #10B981;"></i> Your Submission</strong></p>
+                <span class="submission-time">Submitted: {{ submissions[activity.id].submitted_at }}</span>
+            </div>
+
+            {% if submissions[activity.id].is_late %}
+            <div class="late-warning">
+                <i class="fas fa-exclamation-triangle"></i>
+                Late submission ({{ submissions[activity.id].late_days }} day(s) late) -
+                Penalty: -{{ submissions[activity.id].late_penalty }} points
+            </div>
+            {% endif %}
+
             {% if submissions[activity.id].content %}
-            <p style="background: white; padding: 10px; border-radius: 6px; border: 1px solid #E5E7EB;">{{ submissions[activity.id].content }}</p>
+            <div class="submission-content">
+                {{ submissions[activity.id].content }}
+            </div>
             {% endif %}
+
             {% if submissions[activity.id].file_path %}
-            <p>
-                <i class="fas fa-file"></i> <strong>Attached File:</strong>
-                <a href="{{ url_for('static', filename='../uploads/activity_submissions/' + submissions[activity.id].file_path) }}" target="_blank" class="file-link">
-                    {{ submissions[activity.id].file_path.split('/')[-1] }}
-                </a>
-            </p>
+            <div class="submission-files">
+                <strong><i class="fas fa-paperclip"></i> Attached Files:</strong>
+                <ul class="file-list">
+                    {% for file in submissions[activity.id].file_path.split(',') %}
+                    <li>
+                        <a href="{{ url_for('static', filename='../uploads/activity_submissions/' + file.strip()) }}" target="_blank" class="file-link">
+                            <i class="fas fa-file"></i> {{ file.strip().split('/')[-1] }}
+                        </a>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
             {% endif %}
+
             {% if submissions[activity.id].score is not none and submissions[activity.id].score_visible %}
-            <p><strong>Score:</strong> <span style="font-size: 1.2rem; color: #059669;">{{ submissions[activity.id].score }}/{{ activity.points }}</span></p>
+            <div class="score-display">
+                <span class="score-label">Final Score:</span>
+                <span class="score-value">{{ "%.1f"|format(submissions[activity.id].final_score or submissions[activity.id].score) }}/{{ activity.points }}</span>
+                {% if submissions[activity.id].is_late %}
+                <span class="score-note">(Late penalty: -{{ submissions[activity.id].late_penalty }})</span>
+                {% endif %}
+            </div>
+
+            {% if activity.enable_peer_review %}
+            <div class="score-breakdown-student">
+                <h5><i class="fas fa-calculator"></i> Score Breakdown (25% + 25% + 50%)</h5>
+                <div class="breakdown-grid">
+                    <div class="breakdown-box peer">
+                        <span class="box-label">Peer Review (25%)</span>
+                        <span class="box-value">
+                            {% if submissions[activity.id].peer_review_score is not none %}
+                            {{ "%.1f"|format(submissions[activity.id].peer_review_score) }}%
+                            {% else %}
+                            -
+                            {% endif %}
+                        </span>
+                    </div>
+                    <div class="breakdown-box participation">
+                        <span class="box-label">Participation (25%)</span>
+                        <span class="box-value">
+                            {% if submissions[activity.id].participation_score is not none %}
+                            {{ "%.1f"|format(submissions[activity.id].participation_score) }}%
+                            {% else %}
+                            -
+                            {% endif %}
+                        </span>
+                    </div>
+                    <div class="breakdown-box instructor">
+                        <span class="box-label">Instructor (50%)</span>
+                        <span class="box-value">
+                            {% if submissions[activity.id].instructor_score is not none %}
+                            {{ "%.1f"|format(submissions[activity.id].instructor_score) }}/{{ activity.points }}
+                            {% elif submissions[activity.id].score is not none %}
+                            {{ submissions[activity.id].score }}/{{ activity.points }}
+                            {% else %}
+                            -
+                            {% endif %}
+                        </span>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
             {% if submissions[activity.id].feedback %}
-            <p><strong>Feedback:</strong> {{ submissions[activity.id].feedback }}</p>
+            <div class="feedback-box">
+                <strong>Feedback:</strong> {{ submissions[activity.id].feedback }}
+            </div>
             {% endif %}
             {% elif submissions[activity.id].score is not none %}
-            <p><em style="color: #6B7280;"><i class="fas fa-clock"></i> Score pending release by instructor</em></p>
+            <p class="pending-score"><i class="fas fa-clock"></i> Score pending release by instructor</p>
             {% else %}
-            <p><em style="color: #6B7280;"><i class="fas fa-hourglass-half"></i> Not yet graded</em></p>
+            <p class="pending-score"><i class="fas fa-hourglass-half"></i> Not yet graded</p>
             {% endif %}
         </div>
         {% else %}
         {% if activity.is_active %}
         <form action="{{ url_for('submit_activity', activity_id=activity.id) }}" method="POST" enctype="multipart/form-data" class="mt-20 submission-form">
+            {% if is_past_due %}
+            <div class="late-submission-warning">
+                <i class="fas fa-exclamation-triangle"></i>
+                <strong>Late Submission Warning:</strong> This activity is past due.
+                {% if activity.late_penalty_per_day %}
+                A penalty of {{ activity.late_penalty_per_day }} point(s) per day will be applied.
+                {% endif %}
+            </div>
+            {% endif %}
+
             <div class="form-group">
                 <label>Your Answer/Response</label>
                 <textarea name="content" rows="4" placeholder="Enter your answer here..."></textarea>
             </div>
+
             <div class="form-group">
-                <label><i class="fas fa-upload"></i> Upload File (Optional)</label>
-                <div class="file-upload-area">
-                    <input type="file" name="submission_file" id="file-{{ activity.id }}" accept=".pdf,.doc,.docx,.txt,.zip,.rar,.png,.jpg,.jpeg">
-                    <p class="file-hint">Supported: PDF, DOC, DOCX, TXT, ZIP, RAR, PNG, JPG (Max 16MB)</p>
+                <label><i class="fas fa-upload"></i> Upload Files (Up to {{ activity.max_files or 5 }} files)</label>
+                <div class="file-upload-area" id="upload-area-{{ activity.id }}">
+                    <input type="file" name="submission_files" id="files-{{ activity.id }}" multiple accept=".pdf,.doc,.docx,.txt,.zip,.rar,.png,.jpg,.jpeg">
+                    <div class="upload-placeholder">
+                        <i class="fas fa-cloud-upload-alt"></i>
+                        <p>Drop files here or click to browse</p>
+                    </div>
+                    <div class="selected-files" id="selected-files-{{ activity.id }}"></div>
+                    <p class="file-hint">Supported: PDF, DOC, DOCX, TXT, ZIP, RAR, PNG, JPG (Max 16MB each)</p>
                 </div>
             </div>
+
             <button type="submit" class="btn btn-success">
                 <i class="fas fa-paper-plane"></i> Submit Activity
             </button>
         </form>
         {% else %}
-        <div class="mt-20" style="background: #FEE2E2; padding: 15px; border-radius: 6px; text-align: center;">
-            <i class="fas fa-lock" style="font-size: 2rem; color: #EF4444; margin-bottom: 0.5rem;"></i>
-            <p style="color: #DC2626; font-weight: 600; margin: 0;">This activity is closed for submissions.</p>
-            <p style="color: #6B7280; font-size: 0.9rem; margin-top: 0.25rem;">The instructor has deactivated this activity.</p>
+        <div class="mt-20 closed-activity">
+            <i class="fas fa-lock"></i>
+            <p><strong>This activity is closed for submissions.</strong></p>
+            <p>The instructor has deactivated this activity.</p>
         </div>
         {% endif %}
         {% endif %}
@@ -86,10 +198,262 @@
 </div>
 
 <style>
+.activity-card {
+    margin-bottom: 1.5rem;
+}
+
+.activity-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.activity-header h4 {
+    margin: 0;
+    color: #1F2937;
+}
+
+.activity-badges {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.due-date-info {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 15px;
+    background: #F3F4F6;
+    padding: 10px 15px;
+    border-radius: 8px;
+    margin: 15px 0;
+    font-size: 0.9rem;
+    color: #4B5563;
+}
+
+.late-penalty-info {
+    color: #DC2626;
+    font-size: 0.85rem;
+}
+
+.activity-content {
+    margin: 15px 0;
+    padding: 15px;
+    background: #F9FAFB;
+    border-radius: 8px;
+    border: 1px solid #E5E7EB;
+    line-height: 1.7;
+}
+
+.activity-content h4, .activity-content h5 {
+    color: #1F2937;
+    margin-top: 1rem;
+    margin-bottom: 0.5rem;
+}
+
+.activity-content ul, .activity-content ol {
+    margin-left: 1.5rem;
+    margin-bottom: 1rem;
+}
+
+.activity-content table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+}
+
+.activity-content table th,
+.activity-content table td {
+    border: 1px solid #E5E7EB;
+    padding: 8px 12px;
+    text-align: left;
+}
+
+.activity-content table th {
+    background: #F3F4F6;
+    font-weight: 600;
+}
+
+.points-display {
+    margin: 0;
+    font-size: 1rem;
+}
+
 .submission-box {
     background: #D1FAE5;
+    padding: 20px;
+    border-radius: 8px;
+}
+
+.submission-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 15px;
+}
+
+.submission-header p {
+    margin: 0;
+}
+
+.submission-time {
+    font-size: 0.85rem;
+    color: #6B7280;
+}
+
+.late-warning {
+    background: #FEE2E2;
+    color: #DC2626;
+    padding: 10px 15px;
+    border-radius: 6px;
+    margin-bottom: 15px;
+    font-size: 0.9rem;
+}
+
+.submission-content {
+    background: white;
     padding: 15px;
     border-radius: 6px;
+    border: 1px solid #E5E7EB;
+    margin-bottom: 15px;
+    white-space: pre-wrap;
+}
+
+.submission-files {
+    margin: 15px 0;
+}
+
+.file-list {
+    list-style: none;
+    padding: 0;
+    margin: 10px 0 0 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.file-list li {
+    background: white;
+    padding: 8px 15px;
+    border-radius: 6px;
+    border: 1px solid #E5E7EB;
+}
+
+.file-link {
+    color: #0EA5E9;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.file-link:hover {
+    text-decoration: underline;
+}
+
+.score-display {
+    background: white;
+    padding: 15px;
+    border-radius: 6px;
+    margin: 15px 0;
+}
+
+.score-label {
+    font-weight: 600;
+}
+
+.score-value {
+    font-size: 1.3rem;
+    color: #059669;
+    font-weight: 700;
+}
+
+.score-breakdown {
+    font-size: 0.85rem;
+    color: #6B7280;
+}
+
+.feedback-box {
+    background: white;
+    padding: 15px;
+    border-radius: 6px;
+    border-left: 4px solid #8B5CF6;
+}
+
+.pending-score {
+    color: #6B7280;
+    font-style: italic;
+}
+
+.score-note {
+    font-size: 0.85rem;
+    color: #DC2626;
+    margin-left: 10px;
+}
+
+.score-breakdown-student {
+    background: #F3F4F6;
+    padding: 15px;
+    border-radius: 8px;
+    margin: 15px 0;
+}
+
+.score-breakdown-student h5 {
+    margin: 0 0 12px 0;
+    font-size: 14px;
+    color: #4B5563;
+}
+
+.breakdown-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+}
+
+.breakdown-box {
+    background: white;
+    padding: 12px;
+    border-radius: 6px;
+    text-align: center;
+    border-left: 3px solid #ccc;
+}
+
+.breakdown-box.peer {
+    border-left-color: #8B5CF6;
+}
+
+.breakdown-box.participation {
+    border-left-color: #F59E0B;
+}
+
+.breakdown-box.instructor {
+    border-left-color: #10B981;
+}
+
+.breakdown-box .box-label {
+    display: block;
+    font-size: 11px;
+    color: #6B7280;
+    margin-bottom: 5px;
+}
+
+.breakdown-box .box-value {
+    display: block;
+    font-size: 18px;
+    font-weight: 700;
+    color: #1F2937;
+}
+
+.peer-review-score {
+    background: #EDE9FE;
+    padding: 10px 15px;
+    border-radius: 6px;
+    margin-top: 15px;
+    color: #6D28D9;
 }
 
 .submission-form {
@@ -99,16 +463,64 @@
     border: 1px solid #E5E7EB;
 }
 
+.late-submission-warning {
+    background: #FEF3C7;
+    border: 1px solid #F59E0B;
+    color: #92400E;
+    padding: 15px;
+    border-radius: 6px;
+    margin-bottom: 20px;
+}
+
 .file-upload-area {
     border: 2px dashed #D1D5DB;
     border-radius: 8px;
     padding: 20px;
     text-align: center;
     background: white;
+    transition: all 0.2s ease;
+}
+
+.file-upload-area.dragover {
+    border-color: #8B5CF6;
+    background: #F5F3FF;
 }
 
 .file-upload-area input[type="file"] {
-    width: 100%;
+    display: none;
+}
+
+.upload-placeholder {
+    cursor: pointer;
+    color: #9CA3AF;
+}
+
+.upload-placeholder i {
+    font-size: 2.5rem;
+    margin-bottom: 10px;
+}
+
+.selected-files {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 15px;
+    justify-content: center;
+}
+
+.selected-file {
+    background: #EDE9FE;
+    padding: 8px 12px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.selected-file .remove-file {
+    cursor: pointer;
+    color: #DC2626;
 }
 
 .file-hint {
@@ -117,13 +529,21 @@
     color: #6B7280;
 }
 
-.file-link {
-    color: #0EA5E9;
-    text-decoration: none;
+.closed-activity {
+    background: #FEE2E2;
+    padding: 30px;
+    border-radius: 6px;
+    text-align: center;
+    color: #DC2626;
 }
 
-.file-link:hover {
-    text-decoration: underline;
+.closed-activity i {
+    font-size: 2.5rem;
+    margin-bottom: 1rem;
+}
+
+.closed-activity p {
+    margin: 0.5rem 0;
 }
 
 .badge-danger {
@@ -135,5 +555,111 @@
     background: #F59E0B;
     color: white;
 }
+
+.countdown-badge {
+    min-width: 120px;
+}
+
+@media (max-width: 600px) {
+    .activity-header {
+        flex-direction: column;
+    }
+
+    .due-date-info {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+}
 </style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Countdown timers
+    document.querySelectorAll('.countdown-badge').forEach(badge => {
+        const dueStr = badge.dataset.due;
+        const countdownText = badge.querySelector('.countdown-text');
+
+        function updateCountdown() {
+            const due = new Date(dueStr);
+            const now = new Date();
+            const diff = due - now;
+
+            if (diff <= 0) {
+                badge.classList.remove('badge-warning');
+                badge.classList.add('badge-danger');
+                countdownText.innerHTML = 'Past Due!';
+                return;
+            }
+
+            const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+
+            if (days > 0) {
+                countdownText.innerHTML = `${days}d ${hours}h left`;
+            } else if (hours > 0) {
+                countdownText.innerHTML = `${hours}h ${minutes}m left`;
+                if (hours < 6) {
+                    badge.classList.remove('badge-warning');
+                    badge.classList.add('badge-danger');
+                }
+            } else {
+                countdownText.innerHTML = `${minutes}m left`;
+                badge.classList.remove('badge-warning');
+                badge.classList.add('badge-danger');
+            }
+        }
+
+        updateCountdown();
+        setInterval(updateCountdown, 60000);
+    });
+
+    // File upload handling
+    document.querySelectorAll('.file-upload-area').forEach(area => {
+        const input = area.querySelector('input[type="file"]');
+        const placeholder = area.querySelector('.upload-placeholder');
+        const selectedFilesDiv = area.querySelector('.selected-files');
+
+        if (placeholder) {
+            placeholder.addEventListener('click', () => input.click());
+        }
+
+        // Drag and drop
+        area.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            area.classList.add('dragover');
+        });
+
+        area.addEventListener('dragleave', () => {
+            area.classList.remove('dragover');
+        });
+
+        area.addEventListener('drop', (e) => {
+            e.preventDefault();
+            area.classList.remove('dragover');
+            input.files = e.dataTransfer.files;
+            updateFileList(input, selectedFilesDiv);
+        });
+
+        input.addEventListener('change', () => {
+            updateFileList(input, selectedFilesDiv);
+        });
+    });
+
+    function updateFileList(input, container) {
+        container.innerHTML = '';
+        if (input.files.length > 0) {
+            Array.from(input.files).forEach((file, index) => {
+                const fileEl = document.createElement('div');
+                fileEl.className = 'selected-file';
+                fileEl.innerHTML = `
+                    <i class="fas fa-file"></i>
+                    <span>${file.name}</span>
+                `;
+                container.appendChild(fileEl);
+            });
+        }
+    }
+});
+</script>
 {% endblock %}
