@@ -9,171 +9,828 @@
         <a href="{{ url_for('peer_review_settings', activity_id=activity.id) }}" class="btn btn-secondary">
             <i class="fas fa-cog"></i> Settings
         </a>
-        <a href="javascript:history.back()" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back</a>
+        <a href="{{ url_for('view_peer_reviews', activity_id=activity.id) }}" class="btn btn-secondary">
+            <i class="fas fa-clipboard-check"></i> All Reviews
+        </a>
+        <a href="{{ url_for('instructor_peer_reviews') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Back
+        </a>
     </div>
 </div>
 
-<div class="card">
+<!-- Activity Header + Scoring Info -->
+<div class="card mb-20">
     <div class="card-header">
-        <span class="card-title">{{ activity.title }} - Review Progress</span>
+        <span class="card-title">{{ activity.title }}</span>
+        <span class="prs-max-pts">Max Points: {{ max_points }}</span>
     </div>
     <div class="card-body">
-        {% if submissions %}
-        <table class="table">
-            <thead>
-                <tr>
-                    <th>Student</th>
-                    <th>Student ID</th>
-                    <th>Reviewers Assigned</th>
-                    <th>Reviews Completed</th>
-                    <th>Peer Score</th>
-                    <th>Instructor Score</th>
-                    <th>Final Score</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for sub in submissions %}
-                <tr>
-                    <td>{{ sub.full_name }}</td>
-                    <td>{{ sub.sid }}</td>
-                    <td>{{ sub.total_reviewers }}</td>
-                    <td>
-                        {% if sub.completed_reviews == sub.total_reviewers and sub.total_reviewers > 0 %}
-                        <span class="badge badge-success">{{ sub.completed_reviews }}/{{ sub.total_reviewers }}</span>
-                        {% elif sub.completed_reviews > 0 %}
-                        <span class="badge badge-warning">{{ sub.completed_reviews }}/{{ sub.total_reviewers }}</span>
-                        {% else %}
-                        <span class="badge badge-secondary">{{ sub.completed_reviews }}/{{ sub.total_reviewers }}</span>
-                        {% endif %}
-                    </td>
-                    <td>
-                        {% if sub.peer_review_score is not none %}
-                        <strong>{{ "%.1f"|format(sub.peer_review_score) }}</strong>
-                        {% else %}
-                        <span class="text-muted">-</span>
-                        {% endif %}
-                    </td>
-                    <td>
-                        {% if sub.score is not none %}
-                        {{ sub.score }}/{{ activity.points }}
-                        {% else %}
-                        <span class="text-muted">Not graded</span>
-                        {% endif %}
-                    </td>
-                    <td>
-                        {% set final = sub.final_score %}
-                        {% if final is not none %}
-                        <strong class="{% if sub.late_penalty %}text-warning{% endif %}">
-                            {{ "%.1f"|format(final) }}
-                        </strong>
-                        {% if sub.late_penalty %}
-                        <small class="text-danger">(-{{ sub.late_penalty }})</small>
-                        {% endif %}
-                        {% elif sub.score is not none %}
-                        <strong>{{ sub.score }}</strong>
-                        {% else %}
-                        <span class="text-muted">-</span>
-                        {% endif %}
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-
-        <div class="stats-summary mt-20">
-            <div class="stat-box">
-                <i class="fas fa-users"></i>
-                <span class="stat-value">{{ submissions|length }}</span>
-                <span class="stat-label">Total Submissions</span>
+        <div class="prs-score-formula">
+            <div class="prs-formula-item peer">
+                <span class="prs-pct">25%</span>
+                <span class="prs-label">Peer Review</span>
+                <small>Classmates' scores</small>
             </div>
-            <div class="stat-box">
-                <i class="fas fa-check-double"></i>
-                <span class="stat-value">
-                    {{ submissions|selectattr('completed_reviews')|selectattr('total_reviewers')|list|length }}
-                </span>
-                <span class="stat-label">Fully Reviewed</span>
+            <span class="prs-plus">+</span>
+            <div class="prs-formula-item participation">
+                <span class="prs-pct">25%</span>
+                <span class="prs-label">Participation</span>
+                <small>Approved reviews given</small>
             </div>
-            <div class="stat-box">
-                <i class="fas fa-clock"></i>
-                <span class="stat-value">
-                    {% set pending = submissions|selectattr('total_reviewers')|list|length - submissions|selectattr('completed_reviews')|selectattr('total_reviewers')|list|length %}
-                    {{ pending if pending > 0 else 0 }}
-                </span>
-                <span class="stat-label">Pending Reviews</span>
+            <span class="prs-plus">+</span>
+            <div class="prs-formula-item instructor">
+                <span class="prs-pct">50%</span>
+                <span class="prs-label">Instructor</span>
+                <small>Your grading</small>
+            </div>
+            <span class="prs-eq">=</span>
+            <div class="prs-formula-item final">
+                <span class="prs-pct">100%</span>
+                <span class="prs-label">Final Score</span>
             </div>
         </div>
-        {% else %}
-        <div class="empty-state">
-            <i class="fas fa-inbox"></i>
-            <p>No submissions yet for this activity</p>
+    </div>
+</div>
+
+<!-- Summary Stats -->
+<div class="prs-stats mb-20">
+    <div class="prs-stat-card">
+        <i class="fas fa-users"></i>
+        <div class="prs-stat-num">{{ total_subs }}</div>
+        <div class="prs-stat-label">Submissions</div>
+    </div>
+    <div class="prs-stat-card reviewed">
+        <i class="fas fa-check-double"></i>
+        <div class="prs-stat-num">{{ all_reviewed }}</div>
+        <div class="prs-stat-label">Fully Reviewed</div>
+    </div>
+    <div class="prs-stat-card graded">
+        <i class="fas fa-pen"></i>
+        <div class="prs-stat-num">{{ graded_count }}</div>
+        <div class="prs-stat-label">Graded</div>
+    </div>
+    <div class="prs-stat-card pending">
+        <i class="fas fa-clock"></i>
+        <div class="prs-stat-num">{{ total_subs - graded_count }}</div>
+        <div class="prs-stat-label">Ungraded</div>
+    </div>
+</div>
+
+{% if submissions %}
+<!-- Student Submissions -->
+{% for sub in submissions %}
+<div class="prs-student-card" id="student-{{ sub.id }}">
+    <!-- Student Header Row (clickable to expand) -->
+    <div class="prs-student-header" onclick="toggleStudent({{ sub.id }})">
+        <div class="prs-student-info">
+            <img src="{{ url_for('static', filename='uploads/photos/' + (sub.photo or 'default.png')) }}"
+                 alt="" class="prs-avatar">
+            <div>
+                <strong>{{ sub.full_name }}</strong>
+                <small>{{ sub.sid }}</small>
+            </div>
+        </div>
+        <div class="prs-student-scores">
+            <!-- Review Progress -->
+            <div class="prs-mini-stat">
+                <span class="prs-mini-label">Reviews</span>
+                {% if sub.completed_reviews == sub.total_reviewers and sub.total_reviewers > 0 %}
+                <span class="prs-mini-badge done">{{ sub.completed_reviews }}/{{ sub.total_reviewers }}</span>
+                {% elif sub.completed_reviews > 0 %}
+                <span class="prs-mini-badge partial">{{ sub.completed_reviews }}/{{ sub.total_reviewers }}</span>
+                {% else %}
+                <span class="prs-mini-badge none">{{ sub.completed_reviews }}/{{ sub.total_reviewers }}</span>
+                {% endif %}
+            </div>
+            <!-- Peer Score -->
+            <div class="prs-mini-stat">
+                <span class="prs-mini-label">Peer</span>
+                {% if sub.peer_review_score is not none %}
+                <span class="prs-mini-val">{{ "%.1f"|format(sub.peer_review_score) }}%</span>
+                {% else %}
+                <span class="prs-mini-val muted">-</span>
+                {% endif %}
+            </div>
+            <!-- Participation -->
+            <div class="prs-mini-stat">
+                <span class="prs-mini-label">Participation</span>
+                {% if sub.participation_score is not none %}
+                <span class="prs-mini-val">{{ "%.0f"|format(sub.participation_score) }}%</span>
+                {% else %}
+                <span class="prs-mini-val muted">-</span>
+                {% endif %}
+            </div>
+            <!-- Instructor Score -->
+            <div class="prs-mini-stat">
+                <span class="prs-mini-label">Instructor</span>
+                {% if sub.instructor_score is not none %}
+                <span class="prs-mini-val">{{ "%.0f"|format(sub.instructor_score) }}/{{ max_points }}</span>
+                {% else %}
+                <span class="prs-mini-val muted">Not graded</span>
+                {% endif %}
+            </div>
+            <!-- Final Score -->
+            <div class="prs-mini-stat final">
+                <span class="prs-mini-label">Final</span>
+                {% if sub.final_score is not none %}
+                <span class="prs-mini-val final-val">{{ "%.1f"|format(sub.final_score) }}/{{ max_points }}</span>
+                {% else %}
+                <span class="prs-mini-val muted">-</span>
+                {% endif %}
+            </div>
+            <!-- Expand icon -->
+            <i class="fas fa-chevron-down prs-expand-icon" id="icon-{{ sub.id }}"></i>
+        </div>
+    </div>
+
+    <!-- Expandable Detail Section -->
+    <div class="prs-student-detail" id="detail-{{ sub.id }}" style="display: none;">
+        <div class="prs-detail-grid">
+            <!-- Left: Submission Content -->
+            <div class="prs-sub-content">
+                <h5><i class="fas fa-file-alt"></i> Submission</h5>
+                {% if sub.content %}
+                <div class="prs-content-box">{{ sub.content }}</div>
+                {% endif %}
+                {% if sub.files %}
+                <div class="prs-files">
+                    {% for file in sub.files %}
+                    <a href="{{ url_for('static', filename='uploads/activity_submissions/' + file.file_path) }}"
+                       target="_blank" class="prs-file-link">
+                        <i class="fas fa-file-download"></i> {{ file.file_name }}
+                    </a>
+                    {% endfor %}
+                </div>
+                {% elif sub.file_path %}
+                <div class="prs-files">
+                    <a href="{{ url_for('static', filename='uploads/activity_submissions/' + sub.file_path) }}"
+                       target="_blank" class="prs-file-link">
+                        <i class="fas fa-file-download"></i> Download File
+                    </a>
+                </div>
+                {% endif %}
+                {% if not sub.content and not sub.files and not sub.file_path %}
+                <p class="text-muted">No content submitted</p>
+                {% endif %}
+
+                <!-- Instructor Grade Form -->
+                <div class="prs-grade-form">
+                    <h5><i class="fas fa-pen"></i> Instructor Grade</h5>
+                    <form action="{{ url_for('grade_activity', activity_id=activity.id) }}" method="POST">
+                        <input type="hidden" name="submission_id" value="{{ sub.id }}">
+                        <input type="hidden" name="redirect_to" value="peer_review_status">
+                        <div class="prs-grade-row">
+                            <div class="prs-grade-input">
+                                <label>Score (0-{{ max_points }})</label>
+                                <input type="number" name="score" min="0" max="{{ max_points }}"
+                                       value="{{ sub.instructor_score|int if sub.instructor_score is not none else '' }}"
+                                       placeholder="0-{{ max_points }}" required>
+                            </div>
+                            <div class="prs-grade-feedback">
+                                <label>Feedback</label>
+                                <input type="text" name="feedback"
+                                       value="{{ sub.feedback or '' }}"
+                                       placeholder="Optional feedback...">
+                            </div>
+                            <button type="submit" class="btn prs-grade-btn">
+                                <i class="fas fa-save"></i> {{ 'Update' if sub.instructor_score is not none else 'Grade' }}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Right: Peer Reviews -->
+            <div class="prs-reviews-panel">
+                <h5><i class="fas fa-user-friends"></i> Peer Reviews ({{ sub.reviews|length }})</h5>
+                {% for rev in sub.reviews %}
+                <div class="prs-review-item {% if rev.approval_status == 'approved' %}approved{% elif rev.approval_status == 'rejected' %}rejected{% endif %}">
+                    <div class="prs-rev-header">
+                        <div>
+                            <strong>{{ rev.reviewer_name }}</strong>
+                            <small>({{ rev.reviewer_sid }})</small>
+                        </div>
+                        {% if not rev.is_completed %}
+                        <span class="prs-rev-badge pending"><i class="fas fa-hourglass-half"></i> Pending</span>
+                        {% elif rev.approval_status == 'approved' %}
+                        <span class="prs-rev-badge approved"><i class="fas fa-check-circle"></i> Approved</span>
+                        {% elif rev.approval_status == 'rejected' %}
+                        <span class="prs-rev-badge rejected"><i class="fas fa-times-circle"></i> Rejected</span>
+                        {% else %}
+                        <span class="prs-rev-badge needs-action"><i class="fas fa-exclamation-circle"></i> Needs Action</span>
+                        {% endif %}
+                    </div>
+
+                    {% if rev.is_completed %}
+                    <!-- Responses -->
+                    {% if rev.responses %}
+                    <div class="prs-rev-responses">
+                        {% for resp in rev.responses %}
+                        <div class="prs-resp-row">
+                            <span class="prs-resp-q">{{ resp.criterion }}</span>
+                            {% if resp.response == 'yes' %}
+                            <span class="prs-resp-a yes"><i class="fas fa-check-circle"></i> Yes <small>(100)</small></span>
+                            {% elif resp.response == 'somehow' %}
+                            <span class="prs-resp-a somehow"><i class="fas fa-minus-circle"></i> Somehow <small>(85)</small></span>
+                            {% elif resp.response == 'no' %}
+                            <span class="prs-resp-a no"><i class="fas fa-times-circle"></i> No <small>(70)</small></span>
+                            {% else %}
+                            <span class="prs-resp-a na"><i class="fas fa-ban"></i> N/A <small>(60)</small></span>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+
+                    {% if rev.review_avg is not none %}
+                    <div class="prs-rev-avg">
+                        Avg: <strong>{{ "%.1f"|format(rev.review_avg) }}%</strong>
+                    </div>
+                    {% endif %}
+
+                    <!-- Approve/Reject Actions -->
+                    {% if rev.approval_status == 'approved' %}
+                    <div class="prs-rev-status approved">
+                        <i class="fas fa-check-circle"></i> Approved - reviewer earned participation credit
+                        {% if rev.instructor_feedback %}
+                        <br><small>Feedback: {{ rev.instructor_feedback }}</small>
+                        {% endif %}
+                    </div>
+                    {% elif rev.approval_status == 'rejected' %}
+                    <div class="prs-rev-status rejected">
+                        <i class="fas fa-times-circle"></i> Rejected - no participation credit
+                        {% if rev.instructor_feedback %}
+                        <br><small>Feedback: {{ rev.instructor_feedback }}</small>
+                        {% endif %}
+                    </div>
+                    {% else %}
+                    <form action="{{ url_for('approve_reject_peer_review', assignment_id=rev.id) }}" method="POST" class="prs-rev-actions">
+                        <input type="hidden" name="redirect_to" value="peer_review_status">
+                        <input type="text" name="instructor_feedback" placeholder="Feedback (optional)..." class="prs-rev-fb">
+                        <div class="prs-rev-btns">
+                            <button type="submit" name="action" value="approve" class="btn-approve-sm"
+                                    onclick="return confirm('Approve this review?')">
+                                <i class="fas fa-check"></i> Approve
+                            </button>
+                            <button type="submit" name="action" value="reject" class="btn-reject-sm"
+                                    onclick="return confirm('Reject this review?')">
+                                <i class="fas fa-times"></i> Reject
+                            </button>
+                        </div>
+                    </form>
+                    {% endif %}
+                    {% else %}
+                    <p class="text-muted prs-rev-pending-msg"><i class="fas fa-hourglass-half"></i> Review not yet submitted</p>
+                    {% endif %}
+                </div>
+                {% endfor %}
+
+                {% if not sub.reviews %}
+                <p class="text-muted">No reviewers assigned yet</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Score Breakdown -->
+        {% if sub.final_score is not none %}
+        <div class="prs-score-breakdown">
+            <h5><i class="fas fa-calculator"></i> Score Breakdown</h5>
+            <div class="prs-breakdown-items">
+                <div class="prs-bd-item">
+                    <span class="prs-bd-label">Peer Review (25%)</span>
+                    <span class="prs-bd-val">{{ "%.1f"|format(sub.peer_review_score or 60) }}% &times; 25% = <strong>{{ "%.1f"|format(((sub.peer_review_score or 60) / 100) * 25) }}</strong></span>
+                </div>
+                <div class="prs-bd-item">
+                    <span class="prs-bd-label">Participation (25%)</span>
+                    <span class="prs-bd-val">{{ "%.0f"|format(sub.participation_score or 0) }}% &times; 25% = <strong>{{ "%.1f"|format(((sub.participation_score or 0) / 100) * 25) }}</strong></span>
+                </div>
+                <div class="prs-bd-item">
+                    <span class="prs-bd-label">Instructor (50%)</span>
+                    <span class="prs-bd-val">{{ "%.0f"|format(sub.instructor_score or 0) }}/{{ max_points }} &times; 50% = <strong>{{ "%.1f"|format(((sub.instructor_score or 0) / max_points) * 50 if max_points > 0 else 0) }}</strong></span>
+                </div>
+                <div class="prs-bd-item total">
+                    <span class="prs-bd-label">Final Score</span>
+                    <span class="prs-bd-val"><strong>{{ "%.1f"|format(sub.final_score) }} / {{ max_points }}</strong>
+                        {% if sub.late_penalty %}<small class="text-danger"> (-{{ sub.late_penalty }} late)</small>{% endif %}
+                    </span>
+                </div>
+            </div>
         </div>
         {% endif %}
     </div>
 </div>
+{% endfor %}
+
+{% else %}
+<div class="card">
+    <div class="card-body">
+        <div class="empty-state">
+            <i class="fas fa-inbox"></i>
+            <p>No submissions yet for this activity</p>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<script>
+function toggleStudent(id) {
+    const detail = document.getElementById('detail-' + id);
+    const icon = document.getElementById('icon-' + id);
+    if (detail.style.display === 'none') {
+        detail.style.display = 'block';
+        icon.classList.remove('fa-chevron-down');
+        icon.classList.add('fa-chevron-up');
+    } else {
+        detail.style.display = 'none';
+        icon.classList.remove('fa-chevron-up');
+        icon.classList.add('fa-chevron-down');
+    }
+}
+</script>
 
 <style>
-.badge-success {
-    background: #10b981;
+/* Header */
+.prs-max-pts {
+    background: #7c2d12;
     color: white;
+    padding: 4px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
 }
-.badge-warning {
-    background: #f59e0b;
-    color: white;
+
+/* Score Formula */
+.prs-score-formula {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 10px 0;
 }
-.badge-secondary {
-    background: #94a3b8;
-    color: white;
+.prs-formula-item {
+    text-align: center;
+    padding: 12px 20px;
+    border-radius: 10px;
+    background: white;
+    border: 2px solid #e5e7eb;
+    min-width: 120px;
 }
-.badge {
-    padding: 4px 10px;
+.prs-formula-item.peer { border-color: #8b5cf6; }
+.prs-formula-item.participation { border-color: #f59e0b; }
+.prs-formula-item.instructor { border-color: #3b82f6; }
+.prs-formula-item.final { border-color: #059669; background: #f0fdf4; }
+.prs-pct {
+    display: block;
+    font-size: 24px;
+    font-weight: 800;
+}
+.prs-formula-item.peer .prs-pct { color: #8b5cf6; }
+.prs-formula-item.participation .prs-pct { color: #f59e0b; }
+.prs-formula-item.instructor .prs-pct { color: #3b82f6; }
+.prs-formula-item.final .prs-pct { color: #059669; }
+.prs-label {
+    display: block;
+    font-weight: 600;
+    font-size: 13px;
+    color: #374151;
+    margin-top: 2px;
+}
+.prs-formula-item small {
+    color: #9ca3af;
+    font-size: 11px;
+}
+.prs-plus, .prs-eq {
+    font-size: 24px;
+    font-weight: 700;
+    color: #9ca3af;
+}
+
+/* Stats Bar */
+.prs-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+}
+.prs-stat-card {
+    padding: 16px;
     border-radius: 12px;
+    text-align: center;
+    background: linear-gradient(135deg, #7c2d12, #991b1b);
+    color: white;
+}
+.prs-stat-card.reviewed { background: linear-gradient(135deg, #059669, #047857); }
+.prs-stat-card.graded { background: linear-gradient(135deg, #2563eb, #1d4ed8); }
+.prs-stat-card.pending { background: linear-gradient(135deg, #d97706, #b45309); }
+.prs-stat-card i { font-size: 20px; opacity: 0.8; }
+.prs-stat-num { font-size: 28px; font-weight: 800; }
+.prs-stat-label { font-size: 11px; text-transform: uppercase; opacity: 0.9; letter-spacing: 0.5px; }
+
+/* Student Card */
+.prs-student-card {
+    border: 2px solid #e5e7eb;
+    border-radius: 12px;
+    margin-bottom: 12px;
+    background: white;
+    overflow: hidden;
+    transition: border-color 0.2s;
+}
+
+/* Student Header */
+.prs-student-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 20px;
+    cursor: pointer;
+    transition: background 0.15s;
+    gap: 12px;
+}
+.prs-student-header:hover {
+    background: #f9fafb;
+}
+.prs-student-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 180px;
+}
+.prs-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid #e5e7eb;
+}
+.prs-student-info strong {
+    display: block;
+    color: #1f2937;
+    font-size: 14px;
+}
+.prs-student-info small {
+    color: #9ca3af;
+    font-size: 12px;
+}
+
+.prs-student-scores {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+.prs-mini-stat {
+    text-align: center;
+    min-width: 60px;
+}
+.prs-mini-label {
+    display: block;
+    font-size: 10px;
+    text-transform: uppercase;
+    color: #9ca3af;
+    letter-spacing: 0.5px;
+}
+.prs-mini-val {
+    font-weight: 700;
+    font-size: 14px;
+    color: #1f2937;
+}
+.prs-mini-val.muted { color: #d1d5db; }
+.prs-mini-val.final-val { color: #059669; font-size: 15px; }
+.prs-mini-stat.final {
+    background: #f0fdf4;
+    padding: 4px 10px;
+    border-radius: 8px;
+    border: 1px solid #bbf7d0;
+}
+.prs-mini-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 600;
+}
+.prs-mini-badge.done { background: #d1fae5; color: #059669; }
+.prs-mini-badge.partial { background: #fef3c7; color: #d97706; }
+.prs-mini-badge.none { background: #f3f4f6; color: #9ca3af; }
+
+.prs-expand-icon {
+    color: #9ca3af;
+    transition: transform 0.2s;
+    margin-left: 8px;
+}
+
+/* Detail Section */
+.prs-student-detail {
+    border-top: 1px solid #e5e7eb;
+    background: #fafbfc;
+    padding: 20px;
+}
+
+.prs-detail-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+/* Submission Content */
+.prs-sub-content h5, .prs-reviews-panel h5 {
+    margin: 0 0 12px 0;
+    font-size: 14px;
+    color: #374151;
+}
+.prs-sub-content h5 i { color: #7c2d12; }
+.prs-reviews-panel h5 i { color: #8b5cf6; }
+
+.prs-content-box {
+    background: white;
+    padding: 14px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    white-space: pre-wrap;
+    font-size: 14px;
+    color: #334155;
+    max-height: 200px;
+    overflow-y: auto;
+    margin-bottom: 12px;
+}
+
+.prs-files {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+.prs-file-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    color: #7c2d12;
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 500;
+}
+.prs-file-link:hover { background: #f1f5f9; }
+
+/* Grade Form */
+.prs-grade-form {
+    margin-top: 16px;
+    padding: 14px;
+    background: white;
+    border: 2px solid #e5e7eb;
+    border-radius: 10px;
+}
+.prs-grade-form h5 {
+    margin: 0 0 10px 0;
+}
+.prs-grade-form h5 i { color: #3b82f6; }
+.prs-grade-row {
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+    flex-wrap: wrap;
+}
+.prs-grade-input {
+    width: 120px;
+}
+.prs-grade-input label, .prs-grade-feedback label {
+    display: block;
+    font-size: 12px;
+    color: #6b7280;
+    margin-bottom: 4px;
+}
+.prs-grade-input input {
+    width: 100%;
+    padding: 8px 10px;
+    border: 2px solid #e5e7eb;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+}
+.prs-grade-input input:focus { border-color: #3b82f6; outline: none; }
+.prs-grade-feedback {
+    flex: 1;
+    min-width: 150px;
+}
+.prs-grade-feedback input {
+    width: 100%;
+    padding: 8px 10px;
+    border: 2px solid #e5e7eb;
+    border-radius: 6px;
+    font-size: 14px;
+}
+.prs-grade-feedback input:focus { border-color: #3b82f6; outline: none; }
+.prs-grade-btn {
+    background: #3b82f6 !important;
+    color: white !important;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 14px;
+    border: none;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.prs-grade-btn:hover { background: #2563eb !important; }
+
+/* Review Items */
+.prs-review-item {
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 10px;
+    background: white;
+    border-left: 4px solid #e5e7eb;
+}
+.prs-review-item.approved { border-left-color: #10b981; background: #f0fdf4; }
+.prs-review-item.rejected { border-left-color: #ef4444; background: #fef2f2; }
+
+.prs-rev-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+.prs-rev-header strong { font-size: 13px; color: #1f2937; }
+.prs-rev-header small { color: #9ca3af; }
+
+.prs-rev-badge {
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+}
+.prs-rev-badge.approved { background: #d1fae5; color: #059669; }
+.prs-rev-badge.rejected { background: #fee2e2; color: #dc2626; }
+.prs-rev-badge.pending { background: #f3f4f6; color: #9ca3af; }
+.prs-rev-badge.needs-action { background: #fef3c7; color: #d97706; }
+
+/* Responses */
+.prs-rev-responses {
+    margin: 8px 0;
+}
+.prs-resp-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 5px 0;
+    border-bottom: 1px solid #f3f4f6;
+    gap: 8px;
+}
+.prs-resp-row:last-child { border-bottom: none; }
+.prs-resp-q {
+    font-size: 12px;
+    color: #4b5563;
+    flex: 1;
+}
+.prs-resp-a {
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.prs-resp-a.yes { color: #059669; }
+.prs-resp-a.somehow { color: #d97706; }
+.prs-resp-a.no { color: #dc2626; }
+.prs-resp-a.na { color: #9ca3af; }
+.prs-resp-a i { margin-right: 3px; }
+.prs-resp-a small { font-weight: 400; color: #9ca3af; }
+
+.prs-rev-avg {
+    margin-top: 6px;
+    padding: 5px 10px;
+    background: #f3f4f6;
+    border-radius: 6px;
+    font-size: 12px;
+    color: #374151;
+}
+.prs-rev-avg strong { color: #7c2d12; }
+
+/* Approve/Reject Actions in review item */
+.prs-rev-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+.prs-rev-fb {
+    flex: 1;
+    min-width: 120px;
+    padding: 6px 10px;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    font-size: 12px;
+}
+.prs-rev-fb:focus { border-color: #7c2d12; outline: none; }
+.prs-rev-btns {
+    display: flex;
+    gap: 6px;
+}
+.btn-approve-sm, .btn-reject-sm {
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+}
+.btn-approve-sm { background: #059669; color: white; }
+.btn-approve-sm:hover { background: #047857; }
+.btn-reject-sm { background: #dc2626; color: white; }
+.btn-reject-sm:hover { background: #b91c1c; }
+
+.prs-rev-status {
+    margin-top: 8px;
+    padding: 6px 10px;
+    border-radius: 6px;
     font-size: 12px;
     font-weight: 500;
 }
-.text-warning {
-    color: #f59e0b !important;
-}
-.text-danger {
-    color: #ef4444 !important;
-}
-.stats-summary {
-    display: flex;
-    gap: 20px;
-    flex-wrap: wrap;
-}
-.stat-box {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 20px 40px;
-    background: linear-gradient(135deg, #7c2d12, #991b1b);
-    color: white;
-    border-radius: 12px;
-    min-width: 150px;
-}
-.stat-box i {
-    font-size: 24px;
-    margin-bottom: 10px;
-    opacity: 0.8;
-}
-.stat-value {
-    font-size: 32px;
-    font-weight: bold;
-}
-.stat-label {
+.prs-rev-status.approved { background: #d1fae5; color: #059669; }
+.prs-rev-status.rejected { background: #fee2e2; color: #dc2626; }
+.prs-rev-status small { font-weight: 400; }
+
+.prs-rev-pending-msg {
     font-size: 12px;
-    opacity: 0.9;
-    text-transform: uppercase;
+    margin: 4px 0 0 0;
 }
+
+/* Score Breakdown */
+.prs-score-breakdown {
+    margin-top: 16px;
+    padding: 14px 16px;
+    background: white;
+    border: 2px solid #bbf7d0;
+    border-radius: 10px;
+}
+.prs-score-breakdown h5 {
+    margin: 0 0 10px 0;
+    color: #059669;
+    font-size: 14px;
+}
+.prs-breakdown-items {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 8px;
+}
+.prs-bd-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background: #f9fafb;
+    border-radius: 6px;
+    font-size: 13px;
+}
+.prs-bd-item.total {
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+}
+.prs-bd-label { color: #6b7280; }
+.prs-bd-val { color: #374151; }
+.prs-bd-item.total .prs-bd-label { color: #059669; font-weight: 600; }
+.prs-bd-item.total .prs-bd-val strong { color: #059669; font-size: 15px; }
+
+/* Utilities */
+.mb-20 { margin-bottom: 20px; }
+.text-muted { color: #9ca3af; }
+.text-danger { color: #ef4444 !important; }
 .empty-state {
     text-align: center;
     padding: 60px;
-    color: #666;
+    color: #6b7280;
 }
 .empty-state i {
     font-size: 48px;
     margin-bottom: 15px;
-    color: #ccc;
+    color: #d1d5db;
+}
+
+@media (max-width: 768px) {
+    .prs-detail-grid {
+        grid-template-columns: 1fr;
+    }
+    .prs-student-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    .prs-student-scores {
+        width: 100%;
+    }
+    .prs-score-formula {
+        flex-direction: column;
+    }
+    .prs-grade-row {
+        flex-direction: column;
+    }
+    .prs-grade-input {
+        width: 100%;
+    }
+    .prs-breakdown-items {
+        grid-template-columns: 1fr;
+    }
 }
 </style>
 {% endblock %}

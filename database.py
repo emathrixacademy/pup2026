@@ -382,6 +382,7 @@ def init_db():
         # Peer review assignment quality tracking
         ("peer_review_assignments", "review_quality_score", "REAL"),
         ("peer_review_assignments", "instructor_feedback", "TEXT"),
+        ("peer_review_assignments", "approval_status", "TEXT"),
         # Subjects table migrations
         ("subjects", "color_theme", "TEXT DEFAULT 'blue'"),
         # Quizzes visibility

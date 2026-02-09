@@ -5,225 +5,433 @@
 {% block content %}
 <div class="page-header">
     <div>
-        <span class="schedule-badge">{{ subject.day }} {{ subject.time_schedule }}</span>
-        <h1>All Activities</h1>
+        <span class="schedule-badge"><i class="fas fa-clock"></i> {{ subject.day }} {{ subject.time_schedule }}</span>
+        <h1><i class="fas fa-tasks"></i> All Activities</h1>
         <p class="section-info">{{ subject.name }} - {{ subject.section }}</p>
     </div>
-    <a href="{{ url_for('subject_detail', id=subject.id) }}" class="btn btn-secondary">Back to Sessions</a>
+    <div class="flex gap-10">
+        <a href="{{ url_for('subject_detail', id=subject.id) }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Back to Sessions
+        </a>
+    </div>
 </div>
 
+<!-- Summary Stats -->
+{% if current_user.role == 'instructor' %}
+{% set ns = namespace(total_acts=0, total_subs=0, total_graded=0) %}
 {% for item in sessions_data %}
-<div class="session-block">
-    <div class="session-header">
-        <h2>Session {{ item.session.session_number }}: {{ item.session.title }}</h2>
+    {% for a in item.activities %}
+        {% set ns.total_acts = ns.total_acts + 1 %}
+        {% set ast = activity_stats.get(a.id, {}) if activity_stats is defined else {} %}
+        {% set ns.total_subs = ns.total_subs + (ast.get('submitted_count', 0)|int) %}
+        {% set ns.total_graded = ns.total_graded + (ast.get('graded_count', 0)|int) %}
+    {% endfor %}
+{% endfor %}
+<div class="aa-stats-grid">
+    <div class="aa-stat-card purple">
+        <div class="aa-stat-icon"><i class="fas fa-layer-group"></i></div>
+        <div class="aa-stat-info">
+            <h3>{{ sessions_data|length }}</h3>
+            <p>Sessions</p>
+        </div>
+    </div>
+    <div class="aa-stat-card blue">
+        <div class="aa-stat-icon"><i class="fas fa-tasks"></i></div>
+        <div class="aa-stat-info">
+            <h3>{{ ns.total_acts }}</h3>
+            <p>Total Activities</p>
+        </div>
+    </div>
+    <div class="aa-stat-card green">
+        <div class="aa-stat-icon"><i class="fas fa-file-upload"></i></div>
+        <div class="aa-stat-info">
+            <h3>{{ ns.total_subs }}</h3>
+            <p>Submissions</p>
+        </div>
+    </div>
+    <div class="aa-stat-card orange">
+        <div class="aa-stat-icon"><i class="fas fa-users"></i></div>
+        <div class="aa-stat-info">
+            <h3>{{ total_enrolled }}</h3>
+            <p>Enrolled Students</p>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% for item in sessions_data %}
+<div class="aa-session-block">
+    <div class="aa-session-header">
+        <div class="aa-session-num">{{ item.session.session_number }}</div>
+        <div class="aa-session-title">
+            <h2>{{ item.session.title }}</h2>
+            <span class="aa-activity-count">{{ item.activities|length }} activit{{ 'y' if item.activities|length == 1 else 'ies' }}</span>
+        </div>
+        {% if item.session.is_visible %}
+        <span class="aa-vis-badge visible"><i class="fas fa-eye"></i> Visible</span>
+        {% else %}
+        <span class="aa-vis-badge hidden"><i class="fas fa-eye-slash"></i> Hidden</span>
+        {% endif %}
     </div>
 
     {% if item.activities %}
+    <div class="aa-activities-list">
         {% for activity in item.activities %}
-        <div class="activity-card {% if not activity.is_active %}activity-inactive{% endif %}">
-            <div class="activity-header">
-                <span class="activity-number">Activity {{ activity.activity_number }}</span>
-                <div class="flex gap-10" style="align-items: center;">
+        {% set ast = activity_stats.get(activity.id, {}) if activity_stats is defined else {} %}
+        <div class="aa-activity-card {% if not activity.is_active %}aa-inactive{% endif %}">
+            <div class="aa-activity-top">
+                <div class="aa-activity-left">
+                    <span class="aa-act-number">Activity {{ activity.activity_number }}</span>
+                    <h3 class="aa-act-title">{{ activity.title }}</h3>
+                    {% if activity.due_date %}
+                    <span class="aa-due"><i class="fas fa-calendar-alt"></i> Due: {{ activity.due_date }}{% if activity.due_time %} {{ activity.due_time }}{% endif %}</span>
+                    {% endif %}
+                </div>
+                <div class="aa-activity-right">
+                    <span class="aa-points"><i class="fas fa-star"></i> {{ activity.points }} pts</span>
                     {% if activity.file_path %}
-                    <a href="{{ url_for('view_activity_pdf', activity_id=activity.id) }}" target="_blank" class="btn-file">
-                        View Activities
+                    <a href="{{ url_for('view_activity_pdf', activity_id=activity.id) }}" target="_blank" class="btn btn-sm btn-success">
+                        <i class="fas fa-file-pdf"></i> View PDF
                     </a>
                     {% endif %}
-                    <span class="activity-points">{{ activity.points }} points</span>
                     {% if current_user.role == 'instructor' %}
-                    <div class="activity-toggle">
+                    <a href="{{ url_for('view_submissions', activity_id=activity.id) }}" class="btn btn-sm btn-primary">
+                        <i class="fas fa-eye"></i> Submissions
+                    </a>
+                    <div class="aa-toggle-wrap">
                         <label class="toggle-switch">
                             <input type="checkbox" onchange="toggleActivityActive({{ activity.id }})" {% if activity.is_active %}checked{% endif %}>
                             <span class="toggle-slider"></span>
                         </label>
                         {% if activity.is_active %}
-                        <span class="status-badge active"><i class="fas fa-unlock"></i> Open</span>
+                        <span class="aa-status open"><i class="fas fa-unlock"></i> Open</span>
                         {% else %}
-                        <span class="status-badge inactive"><i class="fas fa-lock"></i> Closed</span>
+                        <span class="aa-status closed"><i class="fas fa-lock"></i> Closed</span>
                         {% endif %}
                     </div>
                     {% endif %}
                 </div>
             </div>
-            <h3 class="activity-title">{{ activity.title }}</h3>
-            {% if activity.due_date %}
-            <p class="due-date"><i class="fas fa-clock"></i> Due: {{ activity.due_date }}</p>
+
+            {% if current_user.role == 'instructor' and total_enrolled is defined and total_enrolled > 0 %}
+            <div class="aa-progress-row">
+                <div class="aa-progress-info">
+                    <i class="fas fa-file-upload"></i>
+                    <span>{{ ast.get('submitted_count', 0)|int }}/{{ total_enrolled }} submitted</span>
+                </div>
+                <div class="aa-progress-bar">
+                    <div class="aa-progress-fill" style="width: {{ (ast.get('submitted_count', 0)|int / total_enrolled * 100)|round|int if total_enrolled > 0 else 0 }}%"></div>
+                </div>
+                {% if ast.get('graded_count', 0)|int > 0 %}
+                <span class="aa-avg-score"><i class="fas fa-chart-bar"></i> avg {{ ast.get('avg_score', 0)|round(1) }}%</span>
+                {% endif %}
+            </div>
             {% endif %}
-            <div class="activity-instructions">
+
+            {% if activity.instructions %}
+            <div class="aa-instructions">
                 {{ activity.instructions | safe }}
             </div>
+            {% endif %}
         </div>
         {% endfor %}
+    </div>
     {% else %}
-        <p class="no-activities">No activities for this session yet.</p>
+    <div class="aa-empty">
+        <i class="fas fa-inbox"></i>
+        <p>No activities for this session yet.</p>
+    </div>
     {% endif %}
 </div>
 {% endfor %}
 
 <style>
-.schedule-badge {
-    background: #0EA5E9;
-    color: white;
-    padding: 6px 12px;
-    border-radius: 20px;
-    font-size: 0.85rem;
-    font-weight: 600;
-    display: inline-block;
-    margin-bottom: 10px;
+/* Summary Stats Grid */
+.aa-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
 }
 
-.section-info {
-    color: #6B7280;
-    font-size: 0.95rem;
-    margin-top: 5px;
-}
-
-.session-block {
-    margin-bottom: 40px;
-    border: 2px solid #E0F2FE;
-    border-radius: 12px;
-    padding: 20px;
-    background: #FAFEFF;
-}
-
-.session-header {
-    background: #0EA5E9;
-    color: white;
-    padding: 15px 20px;
-    margin: -20px -20px 20px -20px;
-    border-radius: 10px 10px 0 0;
-}
-
-.session-header h2 {
-    margin: 0;
-    font-size: 1.2rem;
-}
-
-.activity-card {
+.aa-stat-card {
     background: white;
-    border: 1px solid #E0F2FE;
-    border-radius: 8px;
-    padding: 20px;
-    margin-bottom: 15px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    border-radius: 12px;
+    padding: 1.25rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    transition: transform 0.2s;
 }
 
-.activity-header {
+.aa-stat-card:hover { transform: translateY(-2px); }
+
+.aa-stat-card.purple { border-left: 4px solid #8B5CF6; }
+.aa-stat-card.blue   { border-left: 4px solid #0EA5E9; }
+.aa-stat-card.green  { border-left: 4px solid #10B981; }
+.aa-stat-card.orange { border-left: 4px solid #F59E0B; }
+
+.aa-stat-icon {
+    width: 46px;
+    height: 46px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.3rem;
+}
+
+.aa-stat-card.purple .aa-stat-icon { background: #EDE9FE; color: #7C3AED; }
+.aa-stat-card.blue .aa-stat-icon   { background: #E0F2FE; color: #0284C7; }
+.aa-stat-card.green .aa-stat-icon  { background: #D1FAE5; color: #059669; }
+.aa-stat-card.orange .aa-stat-icon { background: #FEF3C7; color: #D97706; }
+
+.aa-stat-info h3 { margin: 0; font-size: 1.5rem; color: #1F2937; }
+.aa-stat-info p  { margin: 0; color: #6B7280; font-size: 0.85rem; }
+
+/* Session Block */
+.aa-session-block {
+    background: white;
+    border-radius: 12px;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    overflow: hidden;
+}
+
+.aa-session-header {
+    background: linear-gradient(135deg, #8B5CF6 0%, #6D28D9 100%);
+    color: white;
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.aa-session-num {
+    width: 40px;
+    height: 40px;
+    background: rgba(255,255,255,0.2);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    font-weight: 800;
+    flex-shrink: 0;
+}
+
+.aa-session-title { flex: 1; }
+.aa-session-title h2 { margin: 0; font-size: 1.05rem; font-weight: 600; }
+.aa-activity-count {
+    font-size: 0.8rem;
+    opacity: 0.8;
+}
+
+.aa-vis-badge {
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    flex-shrink: 0;
+}
+.aa-vis-badge.visible { background: rgba(255,255,255,0.2); }
+.aa-vis-badge.hidden  { background: rgba(239,68,68,0.3); }
+.aa-vis-badge i { margin-right: 4px; }
+
+/* Activities List */
+.aa-activities-list {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.aa-activity-card {
+    border: 1px solid #E5E7EB;
+    border-radius: 10px;
+    padding: 16px;
+    transition: all 0.2s;
+}
+
+.aa-activity-card:hover {
+    border-color: #C4B5FD;
+    box-shadow: 0 2px 8px rgba(139,92,246,0.1);
+}
+
+.aa-inactive {
+    opacity: 0.6;
+    border-color: #FCA5A5;
+    background: #FFF5F5;
+}
+
+.aa-activity-top {
     display: flex;
     justify-content: space-between;
-    align-items: center;
-    margin-bottom: 12px;
+    align-items: flex-start;
+    gap: 12px;
+    flex-wrap: wrap;
 }
 
-.activity-number {
-    background: #10B981;
+.aa-activity-left { flex: 1; min-width: 200px; }
+
+.aa-act-number {
+    display: inline-block;
+    background: linear-gradient(135deg, #10B981, #059669);
     color: white;
-    padding: 4px 12px;
-    border-radius: 20px;
-    font-weight: 600;
-    font-size: 0.85rem;
+    padding: 3px 10px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
-.activity-points {
-    background: #FEF3C7;
-    color: #D97706;
-    padding: 4px 12px;
-    border-radius: 20px;
-    font-weight: 600;
-    font-size: 0.85rem;
-}
-
-.btn-file {
-    background: #10B981;
-    color: white;
-    padding: 4px 12px;
-    border-radius: 20px;
-    font-weight: 600;
-    font-size: 0.85rem;
-    text-decoration: none;
-    transition: background 0.2s;
-}
-
-.btn-file:hover {
-    background: #059669;
-}
-
-.activity-title {
+.aa-act-title {
     color: #1F2937;
-    font-size: 1.1rem;
-    margin-bottom: 10px;
-    padding-bottom: 8px;
-    border-bottom: 1px solid #E0F2FE;
-}
-
-.activity-instructions {
-    color: #374151;
-    font-size: 0.95rem;
-    line-height: 1.6;
-}
-
-.activity-instructions h4 {
-    color: #0EA5E9;
-    margin: 15px 0 10px 0;
     font-size: 1rem;
+    margin: 8px 0 4px 0;
+    font-weight: 600;
 }
 
-.activity-instructions ul, .activity-instructions ol {
-    margin: 0 0 15px 20px;
+.aa-due {
+    color: #D97706;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+.aa-due i { margin-right: 4px; }
+
+.aa-activity-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.aa-points {
+    background: linear-gradient(135deg, #FEF3C7, #FDE68A);
+    color: #B45309;
+    padding: 5px 12px;
+    border-radius: 8px;
+    font-weight: 700;
+    font-size: 0.8rem;
+    white-space: nowrap;
+}
+.aa-points i { margin-right: 4px; color: #F59E0B; }
+
+.aa-toggle-wrap {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.aa-status {
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 6px;
+}
+.aa-status.open   { background: #D1FAE5; color: #059669; }
+.aa-status.closed { background: #FEE2E2; color: #DC2626; }
+
+/* Progress Row */
+.aa-progress-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #F3F4F6;
+    font-size: 0.8rem;
+}
+
+.aa-progress-info {
+    color: #6B7280;
+    font-weight: 500;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.aa-progress-info i { color: #8B5CF6; }
+
+.aa-progress-bar {
+    flex: 1;
+    height: 6px;
+    background: #E5E7EB;
+    border-radius: 3px;
+    overflow: hidden;
+    min-width: 80px;
+}
+
+.aa-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #8B5CF6, #6D28D9);
+    border-radius: 3px;
+    transition: width 0.6s ease;
+}
+
+.aa-avg-score {
+    color: #10B981;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.aa-avg-score i { margin-right: 3px; }
+
+/* Instructions */
+.aa-instructions {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #F3F4F6;
+    color: #374151;
+    font-size: 0.9rem;
+    line-height: 1.7;
+}
+
+.aa-instructions h4 {
+    color: #7C3AED;
+    margin: 14px 0 8px 0;
+    font-size: 0.95rem;
+}
+
+.aa-instructions ul, .aa-instructions ol {
+    margin: 0 0 12px 20px;
     padding: 0;
 }
 
-.activity-instructions li {
-    margin-bottom: 5px;
-}
+.aa-instructions li { margin-bottom: 4px; }
 
-.activity-instructions .task-table {
+.aa-instructions .task-table {
     width: 100%;
     border-collapse: collapse;
     margin: 10px 0 15px 0;
-    font-size: 0.9rem;
+    font-size: 0.85rem;
+    border-radius: 8px;
+    overflow: hidden;
 }
 
-.activity-instructions .task-table th {
-    background: #0EA5E9;
+.aa-instructions .task-table th {
+    background: linear-gradient(135deg, #8B5CF6, #6D28D9);
     color: white;
     padding: 10px 12px;
     text-align: left;
     font-weight: 600;
 }
 
-.activity-instructions .task-table th:first-child {
-    width: 60px;
-    text-align: center;
-}
+.aa-instructions .task-table th:first-child { width: 60px; text-align: center; }
+.aa-instructions .task-table th:last-child  { width: 80px; text-align: center; }
 
-.activity-instructions .task-table th:last-child {
-    width: 80px;
-    text-align: center;
-}
-
-.activity-instructions .task-table td {
+.aa-instructions .task-table td {
     padding: 10px 12px;
-    border-bottom: 1px solid #E0F2FE;
+    border-bottom: 1px solid #F3F4F6;
 }
 
-.activity-instructions .task-table td:first-child {
-    text-align: center;
-    font-weight: 600;
-    color: #0EA5E9;
-}
+.aa-instructions .task-table td:first-child { text-align: center; font-weight: 600; color: #8B5CF6; }
+.aa-instructions .task-table td:last-child  { text-align: center; font-weight: 600; color: #10B981; }
+.aa-instructions .task-table tr:hover { background: #F5F3FF; }
 
-.activity-instructions .task-table td:last-child {
-    text-align: center;
-    font-weight: 600;
-    color: #10B981;
-}
-
-.activity-instructions .task-table tr:hover {
-    background: #F0F9FF;
-}
-
-.activity-instructions .formula-box {
+.aa-instructions .formula-box {
     background: #FEF3C7;
     border: 1px solid #F59E0B;
     border-radius: 8px;
@@ -232,47 +440,16 @@
     margin: 10px 0;
 }
 
-.no-activities {
-    color: #6B7280;
+/* Empty State */
+.aa-empty {
     text-align: center;
-    padding: 20px;
+    padding: 30px 20px;
+    color: #9CA3AF;
 }
+.aa-empty i { font-size: 2rem; margin-bottom: 8px; display: block; }
+.aa-empty p { margin: 0; }
 
-.activity-inactive {
-    opacity: 0.7;
-    border-color: #FCA5A5;
-    background: #FEF2F2;
-}
-
-.activity-toggle {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.status-badge {
-    padding: 4px 10px;
-    border-radius: 12px;
-    font-size: 0.75rem;
-    font-weight: 600;
-}
-
-.status-badge.active {
-    background: #D1FAE5;
-    color: #059669;
-}
-
-.status-badge.inactive {
-    background: #FEE2E2;
-    color: #DC2626;
-}
-
-.due-date {
-    color: #F59E0B;
-    font-size: 0.9rem;
-    margin-bottom: 10px;
-}
-
+/* Toggle Switch */
 .toggle-switch {
     position: relative;
     display: inline-block;
@@ -289,10 +466,7 @@
 .toggle-slider {
     position: absolute;
     cursor: pointer;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
+    top: 0; left: 0; right: 0; bottom: 0;
     background-color: #ccc;
     transition: .3s;
     border-radius: 22px;
@@ -310,12 +484,14 @@
     border-radius: 50%;
 }
 
-input:checked + .toggle-slider {
-    background-color: #10B981;
-}
+input:checked + .toggle-slider { background-color: #10B981; }
+input:checked + .toggle-slider:before { transform: translateX(18px); }
 
-input:checked + .toggle-slider:before {
-    transform: translateX(18px);
+/* Responsive */
+@media (max-width: 768px) {
+    .aa-activity-top { flex-direction: column; }
+    .aa-activity-right { justify-content: flex-start; }
+    .aa-progress-row { flex-wrap: wrap; }
 }
 </style>
 

@@ -1320,27 +1320,97 @@ def subject_detail(id):
     enrolled_students = cursor.fetchall()
     total_enrolled = len(enrolled_students)
 
-    # Get per-session completion stats: which students submitted for each session
+    # Batch queries for per-session performance stats
+    session_ids = [s['id'] for s in sessions]
     session_stats = {}
-    for s in sessions:
-        cursor.execute('''
-            SELECT DISTINCT u.id, u.full_name, u.photo
+
+    if session_ids:
+        placeholders = ','.join(['?'] * len(session_ids))
+
+        # Query 1: Activity submission stats per session
+        cursor.execute(f'''
+            SELECT a.session_id,
+                   COUNT(DISTINCT a.id) as activity_count,
+                   COUNT(DISTINCT sub.id) as submission_count,
+                   COUNT(DISTINCT sub.student_id) as students_submitted,
+                   AVG(CASE WHEN sub.final_score IS NOT NULL THEN sub.final_score
+                        WHEN sub.score IS NOT NULL THEN sub.score END) as avg_score,
+                   SUM(CASE WHEN sub.score IS NOT NULL OR sub.final_score IS NOT NULL THEN 1 ELSE 0 END) as graded_count
+            FROM activities a
+            LEFT JOIN submissions sub ON a.id = sub.activity_id
+            WHERE a.session_id IN ({placeholders})
+            GROUP BY a.session_id
+        ''', session_ids)
+        activity_stats = {row['session_id']: dict(row) for row in cursor.fetchall()}
+
+        # Query 2: Quiz stats per session
+        cursor.execute(f'''
+            SELECT q.session_id,
+                   COUNT(DISTINCT q.id) as quiz_count,
+                   COUNT(DISTINCT qa.student_id) as students_attempted,
+                   AVG(qa.score) as avg_score,
+                   MAX(qa.score) as max_score
+            FROM quizzes q
+            LEFT JOIN quiz_attempts qa ON q.id = qa.quiz_id
+            WHERE q.session_id IN ({placeholders})
+            GROUP BY q.session_id
+        ''', session_ids)
+        quiz_stats = {row['session_id']: dict(row) for row in cursor.fetchall()}
+
+        # Query 3: Peer review stats per session
+        cursor.execute(f'''
+            SELECT a.session_id,
+                   COUNT(DISTINCT a.id) as peer_review_activities,
+                   COUNT(DISTINCT pra.id) as total_assignments,
+                   SUM(CASE WHEN pra.is_completed = 1 THEN 1 ELSE 0 END) as completed_assignments
+            FROM activities a
+            JOIN submissions sub ON a.id = sub.activity_id
+            JOIN peer_review_assignments pra ON sub.id = pra.submission_id
+            WHERE a.session_id IN ({placeholders}) AND a.enable_peer_review = 1
+            GROUP BY a.session_id
+        ''', session_ids)
+        peer_stats = {row['session_id']: dict(row) for row in cursor.fetchall()}
+
+        # Query 4: Completed students per session (batched)
+        cursor.execute(f'''
+            SELECT a.session_id, u.id, u.full_name, u.photo
             FROM submissions sub
             JOIN activities a ON sub.activity_id = a.id
             JOIN users u ON sub.student_id = u.id
-            WHERE a.session_id = ?
+            WHERE a.session_id IN ({placeholders})
+            GROUP BY a.session_id, u.id
             ORDER BY u.full_name
-        ''', (s['id'],))
-        completed_students = [dict(st) for st in cursor.fetchall()]
+        ''', session_ids)
+        completed_map = {}
+        for row in cursor.fetchall():
+            sid = row['session_id']
+            if sid not in completed_map:
+                completed_map[sid] = []
+            completed_map[sid].append(dict(row))
 
-        cursor.execute('SELECT COUNT(*) FROM activities WHERE session_id = ?', (s['id'],))
-        activity_count = cursor.fetchone()[0]
+        # Assemble enriched session_stats
+        for s in sessions:
+            sid = s['id']
+            act = activity_stats.get(sid, {})
+            quiz = quiz_stats.get(sid, {})
+            pr = peer_stats.get(sid, {})
 
-        session_stats[s['id']] = {
-            'completed_students': completed_students,
-            'completed_count': len(completed_students),
-            'activity_count': activity_count
-        }
+            session_stats[sid] = {
+                'completed_students': completed_map.get(sid, []),
+                'completed_count': len(completed_map.get(sid, [])),
+                'activity_count': act.get('activity_count', 0),
+                'submission_count': act.get('submission_count', 0),
+                'students_submitted': act.get('students_submitted', 0),
+                'avg_score': round(act.get('avg_score') or 0, 1),
+                'graded_count': act.get('graded_count', 0),
+                'quiz_count': quiz.get('quiz_count', 0),
+                'quiz_students_attempted': quiz.get('students_attempted', 0),
+                'quiz_avg_score': round(quiz.get('avg_score') or 0, 1),
+                'quiz_max_score': round(quiz.get('max_score') or 0, 1),
+                'peer_review_activities': pr.get('peer_review_activities', 0),
+                'peer_review_total': pr.get('total_assignments', 0),
+                'peer_review_completed': pr.get('completed_assignments', 0),
+            }
 
     conn.close()
     return render_template('sessions.html', subject=subject, sessions=sessions,
@@ -1358,9 +1428,32 @@ def all_activities(subject_id):
     cursor.execute('SELECT * FROM subjects WHERE id = ?', (subject_id,))
     subject = cursor.fetchone()
 
+    # Get enrolled count
+    cursor.execute('SELECT COUNT(*) FROM enrollments WHERE subject_id = ?', (subject_id,))
+    total_enrolled = cursor.fetchone()[0]
+
     # Get all sessions with their activities
     cursor.execute('SELECT * FROM sessions WHERE subject_id = ? ORDER BY session_number', (subject_id,))
     sessions = cursor.fetchall()
+
+    # Get submission stats per activity in one batch
+    session_ids = [s['id'] for s in sessions]
+    activity_stats = {}
+    if session_ids:
+        placeholders = ','.join(['?'] * len(session_ids))
+        cursor.execute(f'''
+            SELECT a.id as activity_id,
+                   COUNT(DISTINCT sub.student_id) as submitted_count,
+                   AVG(CASE WHEN sub.score IS NOT NULL THEN sub.score
+                        WHEN sub.final_score IS NOT NULL THEN sub.final_score END) as avg_score,
+                   SUM(CASE WHEN sub.score IS NOT NULL OR sub.final_score IS NOT NULL THEN 1 ELSE 0 END) as graded_count
+            FROM activities a
+            LEFT JOIN submissions sub ON a.id = sub.activity_id
+            WHERE a.session_id IN ({placeholders})
+            GROUP BY a.id
+        ''', session_ids)
+        for row in cursor.fetchall():
+            activity_stats[row['activity_id']] = dict(row)
 
     sessions_with_activities = []
     for session in sessions:
@@ -1372,7 +1465,8 @@ def all_activities(subject_id):
         })
 
     conn.close()
-    return render_template('all_activities.html', subject=subject, sessions_data=sessions_with_activities)
+    return render_template('all_activities.html', subject=subject, sessions_data=sessions_with_activities,
+                           total_enrolled=total_enrolled, activity_stats=activity_stats)
 
 @app.route('/session/<int:session_id>/activities')
 @login_required
@@ -1671,14 +1765,22 @@ def grade_activity(activity_id):
     conn.commit()
     conn.close()
     flash('Grade saved successfully!', 'success')
+
+    # Support redirecting back to peer review status page
+    redirect_to = request.form.get('redirect_to', '')
+    if redirect_to == 'peer_review_status':
+        return redirect(url_for('peer_review_status', activity_id=activity_id))
     return redirect(url_for('view_submissions', activity_id=activity_id))
 
 
 def calculate_participation_score(cursor, student_id, activity_id, max_points):
     """
-    Calculate participation score for a student as a PERCENTAGE (0-100) based on:
-    1. Completing assigned peer reviews (50% of participation)
-    2. Quality of reviews - rated by instructor (50% of participation)
+    Calculate participation score for a student as a PERCENTAGE (0-100) based on
+    instructor approval of their peer reviews.
+
+    - approved reviews / total assignments * 100
+    - If no assignments exist -> 100% (not required to review)
+    - Completed but not yet approved -> counts as 0 until instructor approves
 
     Returns: percentage score (0-100)
     """
@@ -1696,27 +1798,11 @@ def calculate_participation_score(cursor, student_id, activity_id, max_points):
         return 100  # Return 100%
 
     total_assignments = len(assignments)
-    completed_assignments = sum(1 for a in assignments if a['is_completed'])
+    approved_count = sum(1 for a in assignments
+                         if 'approval_status' in a.keys() and a['approval_status'] == 'approved')
 
-    # Completion score (50% of participation = 50 percentage points max)
-    completion_rate = completed_assignments / total_assignments if total_assignments > 0 else 0
-    completion_score = completion_rate * 50  # 0-50 points
-
-    # Quality score (50% of participation = 50 percentage points max)
-    # Based on instructor-rated review quality (review_quality_score is 0-100)
-    quality_scores = []
-    for a in assignments:
-        if a['is_completed'] and 'review_quality_score' in a.keys() and a['review_quality_score'] is not None:
-            quality_scores.append(a['review_quality_score'])
-
-    if quality_scores:
-        avg_quality = sum(quality_scores) / len(quality_scores)
-        quality_score = (avg_quality / 100) * 50  # Convert to 0-50 range
-    else:
-        # If no quality ratings yet, give benefit of the doubt for completed reviews
-        quality_score = completion_rate * 50
-
-    return completion_score + quality_score  # Returns 0-100
+    # Participation = percentage of approved reviews
+    return (approved_count / total_assignments) * 100 if total_assignments > 0 else 0
 
 @app.route('/activity/<int:activity_id>/submissions')
 @login_required
@@ -1900,6 +1986,68 @@ def assign_peer_reviewers(activity_id):
     keys = activity.keys()
     peer_reviewers_count = activity['peer_reviewers_count'] if 'peer_reviewers_count' in keys else 1
 
+    # Auto-generate topic-specific review criteria if none exist
+    cursor.execute('SELECT COUNT(*) FROM peer_review_criteria WHERE activity_id = ?', (activity_id,))
+    if cursor.fetchone()[0] == 0:
+        import re
+        # Get session title for topic context
+        cursor.execute('''
+            SELECT s.title as session_title, a.title as activity_title, a.instructions
+            FROM activities a JOIN sessions s ON a.session_id = s.id WHERE a.id = ?
+        ''', (activity_id,))
+        info = cursor.fetchone()
+        session_topic = info['session_title'] if info else 'the lesson'
+        act_title = info['activity_title'] if info else 'the activity'
+        instructions_html = info['instructions'] if info and info['instructions'] else ''
+
+        # Extract key tasks/objectives from instructions HTML
+        task_items = []
+        # Extract <li> items
+        li_matches = re.findall(r'<li[^>]*>(.*?)</li>', instructions_html, re.DOTALL)
+        for item in li_matches:
+            clean = re.sub(r'<[^>]+>', '', item).strip()
+            if clean and len(clean) > 10 and len(clean) < 150:
+                task_items.append(clean)
+        # Extract <td> descriptions from task tables (skip header and number/points columns)
+        td_matches = re.findall(r'<td[^>]*>(.*?)</td>', instructions_html, re.DOTALL)
+        for item in td_matches:
+            clean = re.sub(r'<[^>]+>', '', item).strip()
+            if clean and len(clean) > 15 and not clean.isdigit():
+                task_items.append(clean)
+
+        # Build specific criteria from extracted content
+        criteria = []
+        order = 1
+        # Add topic-level question
+        criteria.append((f'Did the student demonstrate understanding of "{session_topic}"?', 1, order))
+        order += 1
+
+        # Add task-specific questions (up to 4)
+        seen = set()
+        for task in task_items[:6]:
+            if task.lower() not in seen and len(criteria) < 6:
+                seen.add(task.lower())
+                criteria.append((f'Did the student mention or show: "{task}"?', 1, order))
+                order += 1
+
+        # Fill remaining with general criteria if less than 4 total
+        if len(criteria) < 3:
+            criteria.append((f'Did the student follow the instructions for "{act_title}" correctly?', 1, order))
+            order += 1
+        if len(criteria) < 4:
+            criteria.append(('Is the submission complete with all required deliverables?', 1, order))
+            order += 1
+        if len(criteria) < 5:
+            criteria.append(('Would you consider this submission satisfactory overall?', 1, order))
+            order += 1
+
+        for criterion, points, order_num in criteria:
+            cursor.execute('''
+                INSERT INTO peer_review_criteria (activity_id, criterion, points, order_num)
+                VALUES (?, ?, ?, ?)
+            ''', (activity_id, criterion, points, order_num))
+        conn.commit()
+
     # Get all submissions for this activity
     cursor.execute('''
         SELECT s.id, s.student_id FROM submissions s
@@ -2017,10 +2165,11 @@ def student_peer_reviews():
     ''', (current_user.id,))
     pending_reviews = cursor.fetchall()
 
-    # Get completed peer reviews
+    # Get completed peer reviews with score given
     cursor.execute('''
         SELECT pra.*, s.content, a.title as activity_title, a.id as activity_id,
-               ses.title as session_title, sub.name as subject_name
+               ses.title as session_title, sub.name as subject_name,
+               (SELECT AVG(points_awarded) FROM peer_review_responses WHERE assignment_id = pra.id) as review_score
         FROM peer_review_assignments pra
         JOIN submissions s ON pra.submission_id = s.id
         JOIN activities a ON s.activity_id = a.id
@@ -2031,10 +2180,25 @@ def student_peer_reviews():
     ''', (current_user.id,))
     completed_reviews = cursor.fetchall()
 
+    # Get the student's own submissions that have peer review scores
+    cursor.execute('''
+        SELECT s.peer_review_score, a.title as activity_title,
+               ses.title as session_title, sub.name as subject_name,
+               (SELECT COUNT(*) FROM peer_review_assignments WHERE submission_id = s.id AND is_completed = 1) as reviews_received
+        FROM submissions s
+        JOIN activities a ON s.activity_id = a.id
+        JOIN sessions ses ON a.session_id = ses.id
+        JOIN subjects sub ON ses.subject_id = sub.id
+        WHERE s.student_id = ? AND a.enable_peer_review = 1 AND s.peer_review_score IS NOT NULL
+        ORDER BY s.submitted_at DESC
+    ''', (current_user.id,))
+    my_scores = cursor.fetchall()
+
     conn.close()
     return render_template('student_peer_reviews.html',
                            pending_reviews=pending_reviews,
-                           completed_reviews=completed_reviews)
+                           completed_reviews=completed_reviews,
+                           my_scores=my_scores)
 
 
 @app.route('/peer-review/<int:assignment_id>')
@@ -2182,7 +2346,7 @@ def submit_peer_review(assignment_id):
 @app.route('/activity/<int:activity_id>/peer-review/status')
 @login_required
 def peer_review_status(activity_id):
-    """Instructor view of peer review status and scores"""
+    """Instructor view of peer review status, approve/reject reviews, and grade submissions"""
     if current_user.role != 'instructor':
         return redirect(url_for('student_dashboard'))
 
@@ -2197,20 +2361,70 @@ def peer_review_status(activity_id):
         conn.close()
         return redirect(url_for('dashboard'))
 
-    # Get all submissions with their peer review status
+    max_points = activity['points'] if activity['points'] else 100
+
+    # Get all submissions with peer review stats
     cursor.execute('''
-        SELECT s.*, u.full_name, u.student_id as sid,
+        SELECT s.*, u.full_name, u.student_id as sid, u.photo,
                (SELECT COUNT(*) FROM peer_review_assignments WHERE submission_id = s.id) as total_reviewers,
-               (SELECT COUNT(*) FROM peer_review_assignments WHERE submission_id = s.id AND is_completed = 1) as completed_reviews
+               (SELECT COUNT(*) FROM peer_review_assignments WHERE submission_id = s.id AND is_completed = 1) as completed_reviews,
+               (SELECT COUNT(*) FROM peer_review_assignments WHERE submission_id = s.id AND approval_status = 'approved') as approved_reviews,
+               (SELECT COUNT(*) FROM peer_review_assignments WHERE submission_id = s.id AND approval_status = 'rejected') as rejected_reviews
         FROM submissions s
         JOIN users u ON s.student_id = u.id
         WHERE s.activity_id = ?
         ORDER BY u.full_name
     ''', (activity_id,))
-    submissions = cursor.fetchall()
+    submissions_raw = cursor.fetchall()
+
+    # Enrich each submission with reviews, files, and reviewer participation info
+    submissions = []
+    for sub in submissions_raw:
+        sub_dict = dict(sub)
+
+        # Get submission files
+        cursor.execute('SELECT * FROM submission_files WHERE submission_id = ?', (sub['id'],))
+        sub_dict['files'] = cursor.fetchall()
+
+        # Get peer reviews for this submission
+        cursor.execute('''
+            SELECT pra.*, u.full_name as reviewer_name, u.student_id as reviewer_sid,
+                   (SELECT AVG(points_awarded) FROM peer_review_responses WHERE assignment_id = pra.id) as review_avg
+            FROM peer_review_assignments pra
+            JOIN users u ON pra.reviewer_id = u.id
+            WHERE pra.submission_id = ?
+            ORDER BY pra.is_completed DESC, pra.assigned_at
+        ''', (sub['id'],))
+        reviews = cursor.fetchall()
+        sub_dict['reviews'] = []
+        for rev in reviews:
+            rev_dict = dict(rev)
+            if rev['is_completed']:
+                cursor.execute('''
+                    SELECT prr.*, COALESCE(prc.criterion, 'Review criterion') as criterion
+                    FROM peer_review_responses prr
+                    LEFT JOIN peer_review_criteria prc ON prr.criterion_id = prc.id
+                    WHERE prr.assignment_id = ?
+                    ORDER BY prr.id
+                ''', (rev['id'],))
+                rev_dict['responses'] = cursor.fetchall()
+            else:
+                rev_dict['responses'] = []
+            sub_dict['reviews'].append(rev_dict)
+
+        submissions.append(sub_dict)
+
+    # Summary stats
+    total_subs = len(submissions)
+    graded_count = sum(1 for s in submissions if s.get('instructor_score') is not None)
+    all_reviewed = sum(1 for s in submissions if s['completed_reviews'] == s['total_reviewers'] and s['total_reviewers'] > 0)
 
     conn.close()
-    return render_template('peer_review_status.html', activity=activity, submissions=submissions)
+    return render_template('peer_review_status.html',
+                           activity=activity, submissions=submissions,
+                           max_points=max_points,
+                           total_subs=total_subs, graded_count=graded_count,
+                           all_reviewed=all_reviewed)
 
 
 @app.route('/activity/<int:activity_id>/peer-review/reviews')
@@ -2236,7 +2450,8 @@ def view_peer_reviews(activity_id):
         SELECT pra.*,
                reviewer.full_name as reviewer_name, reviewer.student_id as reviewer_sid,
                submitter.full_name as submitter_name, submitter.student_id as submitter_sid,
-               s.content as submission_content
+               s.content as submission_content, s.file_path as submission_file_path,
+               s.id as sub_id
         FROM peer_review_assignments pra
         JOIN submissions s ON pra.submission_id = s.id
         JOIN users reviewer ON pra.reviewer_id = reviewer.id
@@ -2250,18 +2465,29 @@ def view_peer_reviews(activity_id):
     cursor.execute('SELECT * FROM peer_review_criteria WHERE activity_id = ? ORDER BY order_num', (activity_id,))
     criteria = cursor.fetchall()
 
-    # Get responses for each review
+    # Get responses and files for each review
     reviews_with_responses = []
     for review in reviews:
         review_dict = dict(review)
         cursor.execute('''
-            SELECT prr.*, prc.criterion
+            SELECT prr.*, COALESCE(prc.criterion, 'Review criterion') as criterion
             FROM peer_review_responses prr
-            JOIN peer_review_criteria prc ON prr.criterion_id = prc.id
+            LEFT JOIN peer_review_criteria prc ON prr.criterion_id = prc.id
             WHERE prr.assignment_id = ?
-            ORDER BY prc.order_num
+            ORDER BY prr.id
         ''', (review['id'],))
         review_dict['responses'] = cursor.fetchall()
+
+        # Get submission files
+        cursor.execute('SELECT * FROM submission_files WHERE submission_id = ?', (review['sub_id'],))
+        review_dict['files'] = cursor.fetchall()
+
+        # Calculate average score for this review from direct query
+        cursor.execute('SELECT AVG(points_awarded) as avg FROM peer_review_responses WHERE assignment_id = ?',
+                       (review['id'],))
+        avg_row = cursor.fetchone()
+        review_dict['avg_score'] = round(avg_row['avg'], 1) if avg_row and avg_row['avg'] else None
+
         reviews_with_responses.append(review_dict)
 
     conn.close()
@@ -2271,43 +2497,97 @@ def view_peer_reviews(activity_id):
                            criteria=criteria)
 
 
-@app.route('/peer-review/<int:assignment_id>/rate', methods=['POST'])
+@app.route('/peer-review/<int:assignment_id>/approve', methods=['POST'])
 @login_required
-def rate_peer_review(assignment_id):
-    """Instructor rates the quality of a peer review"""
+def approve_reject_peer_review(assignment_id):
+    """Instructor approves or rejects a peer review - approved = 25% participation grade"""
     if current_user.role != 'instructor':
         return redirect(url_for('student_dashboard'))
 
-    quality_score = float(request.form.get('quality_score', 0))
+    action = request.form.get('action', '')  # 'approve' or 'reject'
     instructor_feedback = request.form.get('instructor_feedback', '')
+
+    if action not in ('approve', 'reject'):
+        flash('Invalid action', 'error')
+        return redirect(url_for('dashboard'))
 
     conn = get_db()
     cursor = conn.cursor()
 
-    # Get the activity_id for redirect
+    # Get the assignment details including reviewer and activity info
     cursor.execute('''
-        SELECT s.activity_id FROM peer_review_assignments pra
+        SELECT pra.*, s.activity_id, s.student_id as submitter_id,
+               a.points as max_points, a.enable_peer_review
+        FROM peer_review_assignments pra
         JOIN submissions s ON pra.submission_id = s.id
+        JOIN activities a ON s.activity_id = a.id
         WHERE pra.id = ?
     ''', (assignment_id,))
-    result = cursor.fetchone()
+    assignment = cursor.fetchone()
 
-    if not result:
+    if not assignment:
         flash('Review not found', 'error')
         conn.close()
         return redirect(url_for('dashboard'))
 
-    activity_id = result['activity_id']
+    activity_id = assignment['activity_id']
+    reviewer_id = assignment['reviewer_id']
+    max_points = assignment['max_points'] or 100
 
+    # Update the assignment with approval status
+    quality_score = 100 if action == 'approve' else 0
     cursor.execute('''
         UPDATE peer_review_assignments
-        SET review_quality_score = ?, instructor_feedback = ?
+        SET approval_status = ?, review_quality_score = ?, instructor_feedback = ?
         WHERE id = ?
-    ''', (quality_score, instructor_feedback, assignment_id))
+    ''', ('approved' if action == 'approve' else 'rejected', quality_score, instructor_feedback, assignment_id))
+
+    # Recalculate reviewer's participation score for this activity
+    participation_score = calculate_participation_score(cursor, reviewer_id, activity_id, max_points)
+
+    # Find and update the reviewer's own submission for this activity
+    cursor.execute('''
+        SELECT s.*, a.points as max_points
+        FROM submissions s
+        JOIN activities a ON s.activity_id = a.id
+        WHERE s.student_id = ? AND s.activity_id = ?
+    ''', (reviewer_id, activity_id))
+    reviewer_submission = cursor.fetchone()
+
+    if reviewer_submission:
+        # Update participation_score
+        cursor.execute('''
+            UPDATE submissions SET participation_score = ? WHERE id = ?
+        ''', (participation_score, reviewer_submission['id']))
+
+        # If instructor has already graded this submission, recalculate final_score
+        if reviewer_submission['instructor_score'] is not None:
+            instructor_score = reviewer_submission['instructor_score']
+            peer_review_score = reviewer_submission['peer_review_score'] or 60
+            sub_max = reviewer_submission['max_points'] or 100
+
+            peer_component = (peer_review_score / 100) * 25
+            participation_component = (participation_score / 100) * 25
+            instructor_component = (instructor_score / sub_max) * 50 if sub_max > 0 else 0
+            final_percentage = peer_component + participation_component + instructor_component
+            final_score = (final_percentage / 100) * sub_max
+
+            late_penalty = reviewer_submission['late_penalty'] if reviewer_submission['late_penalty'] else 0
+            final_score = max(0, final_score - late_penalty)
+
+            cursor.execute('''
+                UPDATE submissions SET final_score = ? WHERE id = ?
+            ''', (final_score, reviewer_submission['id']))
+
     conn.commit()
     conn.close()
 
-    flash('Review quality rating saved!', 'success')
+    status_text = 'approved' if action == 'approve' else 'rejected'
+    flash(f'Peer review {status_text}! Reviewer participation score updated to {participation_score:.0f}%', 'success')
+
+    redirect_to = request.form.get('redirect_to', '')
+    if redirect_to == 'peer_review_status':
+        return redirect(url_for('peer_review_status', activity_id=activity_id))
     return redirect(url_for('view_peer_reviews', activity_id=activity_id))
 
 

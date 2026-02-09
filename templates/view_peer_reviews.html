@@ -23,19 +23,19 @@
         <div class="scoring-info">
             <h4><i class="fas fa-info-circle"></i> Activity Scoring Breakdown</h4>
             <div class="score-breakdown-grid">
-                <div class="score-item">
-                    <span class="score-percent">25%</span>
-                    <span class="score-label">Peer Review Score</span>
+                <div class="sb-item">
+                    <span class="sb-percent">25%</span>
+                    <span class="sb-label">Peer Review Score</span>
                     <small>Average score from classmates</small>
                 </div>
-                <div class="score-item">
-                    <span class="score-percent">25%</span>
-                    <span class="score-label">Participation Score</span>
-                    <small>Quality of reviews given to others</small>
+                <div class="sb-item">
+                    <span class="sb-percent">25%</span>
+                    <span class="sb-label">Participation Score</span>
+                    <small>Approved peer reviews given</small>
                 </div>
-                <div class="score-item">
-                    <span class="score-percent">50%</span>
-                    <span class="score-label">Instructor Score</span>
+                <div class="sb-item">
+                    <span class="sb-percent">50%</span>
+                    <span class="sb-label">Instructor Score</span>
                     <small>Your grading</small>
                 </div>
             </div>
@@ -44,103 +44,185 @@
 </div>
 
 {% if reviews %}
-<div class="card">
-    <div class="card-header">
-        <span class="card-title"><i class="fas fa-user-check"></i> Completed Reviews ({{ reviews|length }})</span>
+{% set approved_count = [] %}
+{% set rejected_count = [] %}
+{% for r in reviews %}
+    {% if r.approval_status == 'approved' %}{% if approved_count.append(1) %}{% endif %}{% endif %}
+    {% if r.approval_status == 'rejected' %}{% if rejected_count.append(1) %}{% endif %}{% endif %}
+{% endfor %}
+{% set n_approved = approved_count|length %}
+{% set n_rejected = rejected_count|length %}
+{% set n_pending = reviews|length - n_approved - n_rejected %}
+
+<div class="review-stats-bar mb-20">
+    <div class="rs-stat total">
+        <i class="fas fa-clipboard-list"></i>
+        <span class="rs-num">{{ reviews|length }}</span>
+        <span class="rs-label">Total</span>
     </div>
-    <div class="card-body">
-        {% for review in reviews %}
-        <div class="review-card {% if review.review_quality_score is not none %}rated{% endif %}">
-            <div class="review-header">
-                <div class="review-participants">
-                    <div class="participant">
-                        <span class="label">Reviewer:</span>
-                        <strong>{{ review.reviewer_name }}</strong> ({{ review.reviewer_sid }})
-                    </div>
-                    <i class="fas fa-arrow-right"></i>
-                    <div class="participant">
-                        <span class="label">Reviewed:</span>
-                        <strong>{{ review.submitter_name }}</strong> ({{ review.submitter_sid }})
-                    </div>
-                </div>
-                <div class="review-status">
-                    {% if review.review_quality_score is not none %}
-                    <span class="badge badge-success">
-                        <i class="fas fa-star"></i> Quality: {{ "%.0f"|format(review.review_quality_score) }}%
-                    </span>
-                    {% else %}
-                    <span class="badge badge-warning">
-                        <i class="fas fa-clock"></i> Not Rated
-                    </span>
-                    {% endif %}
-                </div>
-            </div>
+    <div class="rs-stat approved">
+        <i class="fas fa-check-circle"></i>
+        <span class="rs-num">{{ n_approved }}</span>
+        <span class="rs-label">Approved</span>
+    </div>
+    <div class="rs-stat rejected">
+        <i class="fas fa-times-circle"></i>
+        <span class="rs-num">{{ n_rejected }}</span>
+        <span class="rs-label">Rejected</span>
+    </div>
+    <div class="rs-stat pending">
+        <i class="fas fa-clock"></i>
+        <span class="rs-num">{{ n_pending }}</span>
+        <span class="rs-label">Pending</span>
+    </div>
+</div>
 
-            <div class="review-responses">
-                <h5>Review Responses:</h5>
-                <table class="table table-sm">
-                    <thead>
-                        <tr>
-                            <th>Criterion</th>
-                            <th>Response</th>
-                            <th>Points</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for response in review.responses %}
-                        <tr>
-                            <td>{{ response.criterion }}</td>
-                            <td>
-                                {% if response.response == 'yes' %}
-                                <span class="response-yes"><i class="fas fa-check-circle"></i> Yes (100)</span>
-                                {% elif response.response == 'somehow' %}
-                                <span class="response-somehow"><i class="fas fa-minus-circle"></i> Somehow (85)</span>
-                                {% elif response.response == 'no' %}
-                                <span class="response-no"><i class="fas fa-times-circle"></i> No (70)</span>
-                                {% else %}
-                                <span class="response-blank"><i class="fas fa-question-circle"></i> No Answer (60)</span>
-                                {% endif %}
-                            </td>
-                            <td>{{ response.points_awarded }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+{% for review in reviews %}
+<div class="vpr-card {% if review.approval_status == 'approved' %}status-approved{% elif review.approval_status == 'rejected' %}status-rejected{% endif %}">
+    <!-- Header -->
+    <div class="vpr-header">
+        <div class="vpr-participants">
+            <div class="vpr-person reviewer">
+                <span class="vpr-role">Reviewer</span>
+                <strong>{{ review.reviewer_name }}</strong>
+                <small>{{ review.reviewer_sid }}</small>
             </div>
+            <i class="fas fa-long-arrow-alt-right vpr-arrow"></i>
+            <div class="vpr-person submitter">
+                <span class="vpr-role">Student Reviewed</span>
+                <strong>{{ review.submitter_name }}</strong>
+                <small>{{ review.submitter_sid }}</small>
+            </div>
+        </div>
+        <div class="vpr-badges">
+            {% if review.approval_status == 'approved' %}
+            <span class="vpr-badge approved"><i class="fas fa-check-circle"></i> Approved</span>
+            {% elif review.approval_status == 'rejected' %}
+            <span class="vpr-badge rejected"><i class="fas fa-times-circle"></i> Rejected</span>
+            {% else %}
+            <span class="vpr-badge pending"><i class="fas fa-clock"></i> Pending Review</span>
+            {% endif %}
+            {% if review.avg_score is not none %}
+            <span class="vpr-badge score {% if review.avg_score >= 90 %}excellent{% elif review.avg_score >= 80 %}good{% elif review.avg_score >= 70 %}fair{% else %}low{% endif %}">
+                <i class="fas fa-star"></i> {{ review.avg_score }}%
+            </span>
+            {% endif %}
+        </div>
+    </div>
 
-            {% if review.instructor_feedback %}
-            <div class="instructor-feedback-display">
-                <strong><i class="fas fa-comment"></i> Your Feedback:</strong>
-                {{ review.instructor_feedback }}
+    <!-- Two-column layout: Submission + Review -->
+    <div class="vpr-body">
+        <!-- Left: Student's Submission -->
+        <div class="vpr-submission">
+            <h5><i class="fas fa-file-alt"></i> Student's Submission</h5>
+            {% if review.submission_content %}
+            <div class="vpr-content-box">{{ review.submission_content }}</div>
+            {% endif %}
+
+            {% if review.files %}
+            <div class="vpr-files">
+                {% for file in review.files %}
+                <a href="{{ url_for('static', filename='uploads/activity_submissions/' + file.file_path) }}"
+                   target="_blank" class="vpr-file-link">
+                    <i class="fas fa-file-download"></i> {{ file.file_name }}
+                </a>
+                {% endfor %}
+            </div>
+            {% elif review.submission_file_path %}
+            <div class="vpr-files">
+                <a href="{{ url_for('static', filename='uploads/activity_submissions/' + review.submission_file_path) }}"
+                   target="_blank" class="vpr-file-link">
+                    <i class="fas fa-file-download"></i> Download Submission
+                </a>
             </div>
             {% endif %}
 
-            <form action="{{ url_for('rate_peer_review', assignment_id=review.id) }}" method="POST" class="rating-form">
-                <div class="flex gap-10 align-items-end">
-                    <div class="form-group" style="flex: 1;">
-                        <label>Review Quality Score (0-100%)</label>
-                        <input type="number" name="quality_score"
-                               value="{{ review.review_quality_score or '' }}"
-                               min="0" max="100" step="1" required
-                               placeholder="Rate 0-100%">
-                    </div>
-                    <div class="form-group" style="flex: 2;">
-                        <label>Feedback for Reviewer</label>
-                        <input type="text" name="instructor_feedback"
-                               value="{{ review.instructor_feedback or '' }}"
-                               placeholder="Optional feedback about their review quality">
-                    </div>
-                    <div class="form-group">
-                        <button type="submit" class="btn btn-sm">
-                            <i class="fas fa-save"></i> Save
-                        </button>
-                    </div>
-                </div>
-            </form>
+            {% if not review.submission_content and not review.files and not review.submission_file_path %}
+            <p class="text-muted"><i class="fas fa-inbox"></i> No content submitted</p>
+            {% endif %}
         </div>
-        {% endfor %}
+
+        <!-- Right: Peer Review Responses -->
+        <div class="vpr-responses">
+            <h5><i class="fas fa-clipboard-check"></i> Review Responses</h5>
+            {% if review.responses %}
+            <table class="vpr-table">
+                <thead>
+                    <tr>
+                        <th>Criterion</th>
+                        <th>Response</th>
+                        <th>Pts</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for response in review.responses %}
+                    <tr>
+                        <td class="vpr-criterion">{{ response.criterion }}</td>
+                        <td>
+                            {% if response.response == 'yes' %}
+                            <span class="resp-yes"><i class="fas fa-check-circle"></i> Yes</span>
+                            {% elif response.response == 'somehow' %}
+                            <span class="resp-somehow"><i class="fas fa-minus-circle"></i> Somehow</span>
+                            {% elif response.response == 'no' %}
+                            <span class="resp-no"><i class="fas fa-times-circle"></i> No</span>
+                            {% else %}
+                            <span class="resp-na"><i class="fas fa-ban"></i> No Answer</span>
+                            {% endif %}
+                        </td>
+                        <td class="vpr-pts">{{ response.points_awarded }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="text-muted">No response data available</p>
+            {% endif %}
+            {% if review.avg_score is not none %}
+            <div class="vpr-avg-score">
+                Average Score: <strong>{{ review.avg_score }}%</strong>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Instructor Feedback Display -->
+    {% if review.instructor_feedback %}
+    <div class="vpr-feedback-display">
+        <i class="fas fa-comment"></i> <strong>Your Feedback:</strong> {{ review.instructor_feedback }}
+    </div>
+    {% endif %}
+
+    <!-- Action Footer: Approve/Reject -->
+    <div class="vpr-actions">
+        {% if review.approval_status == 'approved' %}
+        <div class="vpr-status-msg approved">
+            <i class="fas fa-check-circle"></i> You approved this review. The reviewer earned their 25% participation grade.
+        </div>
+        {% elif review.approval_status == 'rejected' %}
+        <div class="vpr-status-msg rejected">
+            <i class="fas fa-times-circle"></i> You rejected this review. The reviewer did not earn participation credit.
+        </div>
+        {% else %}
+        <form action="{{ url_for('approve_reject_peer_review', assignment_id=review.id) }}" method="POST" class="vpr-action-form">
+            <div class="vpr-feedback-input">
+                <input type="text" name="instructor_feedback" placeholder="Optional feedback for the reviewer...">
+            </div>
+            <div class="vpr-action-btns">
+                <button type="submit" name="action" value="approve" class="btn btn-approve"
+                        onclick="return confirm('Approve this peer review? The reviewer will earn their 25% participation grade for this activity.')">
+                    <i class="fas fa-check-circle"></i> Approve
+                </button>
+                <button type="submit" name="action" value="reject" class="btn btn-reject"
+                        onclick="return confirm('Reject this peer review? The reviewer will NOT earn participation credit.')">
+                    <i class="fas fa-times-circle"></i> Reject
+                </button>
+            </div>
+        </form>
+        {% endif %}
     </div>
 </div>
+{% endfor %}
+
 {% else %}
 <div class="card">
     <div class="card-body">
@@ -153,6 +235,7 @@
 {% endif %}
 
 <style>
+/* Scoring Info */
 .scoring-info {
     background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
     padding: 20px;
@@ -165,115 +248,325 @@
 }
 .score-breakdown-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 15px;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
 }
-.score-item {
+.sb-item {
     background: white;
     padding: 15px;
     border-radius: 8px;
     text-align: center;
     box-shadow: 0 2px 4px rgba(0,0,0,0.05);
 }
-.score-percent {
+.sb-percent {
     display: block;
     font-size: 28px;
     font-weight: 700;
     color: #7c2d12;
 }
-.score-label {
+.sb-label {
     display: block;
     font-weight: 600;
     color: #1f2937;
-    margin: 5px 0;
+    margin: 4px 0;
 }
-.score-item small {
+.sb-item small {
     color: #6b7280;
     font-size: 12px;
 }
-.review-card {
+
+/* Stats Bar */
+.review-stats-bar {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+.rs-stat {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 18px;
+    background: #f3f4f6;
+    border-radius: 10px;
+    font-size: 14px;
     border: 2px solid #e5e7eb;
-    border-radius: 12px;
-    padding: 20px;
-    margin-bottom: 20px;
+}
+.rs-stat i { color: #6b7280; }
+.rs-num { font-weight: 700; font-size: 18px; color: #1f2937; }
+.rs-label { color: #6b7280; }
+.rs-stat.approved { background: #f0fdf4; border-color: #bbf7d0; }
+.rs-stat.approved i, .rs-stat.approved .rs-num { color: #059669; }
+.rs-stat.rejected { background: #fef2f2; border-color: #fecaca; }
+.rs-stat.rejected i, .rs-stat.rejected .rs-num { color: #dc2626; }
+.rs-stat.pending { background: #fffbeb; border-color: #fde68a; }
+.rs-stat.pending i, .rs-stat.pending .rs-num { color: #d97706; }
+
+/* Review Card */
+.vpr-card {
+    border: 2px solid #e5e7eb;
+    border-radius: 14px;
+    margin-bottom: 24px;
     background: #fff;
+    overflow: hidden;
+    transition: border-color 0.2s;
 }
-.review-card.rated {
+.vpr-card.status-approved {
     border-color: #10b981;
-    background: #f0fdf4;
 }
-.review-header {
+.vpr-card.status-rejected {
+    border-color: #ef4444;
+}
+
+/* Header */
+.vpr-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     flex-wrap: wrap;
-    gap: 15px;
-    margin-bottom: 15px;
-    padding-bottom: 15px;
+    gap: 12px;
+    padding: 16px 20px;
+    background: #f9fafb;
     border-bottom: 1px solid #e5e7eb;
 }
-.review-participants {
+.vpr-participants {
     display: flex;
     align-items: center;
-    gap: 15px;
+    gap: 12px;
     flex-wrap: wrap;
 }
-.participant {
-    background: #f3f4f6;
-    padding: 8px 15px;
+.vpr-person {
+    background: white;
+    padding: 8px 14px;
     border-radius: 8px;
+    border: 1px solid #e5e7eb;
 }
-.participant .label {
-    font-size: 12px;
-    color: #6b7280;
+.vpr-person .vpr-role {
     display: block;
-}
-.review-participants .fa-arrow-right {
+    font-size: 11px;
     color: #9ca3af;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
-.review-responses {
-    margin: 15px 0;
+.vpr-person strong { color: #1f2937; }
+.vpr-person small { color: #6b7280; margin-left: 4px; }
+.vpr-arrow { color: #9ca3af; font-size: 18px; }
+
+.vpr-badges {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
 }
-.review-responses h5 {
-    margin: 0 0 10px 0;
-    color: #374151;
-}
-.table-sm td, .table-sm th {
-    padding: 8px 12px;
-}
-.response-yes { color: #10b981; font-weight: 500; }
-.response-somehow { color: #f59e0b; font-weight: 500; }
-.response-no { color: #ef4444; font-weight: 500; }
-.response-blank { color: #9ca3af; font-weight: 500; }
-.instructor-feedback-display {
-    background: #ede9fe;
-    padding: 12px 15px;
-    border-radius: 8px;
-    margin: 15px 0;
-    color: #5b21b6;
-}
-.rating-form {
-    background: #f9fafb;
-    padding: 15px;
-    border-radius: 8px;
-    margin-top: 15px;
-}
-.badge-success {
-    background: #10b981;
-    color: white;
-}
-.badge-warning {
-    background: #f59e0b;
-    color: white;
-}
-.badge {
-    padding: 6px 12px;
+.vpr-badge {
+    padding: 5px 12px;
     border-radius: 20px;
     font-size: 13px;
+    font-weight: 600;
 }
-.align-items-end {
-    align-items: flex-end;
+.vpr-badge i { margin-right: 4px; }
+.vpr-badge.approved { background: #d1fae5; color: #059669; }
+.vpr-badge.rejected { background: #fee2e2; color: #dc2626; }
+.vpr-badge.pending { background: #fef3c7; color: #d97706; }
+.vpr-badge.score { background: #ede9fe; color: #7c3aed; }
+.vpr-badge.score.excellent { background: #d1fae5; color: #059669; }
+.vpr-badge.score.good { background: #dbeafe; color: #2563eb; }
+.vpr-badge.score.fair { background: #fef3c7; color: #d97706; }
+.vpr-badge.score.low { background: #fee2e2; color: #dc2626; }
+
+/* Two-column body */
+.vpr-body {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
 }
+.vpr-submission {
+    padding: 20px;
+    border-right: 1px solid #e5e7eb;
+}
+.vpr-responses {
+    padding: 20px;
+}
+.vpr-submission h5, .vpr-responses h5 {
+    margin: 0 0 12px 0;
+    color: #374151;
+    font-size: 14px;
+}
+.vpr-submission h5 i { color: #7c2d12; }
+.vpr-responses h5 i { color: #8b5cf6; }
+
+.vpr-content-box {
+    background: #f8fafc;
+    padding: 14px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    white-space: pre-wrap;
+    font-size: 14px;
+    color: #334155;
+    max-height: 300px;
+    overflow-y: auto;
+    margin-bottom: 10px;
+}
+
+.vpr-files {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+}
+.vpr-file-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    background: #f1f5f9;
+    border-radius: 8px;
+    color: #7c2d12;
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 500;
+    transition: background 0.2s;
+}
+.vpr-file-link:hover {
+    background: #e2e8f0;
+}
+
+/* Response Table */
+.vpr-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+}
+.vpr-table th {
+    background: #f9fafb;
+    padding: 8px 10px;
+    text-align: left;
+    font-weight: 600;
+    color: #6b7280;
+    font-size: 12px;
+    text-transform: uppercase;
+    border-bottom: 2px solid #e5e7eb;
+}
+.vpr-table td {
+    padding: 10px;
+    border-bottom: 1px solid #f3f4f6;
+    vertical-align: top;
+}
+.vpr-criterion {
+    max-width: 280px;
+    color: #374151;
+}
+.vpr-pts {
+    font-weight: 700;
+    text-align: center;
+    color: #6b7280;
+}
+
+.resp-yes { color: #059669; font-weight: 600; }
+.resp-somehow { color: #d97706; font-weight: 600; }
+.resp-no { color: #dc2626; font-weight: 600; }
+.resp-na { color: #9ca3af; font-weight: 600; }
+.resp-yes i, .resp-somehow i, .resp-no i, .resp-na i { margin-right: 4px; }
+
+.vpr-avg-score {
+    margin-top: 12px;
+    padding: 10px 14px;
+    background: #f3f4f6;
+    border-radius: 8px;
+    font-size: 14px;
+    color: #374151;
+}
+.vpr-avg-score strong {
+    color: #7c2d12;
+    font-size: 16px;
+}
+
+/* Feedback Display */
+.vpr-feedback-display {
+    margin: 0 20px 16px 20px;
+    padding: 12px 16px;
+    background: #ede9fe;
+    border-radius: 8px;
+    color: #5b21b6;
+    font-size: 14px;
+}
+
+/* Action Footer */
+.vpr-actions {
+    padding: 16px 20px;
+    border-top: 1px solid #e5e7eb;
+    background: #f9fafb;
+}
+
+.vpr-status-msg {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+}
+.vpr-status-msg.approved {
+    background: #d1fae5;
+    color: #059669;
+}
+.vpr-status-msg.rejected {
+    background: #fee2e2;
+    color: #dc2626;
+}
+
+.vpr-action-form {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+.vpr-feedback-input {
+    flex: 1;
+    min-width: 200px;
+}
+.vpr-feedback-input input {
+    width: 100%;
+    padding: 10px 14px;
+    border: 2px solid #e5e7eb;
+    border-radius: 8px;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s;
+}
+.vpr-feedback-input input:focus {
+    border-color: #7c2d12;
+}
+
+.vpr-action-btns {
+    display: flex;
+    gap: 8px;
+}
+.btn-approve {
+    background: #059669 !important;
+    color: white !important;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background 0.2s;
+}
+.btn-approve:hover { background: #047857 !important; }
+.btn-reject {
+    background: #dc2626 !important;
+    color: white !important;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background 0.2s;
+}
+.btn-reject:hover { background: #b91c1c !important; }
+
+/* Empty State */
 .empty-state {
     text-align: center;
     padding: 60px;
@@ -284,8 +577,31 @@
     margin-bottom: 15px;
     color: #d1d5db;
 }
-.mb-20 {
-    margin-bottom: 20px;
+
+.mb-20 { margin-bottom: 20px; }
+.text-muted { color: #9ca3af; }
+
+@media (max-width: 768px) {
+    .vpr-body {
+        grid-template-columns: 1fr;
+    }
+    .vpr-submission {
+        border-right: none;
+        border-bottom: 1px solid #e5e7eb;
+    }
+    .vpr-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    .vpr-action-form {
+        flex-direction: column;
+    }
+    .vpr-feedback-input {
+        width: 100%;
+    }
+    .review-stats-bar {
+        flex-direction: column;
+    }
 }
 </style>
 {% endblock %}

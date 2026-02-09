@@ -105,6 +105,11 @@
                         <span class="radio-btn"></span>
                         <span class="option-text"><i class="fas fa-times-circle"></i> No</span>
                     </label>
+                    <label class="radio-option no-answer">
+                        <input type="radio" name="criterion_{{ c.id }}" value="no_answer">
+                        <span class="radio-btn"></span>
+                        <span class="option-text"><i class="fas fa-ban"></i> No Answer</span>
+                    </label>
                 </div>
             </div>
             {% endfor %}
@@ -233,6 +238,9 @@
 .radio-option.no input:checked + .radio-btn {
     border-color: #ef4444;
 }
+.radio-option.no-answer input:checked + .radio-btn {
+    border-color: #9ca3af;
+}
 .radio-option.yes:hover, .radio-option.yes:has(input:checked) {
     border-color: #10b981;
     background: #ecfdf5;
@@ -245,6 +253,10 @@
     border-color: #ef4444;
     background: #fef2f2;
 }
+.radio-option.no-answer:hover, .radio-option.no-answer:has(input:checked) {
+    border-color: #9ca3af;
+    background: #f1f5f9;
+}
 .option-text {
     font-weight: 500;
 }
@@ -254,6 +266,7 @@
 .radio-option.yes .option-text i { color: #10b981; }
 .radio-option.somehow .option-text i { color: #f59e0b; }
 .radio-option.no .option-text i { color: #ef4444; }
+.radio-option.no-answer .option-text i { color: #9ca3af; }
 .scoring-guide {
     background: #f0fdf4;
     padding: 15px 20px;

@@ -22,7 +22,7 @@
     </div>
 </div>
 
-{% if current_user.role == 'instructor' and total_enrolled > 0 %}
+{% if current_user.role == 'instructor' and total_enrolled is defined and total_enrolled > 0 %}
 <div class="enrolled-bar">
     <div class="enrolled-header">
         <span><i class="fas fa-users"></i> Enrolled Students ({{ total_enrolled }})</span>
@@ -84,6 +84,46 @@
                             </span>
                             {% endif %}
                         </div>
+                        {% if stats.activity_count > 0 or stats.quiz_count > 0 %}
+                        <div class="session-performance-stats">
+                            {% if stats.activity_count > 0 %}
+                            <div class="perf-pill blue">
+                                <i class="fas fa-tasks"></i>
+                                <span class="perf-label">Activities</span>
+                                <span class="perf-value">{{ stats.students_submitted }}/{{ total_enrolled }}</span>
+                                {% if stats.graded_count > 0 %}
+                                <span class="perf-score">avg {{ stats.avg_score }}%</span>
+                                {% endif %}
+                                <div class="perf-bar">
+                                    <div class="perf-bar-fill blue" style="width: {{ (stats.students_submitted / total_enrolled * 100)|round|int if total_enrolled > 0 else 0 }}%"></div>
+                                </div>
+                            </div>
+                            {% endif %}
+                            {% if stats.quiz_count > 0 %}
+                            <div class="perf-pill purple">
+                                <i class="fas fa-question-circle"></i>
+                                <span class="perf-label">Quiz</span>
+                                <span class="perf-value">{{ stats.quiz_students_attempted }}/{{ total_enrolled }}</span>
+                                {% if stats.quiz_avg_score > 0 %}
+                                <span class="perf-score">avg {{ stats.quiz_avg_score }}%</span>
+                                {% endif %}
+                                <div class="perf-bar">
+                                    <div class="perf-bar-fill purple" style="width: {{ (stats.quiz_students_attempted / total_enrolled * 100)|round|int if total_enrolled > 0 else 0 }}%"></div>
+                                </div>
+                            </div>
+                            {% endif %}
+                            {% if stats.peer_review_activities > 0 %}
+                            <div class="perf-pill orange">
+                                <i class="fas fa-user-friends"></i>
+                                <span class="perf-label">Peer Review</span>
+                                <span class="perf-value">{{ stats.peer_review_completed }}/{{ stats.peer_review_total }}</span>
+                                <div class="perf-bar">
+                                    <div class="perf-bar-fill orange" style="width: {{ (stats.peer_review_completed / stats.peer_review_total * 100)|round|int if stats.peer_review_total > 0 else 0 }}%"></div>
+                                </div>
+                            </div>
+                            {% endif %}
+                        </div>
+                        {% endif %}
                         {% endif %}
                     </div>
                 </div>
@@ -253,6 +293,85 @@
 
 .completion-count.none {
     color: #9CA3AF;
+}
+
+/* Performance Stats Pills */
+.session-performance-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.perf-pill {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: #F8FAFC;
+    border: 1px solid #E2E8F0;
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 0.75rem;
+    min-width: 150px;
+    flex-wrap: wrap;
+}
+
+.perf-pill i {
+    font-size: 0.7rem;
+    width: 16px;
+    text-align: center;
+}
+
+.perf-pill.blue  { border-left: 3px solid #0EA5E9; }
+.perf-pill.blue i { color: #0EA5E9; }
+.perf-pill.purple  { border-left: 3px solid #8B5CF6; }
+.perf-pill.purple i { color: #8B5CF6; }
+.perf-pill.orange  { border-left: 3px solid #F59E0B; }
+.perf-pill.orange i { color: #F59E0B; }
+
+.perf-label {
+    color: #64748B;
+    font-weight: 500;
+}
+
+.perf-value {
+    font-weight: 700;
+    color: #1E293B;
+}
+
+.perf-score {
+    color: #10B981;
+    font-weight: 600;
+    margin-left: 2px;
+}
+
+.perf-bar {
+    width: 100%;
+    height: 3px;
+    background: #E2E8F0;
+    border-radius: 2px;
+    margin-top: 4px;
+    overflow: hidden;
+}
+
+.perf-bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.6s ease;
+}
+
+.perf-bar-fill.blue   { background: #0EA5E9; }
+.perf-bar-fill.purple { background: #8B5CF6; }
+.perf-bar-fill.orange { background: #F59E0B; }
+
+@media (max-width: 768px) {
+    .session-performance-stats {
+        flex-direction: column;
+    }
+    .perf-pill {
+        min-width: unset;
+        width: 100%;
+    }
 }
 </style>
 {% endblock %}
