@@ -4,67 +4,74 @@
 
 {% block content %}
 <div class="qg-wrapper" id="game-wrapper">
-    <!-- HUD (Heads Up Display) -->
+    <!-- HUD -->
     <div class="qg-hud">
         <div class="hud-left">
             <div class="hud-item score-hud">
-                <i class="fas fa-star"></i> <span id="hud-score">0</span>
+                <i class="fas fa-star"></i> <span id="hud-score">0</span>/<span>{{ questions|length }}</span>
             </div>
             <div class="hud-item streak-hud" id="streak-hud" style="display:none;">
-                <i class="fas fa-fire"></i> <span id="hud-streak">0</span> streak
+                <i class="fas fa-fire"></i> <span id="hud-streak">0</span>x
             </div>
         </div>
         <div class="hud-center">
-            <span id="hud-question">Q1</span> / <span>{{ questions|length }}</span>
+            <span id="hud-question">Q1</span> / {{ questions|length }}
         </div>
         <div class="hud-right">
-            <div class="hud-timer" id="hud-timer">
-                <div class="timer-ring">
-                    <svg viewBox="0 0 36 36">
-                        <path class="timer-bg-ring" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
-                        <path class="timer-fg-ring" id="timer-ring-fg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
-                    </svg>
-                    <span id="timer-seconds">60</span>
-                </div>
-            </div>
-            <button id="sound-btn" onclick="toggleSound()" class="hud-sound">
+            <button id="sound-btn" onclick="toggleSound()" class="hud-sound" title="Toggle Sound">
                 <i class="fas fa-volume-up" id="sound-icon"></i>
             </button>
         </div>
     </div>
 
-    <!-- Progress -->
-    <div class="qg-progress">
-        <div class="qg-progress-fill" id="progress-fill"></div>
+    <!-- Progress Dots -->
+    <div class="qg-progress-dots" id="progress-dots">
+        {% for q in questions %}
+        <div class="dot" id="dot-{{ loop.index0 }}">{{ loop.index }}</div>
+        {% endfor %}
     </div>
 
     <!-- Game Area -->
     <div class="qg-arena" id="game-arena">
+        <!-- BOMB TIMER -->
+        <div class="bomb-container" id="bomb-container">
+            <div class="bomb-body" id="bomb-body">
+                <div class="bomb-fuse" id="bomb-fuse">
+                    <div class="fuse-spark" id="fuse-spark"></div>
+                </div>
+                <div class="bomb-sphere" id="bomb-sphere">
+                    <span class="bomb-time" id="bomb-time">60</span>
+                    <span class="bomb-label">SEC</span>
+                </div>
+                <div class="bomb-glow" id="bomb-glow"></div>
+            </div>
+            <div class="bomb-warning" id="bomb-warning" style="display:none;">
+                <i class="fas fa-exclamation-triangle"></i> HURRY UP!
+            </div>
+        </div>
+
         <!-- Question Display -->
         <div class="qg-question-box" id="question-box">
             <div class="question-label">
                 <span class="q-badge" id="q-badge">QUESTION 1</span>
-                <span class="q-hint-label" id="hint-toggle" onclick="showHint()" style="display:none;">
-                    <i class="fas fa-lightbulb"></i> Show Hint
+                <span class="q-hint-label" id="hint-toggle" onclick="showHint()">
+                    <i class="fas fa-lightbulb"></i> Hint
                 </span>
             </div>
             <div class="question-text" id="question-text"></div>
             <div class="question-hint" id="question-hint" style="display:none;"></div>
         </div>
 
-        <!-- Answer Input Area -->
+        <!-- Answer Input -->
         <div class="qg-answer-zone">
-            <div class="answer-prompt">
-                <i class="fas fa-keyboard"></i> TYPE YOUR ANSWER
-            </div>
             <div class="answer-input-wrap">
                 <input type="text" id="answer-input" class="answer-input" autocomplete="off" autofocus
-                       placeholder="Type your answer here..." onkeydown="handleKeyDown(event)">
+                       placeholder="Type your answer..." onkeydown="if(event.key==='Enter'){event.preventDefault();submitAnswer();}">
                 <button class="submit-answer-btn" id="submit-answer-btn" onclick="submitAnswer()">
-                    <i class="fas fa-paper-plane"></i>
+                    <i class="fas fa-paper-plane"></i> SUBMIT
                 </button>
             </div>
-            <div class="answer-tip" id="answer-tip">Press <kbd>Enter</kbd> to submit</div>
+            <div class="answer-tip">Press <kbd>Enter</kbd> to lock in your answer &mdash; <strong>no going back!</strong></div>
         </div>
 
         <!-- Feedback Overlay -->
@@ -83,349 +90,333 @@
 </div>
 
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
 
+/* === WRAPPER === */
 .qg-wrapper {
     min-height: calc(100vh - 70px);
-    background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+    background: linear-gradient(135deg, #0a0118 0%, #1a0a3e 40%, #0f0c29 100%);
     padding: 0;
     position: relative;
     overflow: hidden;
 }
 
-/* Animated background particles */
 .qg-wrapper::before {
     content: '';
     position: absolute;
     top: 0; left: 0; right: 0; bottom: 0;
     background-image:
-        radial-gradient(2px 2px at 20px 30px, rgba(255,255,255,0.15), transparent),
-        radial-gradient(2px 2px at 40px 70px, rgba(139,92,246,0.15), transparent),
-        radial-gradient(2px 2px at 50px 160px, rgba(255,255,255,0.1), transparent),
-        radial-gradient(2px 2px at 90px 40px, rgba(251,191,36,0.1), transparent);
-    background-size: 200px 200px;
-    animation: sparkle 4s linear infinite;
+        radial-gradient(1px 1px at 10% 20%, rgba(255,255,255,0.15), transparent),
+        radial-gradient(1px 1px at 30% 60%, rgba(139,92,246,0.12), transparent),
+        radial-gradient(1px 1px at 70% 30%, rgba(251,191,36,0.08), transparent),
+        radial-gradient(1px 1px at 90% 80%, rgba(239,68,68,0.08), transparent);
+    background-size: 250px 250px;
+    animation: bgDrift 8s linear infinite;
     pointer-events: none;
 }
 
-@keyframes sparkle {
-    from { transform: translateY(0); }
-    to { transform: translateY(-200px); }
-}
+@keyframes bgDrift { from{transform:translateY(0);} to{transform:translateY(-250px);} }
 
-/* HUD */
+/* === HUD === */
 .qg-hud {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 12px 20px;
-    background: rgba(0,0,0,0.4);
+    padding: 10px 20px;
+    background: rgba(0,0,0,0.6);
     backdrop-filter: blur(10px);
-    border-bottom: 2px solid rgba(139,92,246,0.3);
+    border-bottom: 2px solid rgba(139,92,246,0.4);
 }
 
-.hud-left, .hud-right {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-}
+.hud-left, .hud-right { display: flex; align-items: center; gap: 15px; }
 
-.hud-item {
-    color: white;
-    font-weight: 700;
-    font-size: 1rem;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-
+.hud-item { color: white; font-weight: 700; font-size: 1rem; display: flex; align-items: center; gap: 6px; }
 .score-hud i { color: #fbbf24; }
 .streak-hud { color: #ef4444; }
-.streak-hud i { color: #ef4444; animation: pulse 0.5s infinite; }
+.streak-hud i { animation: firePulse 0.4s infinite alternate; }
+@keyframes firePulse { from{transform:scale(1);color:#ef4444;} to{transform:scale(1.4);color:#fbbf24;} }
 
-@keyframes pulse { 0%,100%{transform:scale(1);} 50%{transform:scale(1.3);} }
-
-.hud-center {
-    color: #a5b4fc;
-    font-weight: 600;
-    font-size: 0.9rem;
-}
-
-.timer-ring {
-    width: 50px;
-    height: 50px;
-    position: relative;
-}
-
-.timer-ring svg {
-    width: 100%;
-    height: 100%;
-    transform: rotate(-90deg);
-}
-
-.timer-bg-ring {
-    fill: none;
-    stroke: rgba(255,255,255,0.1);
-    stroke-width: 3;
-}
-
-.timer-fg-ring {
-    fill: none;
-    stroke: #10b981;
-    stroke-width: 3;
-    stroke-linecap: round;
-    stroke-dasharray: 100;
-    stroke-dashoffset: 0;
-    transition: stroke-dashoffset 1s linear, stroke 0.3s;
-}
-
-.timer-fg-ring.warning { stroke: #fbbf24; }
-.timer-fg-ring.danger { stroke: #ef4444; }
-
-#timer-seconds {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    color: white;
-    font-weight: 800;
-    font-size: 0.9rem;
-}
+.hud-center { color: #a5b4fc; font-weight: 600; font-size: 0.9rem; letter-spacing: 1px; }
 
 .hud-sound {
-    background: rgba(255,255,255,0.1);
-    border: none;
-    color: white;
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    cursor: pointer;
-    font-size: 0.9rem;
+    background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.15);
+    color: white; width: 36px; height: 36px; border-radius: 50%; cursor: pointer;
+    font-size: 0.85rem; transition: all 0.2s;
 }
+.hud-sound:hover { background: rgba(255,255,255,0.2); }
 
-/* Progress */
-.qg-progress {
-    height: 4px;
-    background: rgba(255,255,255,0.1);
-}
-
-.qg-progress-fill {
-    height: 100%;
-    background: linear-gradient(90deg, #8b5cf6, #fbbf24);
-    width: 0%;
-    transition: width 0.5s ease;
-}
-
-/* Arena */
-.qg-arena {
-    max-width: 750px;
-    margin: 0 auto;
-    padding: 2rem;
-    position: relative;
-}
-
-/* Question Box */
-.qg-question-box {
-    background: rgba(255,255,255,0.07);
-    border: 2px solid rgba(139,92,246,0.3);
-    border-radius: 20px;
-    padding: 2rem;
-    margin-bottom: 2rem;
-    position: relative;
-}
-
-.question-label {
+/* === PROGRESS DOTS === */
+.qg-progress-dots {
     display: flex;
-    justify-content: space-between;
+    justify-content: center;
+    gap: 6px;
+    padding: 12px 20px;
+    background: rgba(0,0,0,0.3);
+}
+
+.dot {
+    width: 30px; height: 30px; border-radius: 50%;
+    background: rgba(255,255,255,0.08); border: 2px solid rgba(255,255,255,0.15);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.65rem; font-weight: 700; color: rgba(255,255,255,0.3);
+    transition: all 0.4s;
+}
+
+.dot.active { background: linear-gradient(135deg, #8b5cf6, #6d28d9); border-color: #a78bfa; color: white; transform: scale(1.2); box-shadow: 0 0 15px rgba(139,92,246,0.5); }
+.dot.correct { background: linear-gradient(135deg, #059669, #10b981); border-color: #34d399; color: white; }
+.dot.wrong { background: linear-gradient(135deg, #dc2626, #ef4444); border-color: #f87171; color: white; }
+.dot.timeout { background: rgba(239,68,68,0.3); border-color: #ef4444; color: #ef4444; }
+
+/* === BOMB TIMER === */
+.bomb-container {
+    display: flex;
+    flex-direction: column;
     align-items: center;
-    margin-bottom: 1.2rem;
+    margin: 1rem auto 0.5rem;
+    position: relative;
 }
 
-.q-badge {
-    background: linear-gradient(135deg, #8b5cf6, #6d28d9);
-    color: white;
-    padding: 5px 16px;
-    border-radius: 20px;
-    font-size: 0.75rem;
-    font-weight: 700;
-    letter-spacing: 1px;
+.bomb-body { position: relative; }
+
+.bomb-fuse {
+    width: 4px;
+    height: 30px;
+    background: linear-gradient(to top, #6b4c11, #d4a046);
+    margin: 0 auto;
+    position: relative;
+    border-radius: 2px;
+    transform-origin: bottom;
+    animation: fuseWiggle 0.5s ease-in-out infinite alternate;
 }
 
-.q-hint-label {
-    color: #fbbf24;
-    cursor: pointer;
-    font-size: 0.85rem;
-    font-weight: 600;
+@keyframes fuseWiggle { from{transform:rotate(-3deg);} to{transform:rotate(3deg);} }
+
+.fuse-spark {
+    position: absolute;
+    top: -8px; left: 50%;
+    transform: translateX(-50%);
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    background: radial-gradient(circle, #fff 0%, #fbbf24 40%, #f59e0b 60%, transparent 70%);
+    animation: sparkFlicker 0.15s infinite alternate;
+    box-shadow: 0 0 12px #fbbf24, 0 0 25px #f59e0b, 0 0 40px rgba(251,191,36,0.3);
+}
+
+@keyframes sparkFlicker {
+    from { transform: translateX(-50%) scale(1); opacity: 1; }
+    to { transform: translateX(-50%) scale(1.4); opacity: 0.8; }
+}
+
+.bomb-sphere {
+    width: 100px; height: 100px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #4a3b6b, #1a0a3e 50%, #0a0118);
+    border: 3px solid #7c3aed;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    position: relative;
+    z-index: 2;
+    transition: all 0.3s;
+    box-shadow: 0 0 20px rgba(139,92,246,0.3), inset 0 0 20px rgba(0,0,0,0.5);
+}
+
+.bomb-time {
+    font-family: 'Orbitron', monospace;
+    font-size: 2.2rem;
+    font-weight: 900;
+    color: #10b981;
+    text-shadow: 0 0 15px rgba(16,185,129,0.5);
+    transition: color 0.3s;
+    line-height: 1;
+}
+
+.bomb-label {
+    font-family: 'Orbitron', monospace;
+    font-size: 0.55rem;
+    color: rgba(255,255,255,0.4);
+    letter-spacing: 3px;
+    margin-top: 2px;
+}
+
+.bomb-glow {
+    position: absolute;
+    top: 30px; left: 50%;
+    transform: translateX(-50%);
+    width: 100px; height: 100px;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 1;
     transition: all 0.3s;
 }
 
-.q-hint-label:hover {
-    color: #f59e0b;
-    transform: scale(1.05);
+/* Bomb states */
+.bomb-warning-state .bomb-sphere { border-color: #fbbf24; }
+.bomb-warning-state .bomb-time { color: #fbbf24; text-shadow: 0 0 15px rgba(251,191,36,0.6); }
+.bomb-warning-state .bomb-glow { box-shadow: 0 0 40px rgba(251,191,36,0.3); }
+.bomb-warning-state .bomb-sphere { animation: bombPulseWarn 0.8s infinite; }
+
+.bomb-danger-state .bomb-sphere { border-color: #ef4444; }
+.bomb-danger-state .bomb-time { color: #ef4444; text-shadow: 0 0 20px rgba(239,68,68,0.8); }
+.bomb-danger-state .bomb-glow { box-shadow: 0 0 60px rgba(239,68,68,0.5); }
+.bomb-danger-state .bomb-sphere { animation: bombPulseDanger 0.3s infinite; }
+.bomb-danger-state .fuse-spark { background: radial-gradient(circle, #fff 0%, #ef4444 40%, #dc2626 60%, transparent 70%); box-shadow: 0 0 15px #ef4444, 0 0 30px #dc2626; }
+
+.bomb-critical-state .bomb-sphere { border-color: #ef4444; animation: bombShake 0.15s infinite; }
+.bomb-critical-state .bomb-time { color: #ff0000; text-shadow: 0 0 25px rgba(255,0,0,1); animation: textFlash 0.3s infinite; }
+.bomb-critical-state .bomb-glow { box-shadow: 0 0 80px rgba(255,0,0,0.6); }
+
+@keyframes bombPulseWarn { 0%,100%{transform:scale(1);} 50%{transform:scale(1.04);} }
+@keyframes bombPulseDanger { 0%,100%{transform:scale(1);} 50%{transform:scale(1.07);} }
+@keyframes bombShake { 0%{transform:translate(0,0);} 25%{transform:translate(-3px,2px);} 50%{transform:translate(3px,-2px);} 75%{transform:translate(-2px,-3px);} 100%{transform:translate(2px,3px);} }
+@keyframes textFlash { 0%,100%{opacity:1;} 50%{opacity:0.4;} }
+
+.bomb-explode .bomb-sphere {
+    animation: explode 0.6s forwards;
+}
+@keyframes explode {
+    0% { transform: scale(1); }
+    30% { transform: scale(1.3); background: radial-gradient(circle, #fbbf24, #ef4444); border-color: #fbbf24; }
+    60% { transform: scale(2); opacity: 0.6; }
+    100% { transform: scale(3); opacity: 0; }
 }
 
-.question-text {
-    color: white;
-    font-size: 1.3rem;
-    line-height: 1.7;
-    font-weight: 500;
-}
-
-.question-hint {
-    margin-top: 1rem;
-    padding: 12px 16px;
-    background: rgba(251,191,36,0.1);
-    border: 1px solid rgba(251,191,36,0.3);
-    border-radius: 10px;
-    color: #fbbf24;
-    font-size: 0.9rem;
-}
-
-/* Answer Zone */
-.qg-answer-zone {
-    text-align: center;
-}
-
-.answer-prompt {
-    color: #a5b4fc;
+.bomb-warning {
+    color: #ef4444;
+    font-family: 'Orbitron', monospace;
     font-size: 0.8rem;
     font-weight: 700;
     letter-spacing: 2px;
-    margin-bottom: 12px;
+    margin-top: 8px;
+    animation: warnBlink 0.5s infinite;
 }
 
-.answer-prompt i { margin-right: 5px; }
+@keyframes warnBlink { 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+
+/* === QUESTION BOX === */
+.qg-arena {
+    max-width: 700px;
+    margin: 0 auto;
+    padding: 1rem 2rem 2rem;
+    position: relative;
+}
+
+.qg-question-box {
+    background: rgba(255,255,255,0.06);
+    border: 2px solid rgba(139,92,246,0.3);
+    border-radius: 20px;
+    padding: 1.8rem 2rem;
+    margin-bottom: 1.5rem;
+    position: relative;
+    transition: all 0.3s;
+}
+
+.question-label { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+
+.q-badge {
+    background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+    color: white; padding: 5px 16px; border-radius: 20px;
+    font-size: 0.72rem; font-weight: 700; letter-spacing: 1.5px;
+}
+
+.q-hint-label {
+    color: #fbbf24; cursor: pointer; font-size: 0.85rem; font-weight: 600;
+    transition: all 0.3s; padding: 4px 12px; border-radius: 8px;
+    background: rgba(251,191,36,0.1);
+}
+.q-hint-label:hover { background: rgba(251,191,36,0.2); transform: scale(1.05); }
+
+.question-text { color: white; font-size: 1.25rem; line-height: 1.7; font-weight: 500; }
+
+.question-hint {
+    margin-top: 1rem; padding: 12px 16px;
+    background: rgba(251,191,36,0.1); border: 1px solid rgba(251,191,36,0.3);
+    border-radius: 10px; color: #fbbf24; font-size: 0.88rem;
+}
+
+/* === ANSWER ZONE === */
+.qg-answer-zone { text-align: center; }
 
 .answer-input-wrap {
-    display: flex;
-    gap: 10px;
-    max-width: 550px;
-    margin: 0 auto;
+    display: flex; gap: 10px; max-width: 550px; margin: 0 auto;
 }
 
 .answer-input {
-    flex: 1;
-    padding: 18px 24px;
-    background: rgba(255,255,255,0.1);
-    border: 3px solid rgba(139,92,246,0.4);
-    border-radius: 16px;
-    color: white;
-    font-size: 1.2rem;
-    font-weight: 600;
-    outline: none;
-    transition: all 0.3s;
+    flex: 1; padding: 16px 22px;
+    background: rgba(255,255,255,0.08); border: 3px solid rgba(139,92,246,0.4);
+    border-radius: 14px; color: white; font-size: 1.15rem; font-weight: 600;
+    outline: none; transition: all 0.3s;
 }
-
-.answer-input:focus {
-    border-color: #8b5cf6;
-    background: rgba(139,92,246,0.1);
-    box-shadow: 0 0 30px rgba(139,92,246,0.2);
-}
-
-.answer-input::placeholder {
-    color: rgba(255,255,255,0.3);
-    font-weight: 400;
-}
+.answer-input:focus { border-color: #8b5cf6; background: rgba(139,92,246,0.1); box-shadow: 0 0 25px rgba(139,92,246,0.2); }
+.answer-input::placeholder { color: rgba(255,255,255,0.25); font-weight: 400; }
+.answer-input:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .submit-answer-btn {
-    width: 60px;
+    padding: 0 24px;
     background: linear-gradient(135deg, #8b5cf6, #6d28d9);
-    border: none;
-    border-radius: 16px;
-    color: white;
-    font-size: 1.2rem;
-    cursor: pointer;
-    transition: all 0.3s;
+    border: none; border-radius: 14px; color: white;
+    font-size: 0.9rem; font-weight: 700; cursor: pointer;
+    transition: all 0.3s; letter-spacing: 1px;
+    display: flex; align-items: center; gap: 8px;
 }
+.submit-answer-btn:hover { transform: scale(1.04); box-shadow: 0 0 20px rgba(139,92,246,0.4); }
+.submit-answer-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
 
-.submit-answer-btn:hover {
-    transform: scale(1.05);
-    box-shadow: 0 0 20px rgba(139,92,246,0.4);
-}
+.answer-tip { margin-top: 10px; color: rgba(255,255,255,0.25); font-size: 0.78rem; }
+.answer-tip kbd { background: rgba(255,255,255,0.1); padding: 2px 8px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.2); }
+.answer-tip strong { color: #ef4444; }
 
-.answer-tip {
-    margin-top: 10px;
-    color: rgba(255,255,255,0.3);
-    font-size: 0.8rem;
-}
-
-.answer-tip kbd {
-    background: rgba(255,255,255,0.1);
-    padding: 2px 8px;
-    border-radius: 4px;
-    border: 1px solid rgba(255,255,255,0.2);
-}
-
-/* Feedback */
+/* === FEEDBACK OVERLAY === */
 .qg-feedback {
-    position: absolute;
-    top: 0; left: 0; right: 0; bottom: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 100;
-    backdrop-filter: blur(5px);
+    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+    display: flex; align-items: center; justify-content: center;
+    z-index: 100; backdrop-filter: blur(8px); background: rgba(0,0,0,0.3);
 }
 
-.feedback-content {
-    text-align: center;
-    padding: 2rem;
-    animation: popIn 0.3s ease;
-}
+.feedback-content { text-align: center; padding: 2rem; animation: fbPop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1); }
+@keyframes fbPop { from{transform:scale(0);opacity:0;} to{transform:scale(1);opacity:1;} }
 
-@keyframes popIn {
-    from { transform: scale(0.5); opacity: 0; }
-    to { transform: scale(1); opacity: 1; }
-}
+.feedback-correct { color: #10b981; }
+.feedback-correct .fb-icon { font-size: 4.5rem; display: block; margin-bottom: 10px; filter: drop-shadow(0 0 20px rgba(16,185,129,0.6)); }
+.feedback-correct .fb-text { font-size: 2rem; font-weight: 800; }
+.feedback-correct .fb-points { font-size: 1.1rem; color: #fbbf24; margin-top: 6px; font-weight: 600; }
 
-.feedback-correct {
-    color: #10b981;
-    font-size: 3rem;
-    font-weight: 800;
-}
+.feedback-wrong { color: #ef4444; }
+.feedback-wrong .fb-icon { font-size: 4.5rem; display: block; margin-bottom: 10px; filter: drop-shadow(0 0 20px rgba(239,68,68,0.6)); }
+.feedback-wrong .fb-text { font-size: 1.8rem; font-weight: 700; }
+.feedback-wrong .fb-correct { color: #10b981; font-size: 1rem; margin-top: 10px; font-weight: 500; }
 
-.feedback-correct i { font-size: 4rem; display: block; margin-bottom: 10px; }
+/* === EFFECTS === */
+.shake { animation: shakeHard 0.5s ease; }
+@keyframes shakeHard { 0%,100%{transform:translateX(0);} 15%{transform:translateX(-18px) rotate(-1deg);} 30%{transform:translateX(18px) rotate(1deg);} 45%{transform:translateX(-12px);} 60%{transform:translateX(12px);} 75%{transform:translateX(-6px);} 90%{transform:translateX(6px);} }
 
-.feedback-wrong {
-    color: #ef4444;
-    font-size: 2rem;
-    font-weight: 700;
-}
-
-.feedback-wrong i { font-size: 3.5rem; display: block; margin-bottom: 10px; }
-
-.feedback-wrong .correct-ans {
-    color: #10b981;
-    font-size: 1rem;
-    margin-top: 8px;
-    font-weight: 500;
-}
-
-/* Shake animation */
-.shake { animation: shake 0.5s ease; }
-@keyframes shake {
-    0%,100%{transform:translateX(0);}
-    20%{transform:translateX(-15px);}
-    40%{transform:translateX(15px);}
-    60%{transform:translateX(-10px);}
-    80%{transform:translateX(10px);}
-}
-
-/* Glow correct */
 .glow-correct { box-shadow: 0 0 40px rgba(16,185,129,0.5); border-color: #10b981 !important; }
 .glow-wrong { box-shadow: 0 0 40px rgba(239,68,68,0.5); border-color: #ef4444 !important; }
 
-/* Screen flash */
-.flash-green { animation: flashG 0.4s; }
-@keyframes flashG { 0%{background:rgba(16,185,129,0.3);} 100%{background:transparent;} }
+.flash-green { animation: flashG 0.5s; }
+@keyframes flashG { 0%{background-color:rgba(16,185,129,0.25);} 100%{background-color:transparent;} }
 
-.flash-red { animation: flashR 0.4s; }
-@keyframes flashR { 0%{background:rgba(239,68,68,0.3);} 100%{background:transparent;} }
+.flash-red { animation: flashR 0.5s; }
+@keyframes flashR { 0%{background-color:rgba(239,68,68,0.25);} 100%{background-color:transparent;} }
+
+/* Particle burst */
+.particle {
+    position: fixed; width: 8px; height: 8px; border-radius: 50%;
+    pointer-events: none; z-index: 200;
+    animation: particleFly 0.8s forwards ease-out;
+}
+@keyframes particleFly {
+    0% { transform: translate(0,0) scale(1); opacity: 1; }
+    100% { transform: translate(var(--tx), var(--ty)) scale(0); opacity: 0; }
+}
 
 @media (max-width: 768px) {
     .qg-arena { padding: 1rem; }
-    .question-text { font-size: 1.1rem; }
-    .answer-input { font-size: 1rem; padding: 14px 18px; }
+    .question-text { font-size: 1.05rem; }
+    .answer-input { font-size: 1rem; padding: 14px 16px; }
+    .bomb-sphere { width: 80px; height: 80px; }
+    .bomb-time { font-size: 1.8rem; }
+    .submit-answer-btn { padding: 0 16px; font-size: 0.8rem; }
+    .dot { width: 24px; height: 24px; font-size: 0.55rem; }
 }
 </style>
 
@@ -440,77 +431,93 @@ const questions = [
         correct: {{ question.correct_answer|tojson }},
         options: {{ question.options|default('null')|safe if question.options else 'null' }},
         points: {{ question.points }},
-        hint: {% if question.options %}
-            (() => {
-                const ans = {{ question.correct_answer|tojson }};
-                return "The answer starts with '" + ans.charAt(0) + "' and has " + ans.length + " characters";
-            })()
-        {% else %}
-            "Think carefully about the answer..."
-        {% endif %}
+        hint: (() => {
+            const ans = {{ question.correct_answer|tojson }};
+            return "Starts with '" + ans.charAt(0).toUpperCase() + "' — " + ans.length + " characters long";
+        })()
     }{% if not loop.last %},{% endif %}
     {% endfor %}
 ];
 
-const totalQ = questions.length;
+const TOTAL_Q = questions.length;
+const TIME_PER_Q = 60;
 let currentIdx = 0;
 let score = 0;
 let streak = 0;
 let bestStreak = 0;
 let totalTimeSpent = 0;
-let questionStartTime = Date.now();
+let questionStartTime = 0;
 let timerInterval = null;
-let timeLeft = 60;
+let timeLeft = TIME_PER_Q;
 let soundEnabled = true;
-let hintUsed = false;
+let isSubmitting = false;
 
-// ========== SOUND EFFECTS ==========
+// ========== AUDIO ENGINE ==========
 const AudioCtx = window.AudioContext || window.webkitAudioContext;
 let audioCtx = null;
 
-function ensureAudio() {
-    if (!audioCtx) audioCtx = new AudioCtx();
-}
+function initAudio() { if (!audioCtx) audioCtx = new AudioCtx(); }
 
-function playTone(freq, duration, type='square', vol=0.15) {
+function playTone(freq, dur, type='square', vol=0.12) {
     if (!soundEnabled) return;
-    ensureAudio();
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.type = type;
-    osc.frequency.value = freq;
-    gain.gain.value = vol;
-    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    osc.start();
-    osc.stop(audioCtx.currentTime + duration);
+    initAudio();
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type = type; o.frequency.value = freq;
+    g.gain.setValueAtTime(vol, audioCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start(); o.stop(audioCtx.currentTime + dur);
 }
 
 function sfxCorrect() {
-    playTone(523, 0.1, 'square', 0.12);
-    setTimeout(() => playTone(659, 0.1, 'square', 0.12), 100);
-    setTimeout(() => playTone(784, 0.15, 'square', 0.12), 200);
+    playTone(523, 0.08, 'square', 0.1);
+    setTimeout(() => playTone(659, 0.08, 'square', 0.1), 80);
+    setTimeout(() => playTone(784, 0.08, 'square', 0.1), 160);
+    setTimeout(() => playTone(1047, 0.15, 'square', 0.12), 240);
 }
 
 function sfxWrong() {
-    playTone(200, 0.15, 'sawtooth', 0.12);
-    setTimeout(() => playTone(150, 0.25, 'sawtooth', 0.12), 150);
+    playTone(180, 0.12, 'sawtooth', 0.12);
+    setTimeout(() => playTone(130, 0.3, 'sawtooth', 0.1), 120);
 }
 
-function sfxTick() {
-    playTone(800, 0.03, 'sine', 0.05);
+function sfxTick() { playTone(900, 0.02, 'sine', 0.04); }
+
+function sfxTickLow() { playTone(300, 0.06, 'square', 0.08); }
+
+function sfxWarning() {
+    playTone(440, 0.08, 'square', 0.1);
+    setTimeout(() => playTone(440, 0.08, 'square', 0.1), 150);
 }
 
-function sfxTimeLow() {
-    playTone(440, 0.1, 'square', 0.1);
+function sfxDanger() {
+    playTone(600, 0.05, 'square', 0.12);
+    setTimeout(() => playTone(400, 0.05, 'square', 0.12), 100);
 }
 
-function sfxGameOver() {
-    playTone(523, 0.15, 'square', 0.12);
-    setTimeout(() => playTone(659, 0.15, 'square', 0.12), 150);
-    setTimeout(() => playTone(784, 0.15, 'square', 0.12), 300);
-    setTimeout(() => playTone(1047, 0.3, 'square', 0.15), 450);
+function sfxExplosion() {
+    if (!soundEnabled) return;
+    initAudio();
+    // White noise burst
+    const bufSize = audioCtx.sampleRate * 0.4;
+    const buf = audioCtx.createBuffer(1, bufSize, audioCtx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < bufSize; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i/bufSize, 2);
+    const src = audioCtx.createBufferSource();
+    src.buffer = buf;
+    const g = audioCtx.createGain();
+    g.gain.setValueAtTime(0.2, audioCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.4);
+    src.connect(g); g.connect(audioCtx.destination);
+    src.start();
+    // Low boom
+    playTone(60, 0.5, 'sine', 0.15);
+}
+
+function sfxVictory() {
+    const notes = [523, 659, 784, 1047, 784, 1047];
+    notes.forEach((n, i) => setTimeout(() => playTone(n, 0.12, 'square', 0.1), i * 100));
 }
 
 function toggleSound() {
@@ -518,66 +525,102 @@ function toggleSound() {
     document.getElementById('sound-icon').className = soundEnabled ? 'fas fa-volume-up' : 'fas fa-volume-mute';
 }
 
-// ========== TIMER ==========
-function getTimeForQ(idx) {
-    return idx < 5 ? 60 : 30;
-}
-
+// ========== BOMB TIMER ==========
 function startTimer() {
     clearInterval(timerInterval);
-    timeLeft = getTimeForQ(currentIdx);
-    const maxTime = timeLeft;
-    updateTimerDisplay(timeLeft, maxTime);
+    timeLeft = TIME_PER_Q;
+    isSubmitting = false;
+    updateBomb(timeLeft);
+
+    const bc = document.getElementById('bomb-container');
+    bc.className = 'bomb-container';
+    document.getElementById('bomb-warning').style.display = 'none';
+    document.getElementById('bomb-body').classList.remove('bomb-explode');
 
     timerInterval = setInterval(() => {
         timeLeft--;
-        updateTimerDisplay(timeLeft, maxTime);
+        updateBomb(timeLeft);
 
-        if (timeLeft <= 5) sfxTimeLow();
-        else if (timeLeft <= 10) sfxTick();
+        // Sound effects based on time
+        if (timeLeft <= 5 && timeLeft > 0) {
+            sfxDanger();
+        } else if (timeLeft <= 15 && timeLeft > 5) {
+            sfxWarning();
+        } else if (timeLeft <= 30) {
+            sfxTickLow();
+        }
+
+        // Visual states
+        if (timeLeft <= 5) {
+            bc.className = 'bomb-container bomb-critical-state';
+            document.getElementById('bomb-warning').style.display = 'block';
+        } else if (timeLeft <= 15) {
+            bc.className = 'bomb-container bomb-danger-state';
+            document.getElementById('bomb-warning').style.display = 'block';
+        } else if (timeLeft <= 30) {
+            bc.className = 'bomb-container bomb-warning-state';
+        }
 
         if (timeLeft <= 0) {
             clearInterval(timerInterval);
-            // Time's up - auto submit empty
+            // BOOM! Time's up
+            sfxExplosion();
+            document.getElementById('bomb-body').classList.add('bomb-explode');
             submitAnswer(true);
         }
     }, 1000);
 }
 
-function updateTimerDisplay(current, max) {
-    document.getElementById('timer-seconds').textContent = current;
-    const pct = ((max - current) / max) * 100;
-    document.getElementById('timer-ring-fg').style.strokeDashoffset = pct;
+function updateBomb(t) {
+    document.getElementById('bomb-time').textContent = t;
+}
 
-    const ring = document.getElementById('timer-ring-fg');
-    ring.classList.remove('warning', 'danger');
-    if (current <= 5) ring.classList.add('danger');
-    else if (current <= 15) ring.classList.add('warning');
+// ========== PARTICLE BURST ==========
+function burstParticles(x, y, color, count) {
+    for (let i = 0; i < count; i++) {
+        const el = document.createElement('div');
+        el.className = 'particle';
+        el.style.left = x + 'px';
+        el.style.top = y + 'px';
+        el.style.background = color;
+        const angle = (Math.PI * 2 * i) / count + (Math.random() * 0.5);
+        const dist = 60 + Math.random() * 80;
+        el.style.setProperty('--tx', Math.cos(angle) * dist + 'px');
+        el.style.setProperty('--ty', Math.sin(angle) * dist + 'px');
+        document.body.appendChild(el);
+        setTimeout(() => el.remove(), 800);
+    }
 }
 
 // ========== GAME LOGIC ==========
 function loadQuestion() {
     const q = questions[currentIdx];
+    isSubmitting = false;
+
     document.getElementById('q-badge').textContent = 'QUESTION ' + (currentIdx + 1);
     document.getElementById('hud-question').textContent = 'Q' + (currentIdx + 1);
     document.getElementById('question-text').innerHTML = q.text;
 
-    // Show hint toggle
+    // Hint
     document.getElementById('hint-toggle').style.display = 'inline';
     document.getElementById('question-hint').style.display = 'none';
     document.getElementById('question-hint').textContent = q.hint;
-    hintUsed = false;
 
-    // Clear and focus input
+    // Input
     const input = document.getElementById('answer-input');
     input.value = '';
-    input.focus();
+    input.disabled = false;
     input.classList.remove('glow-correct', 'glow-wrong');
+    input.focus();
+    document.getElementById('submit-answer-btn').disabled = false;
 
-    // Update progress
-    document.getElementById('progress-fill').style.width = ((currentIdx) / totalQ * 100) + '%';
+    // Progress dots
+    document.querySelectorAll('.dot').forEach((d, i) => {
+        if (i === currentIdx) d.classList.add('active');
+        else d.classList.remove('active');
+    });
 
-    // Start timer
+    // Timer
     questionStartTime = Date.now();
     startTimer();
 }
@@ -585,57 +628,62 @@ function loadQuestion() {
 function showHint() {
     document.getElementById('question-hint').style.display = 'block';
     document.getElementById('hint-toggle').style.display = 'none';
-    hintUsed = true;
     sfxTick();
 }
 
-function handleKeyDown(e) {
-    if (e.key === 'Enter') {
-        e.preventDefault();
-        submitAnswer();
-    }
-}
-
 function submitAnswer(timedOut = false) {
+    if (isSubmitting) return;
+    isSubmitting = true;
     clearInterval(timerInterval);
 
     const q = questions[currentIdx];
     const input = document.getElementById('answer-input');
     const userAnswer = timedOut ? '' : input.value.trim();
 
-    // Track time for this question
+    // Disable input immediately - no going back
+    input.disabled = true;
+    document.getElementById('submit-answer-btn').disabled = true;
+
+    // Track time
     totalTimeSpent += Math.round((Date.now() - questionStartTime) / 1000);
 
-    // Store answer in hidden form
+    // Store answer
     document.getElementById('form-answer-' + q.id).value = userAnswer;
 
-    // Check answer
+    // Score
     const isCorrect = userAnswer.toLowerCase() === q.correct.toLowerCase();
+    const dotEl = document.getElementById('dot-' + currentIdx);
+    dotEl.classList.remove('active');
 
     if (isCorrect) {
         score += q.points;
         streak++;
         if (streak > bestStreak) bestStreak = streak;
 
-        // Visual feedback
+        dotEl.classList.add('correct');
         sfxCorrect();
         input.classList.add('glow-correct');
+
+        // Particle burst from bomb
+        const bomb = document.getElementById('bomb-sphere');
+        const rect = bomb.getBoundingClientRect();
+        burstParticles(rect.left + rect.width/2, rect.top + rect.height/2, '#10b981', 12);
+
         document.getElementById('game-arena').classList.add('flash-green');
-        setTimeout(() => document.getElementById('game-arena').classList.remove('flash-green'), 400);
+        setTimeout(() => document.getElementById('game-arena').classList.remove('flash-green'), 500);
 
         showFeedback(true, q.correct);
     } else {
         streak = 0;
-        sfxWrong();
-        input.classList.add('glow-wrong');
-        document.getElementById('game-arena').classList.add('flash-red');
-        document.getElementById('qg-wrapper')?.classList?.add('shake');
-        document.getElementById('game-arena').classList.add('shake');
-        setTimeout(() => {
-            document.getElementById('game-arena').classList.remove('flash-red', 'shake');
-        }, 500);
 
-        showFeedback(false, q.correct, userAnswer);
+        dotEl.classList.add(timedOut ? 'timeout' : 'wrong');
+        if (!timedOut) sfxWrong();
+        input.classList.add('glow-wrong');
+
+        document.getElementById('game-arena').classList.add('flash-red', 'shake');
+        setTimeout(() => document.getElementById('game-arena').classList.remove('flash-red', 'shake'), 500);
+
+        showFeedback(false, q.correct, userAnswer, timedOut);
     }
 
     // Update HUD
@@ -648,24 +696,25 @@ function submitAnswer(timedOut = false) {
     }
 }
 
-function showFeedback(correct, correctAnswer, userAnswer) {
+function showFeedback(correct, correctAnswer, userAnswer, timedOut) {
     const overlay = document.getElementById('feedback-overlay');
     const content = document.getElementById('feedback-content');
 
     if (correct) {
-        const msgs = ['+' + questions[currentIdx].points + ' Points!', 'Correct!', 'Nailed It!', 'Perfect!'];
+        const msgs = ['CORRECT!', 'NAILED IT!', 'PERFECT!', 'BRILLIANT!'];
         content.innerHTML = `
             <div class="feedback-correct">
-                <i class="fas fa-check-circle"></i>
-                ${msgs[Math.floor(Math.random() * msgs.length)]}
-                ${streak >= 3 ? '<br><span style="font-size:1.2rem;color:#fbbf24;"><i class="fas fa-fire"></i> ' + streak + 'x Streak!</span>' : ''}
+                <i class="fas fa-check-circle fb-icon"></i>
+                <div class="fb-text">${msgs[Math.floor(Math.random() * msgs.length)]}</div>
+                <div class="fb-points">+${questions[currentIdx].points} point${questions[currentIdx].points > 1 ? 's' : ''}</div>
+                ${streak >= 3 ? '<div style="margin-top:8px;color:#fbbf24;font-size:1.1rem;font-weight:700;"><i class="fas fa-fire"></i> ' + streak + 'x STREAK!</div>' : ''}
             </div>`;
     } else {
         content.innerHTML = `
             <div class="feedback-wrong">
-                <i class="fas fa-times-circle"></i>
-                ${userAnswer ? 'Not Quite!' : "Time's Up!"}
-                <div class="correct-ans">Correct answer: <strong>${correctAnswer}</strong></div>
+                <i class="fas ${timedOut ? 'fa-bomb' : 'fa-times-circle'} fb-icon"></i>
+                <div class="fb-text">${timedOut ? "BOOM! TIME'S UP!" : 'WRONG!'}</div>
+                <div class="fb-correct">Answer: <strong>${correctAnswer}</strong></div>
             </div>`;
     }
 
@@ -675,35 +724,32 @@ function showFeedback(correct, correctAnswer, userAnswer) {
         overlay.style.display = 'none';
         currentIdx++;
 
-        if (currentIdx < totalQ) {
+        if (currentIdx < TOTAL_Q) {
             loadQuestion();
         } else {
             finishQuiz();
         }
-    }, correct ? 1200 : 2000);
+    }, correct ? 1200 : 2200);
 }
 
 function finishQuiz() {
-    sfxGameOver();
+    clearInterval(timerInterval);
+    sfxVictory();
     document.getElementById('form-time-spent').value = totalTimeSpent;
-    document.getElementById('progress-fill').style.width = '100%';
 
-    // Auto-submit form
     window.onbeforeunload = null;
     document.getElementById('quiz-form').submit();
 }
 
 // ========== INIT ==========
 window.history.pushState(null, '', window.location.href);
-window.onpopstate = function() {
-    window.history.pushState(null, '', window.location.href);
-};
+window.onpopstate = () => window.history.pushState(null, '', window.location.href);
+window.onbeforeunload = () => 'Leaving will lose your progress!';
 
-window.onbeforeunload = function() {
-    return 'Leaving will lose your progress!';
-};
-
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', () => {
+    // Init audio on first interaction
+    document.addEventListener('click', initAudio, { once: true });
+    document.addEventListener('keydown', initAudio, { once: true });
     loadQuestion();
 });
 </script>
