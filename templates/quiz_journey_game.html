@@ -429,15 +429,17 @@ const questions = [
         text: {{ question.question_text|tojson }},
         type: {{ question.question_type|tojson }},
         correct: {{ question.correct_answer|tojson }},
-        options: {{ question.options|default('null')|safe if question.options else 'null' }},
-        points: {{ question.points }},
-        hint: (() => {
-            const ans = {{ question.correct_answer|tojson }};
-            return "Starts with '" + ans.charAt(0).toUpperCase() + "' — " + ans.length + " characters long";
-        })()
+        options: {% if question.options %}{{ question.options|safe }}{% else %}null{% endif %},
+        points: {{ question.points }}
     }{% if not loop.last %},{% endif %}
     {% endfor %}
 ];
+
+// Build hints safely after array is ready
+questions.forEach(q => {
+    const a = q.correct;
+    q.hint = "Starts with '" + a.charAt(0).toUpperCase() + "' - " + a.length + " characters long";
+});
 
 const TOTAL_Q = questions.length;
 const TIME_PER_Q = 60;
