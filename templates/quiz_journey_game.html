@@ -528,7 +528,7 @@ function toggleSound() {
 }
 
 // ========== BOMB TIMER ==========
-function startTimer() {
+function startBombTimer() {
     clearInterval(timerInterval);
     timeLeft = TIME_PER_Q;
     isSubmitting = false;
@@ -624,7 +624,7 @@ function loadQuestion() {
 
     // Timer
     questionStartTime = Date.now();
-    startTimer();
+    startBombTimer();
 }
 
 function showHint() {
