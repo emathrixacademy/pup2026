@@ -115,6 +115,11 @@
                 <a href="{{ url_for('messages') }}" class="dropdown-item">
                     <i class="fas fa-envelope"></i> Messages
                 </a>
+                {% if current_user.role == 'instructor' %}
+                <a href="{{ url_for('backup_page') }}" class="dropdown-item">
+                    <i class="fas fa-database"></i> Backup & Restore
+                </a>
+                {% endif %}
                 <div class="dropdown-divider"></div>
                 <a href="{{ url_for('logout') }}" class="dropdown-item logout">
                     <i class="fas fa-sign-out-alt"></i> Logout

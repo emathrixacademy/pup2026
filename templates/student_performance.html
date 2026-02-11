@@ -10,38 +10,110 @@
     </div>
 </div>
 
+<!-- Summary Stats -->
+<div class="perf-stats-grid">
+    <div class="perf-stat-card purple">
+        <div class="perf-stat-icon"><i class="fas fa-clipboard-check"></i></div>
+        <div class="perf-stat-info">
+            <h3>{{ quizzes|length }}</h3>
+            <p>Total Quizzes</p>
+        </div>
+    </div>
+    <div class="perf-stat-card blue">
+        <div class="perf-stat-icon"><i class="fas fa-pencil-alt"></i></div>
+        <div class="perf-stat-info">
+            <h3>{{ total_attempts }}</h3>
+            <p>Quiz Attempts</p>
+        </div>
+    </div>
+    <div class="perf-stat-card green">
+        <div class="perf-stat-icon"><i class="fas fa-trophy"></i></div>
+        <div class="perf-stat-info">
+            <h3>{{ total_perfect }}</h3>
+            <p>Perfect Scores</p>
+        </div>
+    </div>
+    <div class="perf-stat-card orange">
+        <div class="perf-stat-icon"><i class="fas fa-star-half-alt"></i></div>
+        <div class="perf-stat-info">
+            <h3>{{ overall_avg }}</h3>
+            <p>Avg Score (pts)</p>
+        </div>
+    </div>
+    <div class="perf-stat-card teal">
+        <div class="perf-stat-icon"><i class="fas fa-gamepad"></i></div>
+        <div class="perf-stat-info">
+            <h3>{{ game_players|length }}</h3>
+            <p>Game Players</p>
+        </div>
+    </div>
+</div>
+
 <!-- Tab Navigation -->
 <div class="perf-tabs">
     <button class="perf-tab active" onclick="switchPerfTab('quiz', this)">
         <i class="fas fa-clipboard-check"></i> Quiz Analytics
+        <span class="tab-count">{{ quizzes|length }}</span>
     </button>
     <button class="perf-tab" onclick="switchPerfTab('game', this)">
         <i class="fas fa-gamepad"></i> Python Game
+        <span class="tab-count">{{ game_players|length }}</span>
     </button>
 </div>
 
 <!-- QUIZ ANALYTICS TAB -->
 <div id="quiz-tab" class="perf-content active">
-    <!-- Section Filter + Search -->
+    <!-- Filter Bar -->
     <div class="filter-bar-perf">
         <div class="filter-group">
-            <label><i class="fas fa-filter"></i> Section:</label>
-            <select id="section-filter-quiz" onchange="filterQuizCards()">
-                <option value="all">All Sections</option>
+            <label><i class="fas fa-filter"></i> Filter:</label>
+            <select id="filterQuizSubject" onchange="filterQuizCards()">
+                <option value="">All Subjects</option>
+                {% for subject in subjects %}
+                <option value="{{ subject }}">{{ subject }}</option>
+                {% endfor %}
+            </select>
+            <select id="filterQuizSection" onchange="filterQuizCards()">
+                <option value="">All Sections</option>
                 {% for section in sections %}
                 <option value="{{ section }}">{{ section }}</option>
                 {% endfor %}
             </select>
+            <div class="search-box-perf">
+                <i class="fas fa-search"></i>
+                <input type="text" id="searchQuiz" placeholder="Search quiz..." oninput="filterQuizCards()">
+            </div>
         </div>
-        <div class="search-box-perf">
-            <i class="fas fa-search"></i>
-            <input type="text" id="search-quiz" placeholder="Search quiz or subject..." onkeyup="filterQuizCards()">
+        <div class="filter-right-info">
+            <span class="filter-count-perf">Showing <span id="quizVisibleCount">{{ quizzes|length }}</span> of {{ quizzes|length }}</span>
+            <div class="pagination-controls" id="quizPagination">
+                <button class="page-btn" id="quizPrevBtn" onclick="changeQuizPage(-1)" disabled><i class="fas fa-chevron-left"></i></button>
+                <span class="page-info" id="quizPageInfo">Page 1</span>
+                <button class="page-btn" id="quizNextBtn" onclick="changeQuizPage(1)"><i class="fas fa-chevron-right"></i></button>
+            </div>
         </div>
     </div>
 
+    <!-- Subject Category Tabs -->
+    <div class="subject-tabs" id="subjectTabs">
+        <button class="subject-tab active" data-subject="" onclick="selectSubjectTab(this)">
+            <i class="fas fa-layer-group"></i> All
+        </button>
+        {% set seen_subjects = [] %}
+        {% for quiz in quizzes %}
+        {% if quiz.subject_name not in seen_subjects %}
+        {% if seen_subjects.append(quiz.subject_name) %}{% endif %}
+        <button class="subject-tab" data-subject="{{ quiz.subject_name }}" onclick="selectSubjectTab(this)">
+            {{ quiz.subject_name }}
+        </button>
+        {% endif %}
+        {% endfor %}
+    </div>
+
     {% if quizzes %}
+    <div id="quizCardsContainer">
     {% for quiz in quizzes %}
-    <div class="quiz-analytics-card" data-section="{{ quiz.section or '' }}" data-search="{{ quiz.quiz_title|lower }} {{ quiz.subject_name|lower }} {{ quiz.session_title|lower }}">
+    <div class="quiz-analytics-card" data-subject="{{ quiz.subject_name }}" data-section="{{ quiz.section or '' }}" data-search="{{ quiz.quiz_title|lower }} {{ quiz.subject_name|lower }} {{ quiz.session_title|lower }}">
         <div class="qac-header" onclick="toggleQuizCard({{ quiz.id }})">
             <div class="qac-title-area">
                 <h3><i class="fas fa-clipboard-check"></i> {{ quiz.quiz_title }}</h3>
@@ -188,6 +260,7 @@
         </div>
     </div>
     {% endfor %}
+    </div>
     {% else %}
     <div class="empty-state-card">
         <i class="fas fa-clipboard"></i>
@@ -201,18 +274,19 @@
 <div id="game-tab" class="perf-content" style="display:none;">
     <div class="filter-bar-perf">
         <div class="filter-group">
-            <label><i class="fas fa-filter"></i> Section:</label>
-            <select id="section-filter-game" onchange="filterGameTable()">
-                <option value="all">All Sections</option>
+            <label><i class="fas fa-filter"></i> Filter:</label>
+            <select id="filterGameSection" onchange="filterGameTable()">
+                <option value="">All Sections</option>
                 {% for section in sections %}
                 <option value="{{ section }}">{{ section }}</option>
                 {% endfor %}
             </select>
+            <div class="search-box-perf">
+                <i class="fas fa-search"></i>
+                <input type="text" id="searchGame" placeholder="Search student..." oninput="filterGameTable()">
+            </div>
         </div>
-        <div class="search-box-perf">
-            <i class="fas fa-search"></i>
-            <input type="text" id="search-game" placeholder="Search student..." onkeyup="filterGameTable()">
-        </div>
+        <span class="filter-count-perf">Showing <span id="gameVisibleCount">{{ game_players|length }}</span> of {{ game_players|length }}</span>
     </div>
 
     {% if game_players %}
@@ -235,7 +309,7 @@
                 </thead>
                 <tbody>
                     {% for player in game_players %}
-                    <tr data-section="{{ player.section or '' }}">
+                    <tr data-section="{{ player.section or '' }}" data-name="{{ player.full_name|lower }}" data-sid="{{ player.student_id|lower if player.student_id else '' }}">
                         <td style="text-align:center;">
                             {% if loop.index <= 3 %}
                             <span class="rank-badge rank-{{ loop.index }}">{{ loop.index }}</span>
@@ -280,15 +354,62 @@
 <!-- Missed Questions Modal -->
 <div class="modal-overlay" id="missed-modal" style="display:none;" onclick="if(event.target===this)this.style.display='none'">
     <div class="modal-box" onclick="event.stopPropagation()">
-        <div class="modal-header">
+        <div class="modal-header-perf">
             <h3><i class="fas fa-exclamation-triangle"></i> <span id="missed-modal-title">Missed Questions</span></h3>
-            <button onclick="document.getElementById('missed-modal').style.display='none'" class="modal-close">&times;</button>
+            <button onclick="document.getElementById('missed-modal').style.display='none'" class="modal-close-btn">&times;</button>
         </div>
-        <div class="modal-body" id="missed-modal-body"></div>
+        <div class="modal-body-perf" id="missed-modal-body"></div>
     </div>
 </div>
 
 <style>
+/* Summary Stats Grid */
+.perf-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.perf-stat-card {
+    background: white;
+    border-radius: 12px;
+    padding: 1.25rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.perf-stat-card:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08); }
+
+.perf-stat-card.purple { border-left: 4px solid #8B5CF6; }
+.perf-stat-card.blue { border-left: 4px solid #0EA5E9; }
+.perf-stat-card.green { border-left: 4px solid #10B981; }
+.perf-stat-card.orange { border-left: 4px solid #F59E0B; }
+.perf-stat-card.teal { border-left: 4px solid #14B8A6; }
+
+.perf-stat-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.3rem;
+    flex-shrink: 0;
+}
+
+.perf-stat-card.purple .perf-stat-icon { background: #EDE9FE; color: #7C3AED; }
+.perf-stat-card.blue .perf-stat-icon { background: #E0F2FE; color: #0284C7; }
+.perf-stat-card.green .perf-stat-icon { background: #D1FAE5; color: #059669; }
+.perf-stat-card.orange .perf-stat-icon { background: #FEF3C7; color: #D97706; }
+.perf-stat-card.teal .perf-stat-icon { background: #CCFBF1; color: #0D9488; }
+
+.perf-stat-info h3 { margin: 0; font-size: 1.6rem; color: #1F2937; }
+.perf-stat-info p { margin: 0; color: #6B7280; font-size: 0.82rem; }
+
 /* Tabs */
 .perf-tabs {
     display: flex;
@@ -314,15 +435,51 @@
 .perf-tab:hover { background: #E5E7EB; }
 .perf-tab.active { background: linear-gradient(135deg, #8B5CF6, #6D28D9); color: white; box-shadow: 0 4px 12px rgba(139,92,246,0.3); }
 
+.tab-count {
+    background: rgba(255,255,255,0.2);
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.78rem;
+}
+.perf-tab:not(.active) .tab-count { background: #E5E7EB; color: #6B7280; }
+
 .perf-content { display: none; }
 .perf-content.active { display: block; }
+
+/* Subject Category Tabs */
+.subject-tabs {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+    padding: 4px;
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+}
+
+.subject-tab {
+    padding: 8px 16px;
+    border: none;
+    background: transparent;
+    color: #6B7280;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.82rem;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.subject-tab:hover { background: #F3F4F6; color: #374151; }
+.subject-tab.active { background: #EDE9FE; color: #7C3AED; }
 
 /* Filter */
 .filter-bar-perf {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 1.2rem;
+    margin-bottom: 1rem;
     flex-wrap: wrap;
     gap: 10px;
     background: white;
@@ -331,15 +488,41 @@
     box-shadow: 0 1px 4px rgba(0,0,0,0.04);
 }
 
-.filter-group { display: flex; align-items: center; gap: 10px; }
-.filter-group label { color: #6B7280; font-size: 0.9rem; white-space: nowrap; font-weight: 600; }
-.filter-group select { padding: 8px 15px; border: 1px solid #E5E7EB; border-radius: 8px; font-size: 0.9rem; background: white; }
-.filter-group select:focus { outline: none; border-color: #8B5CF6; }
+.filter-group { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.filter-group label { color: #6B7280; font-size: 0.85rem; white-space: nowrap; font-weight: 600; }
+.filter-group select { padding: 8px 15px; border: 1px solid #E5E7EB; border-radius: 8px; font-size: 0.85rem; background: #F9FAFB; color: #374151; min-width: 150px; }
+.filter-group select:focus { outline: none; border-color: #8B5CF6; box-shadow: 0 0 0 3px rgba(139,92,246,0.1); }
 
 .search-box-perf { position: relative; }
-.search-box-perf i { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #9CA3AF; }
-.search-box-perf input { padding: 8px 15px 8px 35px; border: 1px solid #E5E7EB; border-radius: 8px; font-size: 0.9rem; width: 250px; }
+.search-box-perf i { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #9CA3AF; font-size: 0.85rem; }
+.search-box-perf input { padding: 8px 15px 8px 35px; border: 1px solid #E5E7EB; border-radius: 8px; font-size: 0.85rem; width: 220px; background: #F9FAFB; }
 .search-box-perf input:focus { outline: none; border-color: #8B5CF6; box-shadow: 0 0 0 3px rgba(139,92,246,0.1); }
+
+.filter-right-info { display: flex; align-items: center; gap: 15px; flex-wrap: wrap; }
+.filter-count-perf { font-size: 0.85rem; color: #6B7280; white-space: nowrap; }
+
+/* Pagination */
+.pagination-controls { display: flex; align-items: center; gap: 6px; }
+
+.page-btn {
+    width: 32px;
+    height: 32px;
+    border: 1px solid #E5E7EB;
+    background: white;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #6B7280;
+    transition: all 0.2s;
+    font-size: 0.8rem;
+}
+
+.page-btn:hover:not(:disabled) { background: #EDE9FE; color: #7C3AED; border-color: #C4B5FD; }
+.page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.page-info { font-size: 0.82rem; color: #6B7280; font-weight: 600; white-space: nowrap; }
 
 /* Quiz Analytics Card */
 .quiz-analytics-card {
@@ -529,11 +712,11 @@
 /* Modal */
 .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; backdrop-filter: blur(2px); }
 .modal-box { background: white; border-radius: 16px; max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto; box-shadow: 0 25px 50px rgba(0,0,0,0.15); }
-.modal-header { display: flex; justify-content: space-between; align-items: center; padding: 1.2rem 1.5rem; border-bottom: 1px solid #E5E7EB; }
-.modal-header h3 { margin: 0; color: #D97706; font-size: 1.05rem; display: flex; align-items: center; gap: 8px; }
-.modal-close { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #9CA3AF; padding: 0; line-height: 1; }
-.modal-close:hover { color: #374151; }
-.modal-body { padding: 1.5rem; }
+.modal-header-perf { display: flex; justify-content: space-between; align-items: center; padding: 1.2rem 1.5rem; border-bottom: 1px solid #E5E7EB; }
+.modal-header-perf h3 { margin: 0; color: #D97706; font-size: 1.05rem; display: flex; align-items: center; gap: 8px; }
+.modal-close-btn { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #9CA3AF; padding: 0; line-height: 1; }
+.modal-close-btn:hover { color: #374151; }
+.modal-body-perf { padding: 1.5rem; }
 
 .missed-item {
     padding: 14px;
@@ -561,16 +744,24 @@
 .card { background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); border: 1px solid #E5E7EB; overflow: hidden; }
 
 @media (max-width: 768px) {
+    .perf-stats-grid { grid-template-columns: repeat(2, 1fr); }
     .qac-header { flex-direction: column; align-items: flex-start; }
     .qac-right { width: 100%; align-items: flex-start; }
     .qac-stats-mini { width: 100%; }
     .perf-table { font-size: 0.78rem; }
-    .search-box-perf input { width: 180px; }
+    .search-box-perf input { width: 160px; }
     .filter-bar-perf { flex-direction: column; align-items: flex-start; }
+    .filter-right-info { width: 100%; justify-content: space-between; }
+    .subject-tabs { gap: 4px; }
+    .subject-tab { padding: 6px 12px; font-size: 0.78rem; }
 }
 </style>
 
 <script>
+const QUIZZES_PER_PAGE = 8;
+let quizCurrentPage = 1;
+let filteredQuizCards = [];
+
 function switchPerfTab(tab, btn) {
     document.querySelectorAll('.perf-content').forEach(c => { c.style.display = 'none'; c.classList.remove('active'); });
     document.querySelectorAll('.perf-tab').forEach(t => t.classList.remove('active'));
@@ -613,27 +804,107 @@ function showMissed(missedList, studentName) {
     document.getElementById('missed-modal').style.display = 'flex';
 }
 
+function selectSubjectTab(btn) {
+    document.querySelectorAll('.subject-tab').forEach(t => t.classList.remove('active'));
+    btn.classList.add('active');
+    // Sync the subject dropdown
+    const subject = btn.dataset.subject;
+    document.getElementById('filterQuizSubject').value = subject;
+    filterQuizCards();
+}
+
 function filterQuizCards() {
-    const section = document.getElementById('section-filter-quiz').value;
-    const search = document.getElementById('search-quiz').value.toLowerCase();
-    document.querySelectorAll('.quiz-analytics-card').forEach(card => {
+    const subject = document.getElementById('filterQuizSubject').value;
+    const section = document.getElementById('filterQuizSection').value;
+    const search = document.getElementById('searchQuiz').value.toLowerCase().trim();
+
+    // Sync subject tabs with dropdown
+    document.querySelectorAll('.subject-tab').forEach(t => {
+        t.classList.toggle('active', t.dataset.subject === subject);
+    });
+
+    const allCards = document.querySelectorAll('.quiz-analytics-card');
+    filteredQuizCards = [];
+
+    allCards.forEach(card => {
+        const cardSubject = card.dataset.subject;
         const cardSection = card.dataset.section;
         const cardSearch = card.dataset.search || '';
-        const sectionMatch = section === 'all' || cardSection === section;
-        const searchMatch = !search || cardSearch.includes(search);
-        card.style.display = (sectionMatch && searchMatch) ? '' : 'none';
+
+        let show = true;
+        if (subject && cardSubject !== subject) show = false;
+        if (section && cardSection !== section) show = false;
+        if (search && !cardSearch.includes(search)) show = false;
+
+        if (show) {
+            filteredQuizCards.push(card);
+        }
+        card.style.display = 'none'; // hide all first
     });
+
+    document.getElementById('quizVisibleCount').textContent = filteredQuizCards.length;
+
+    // Reset to page 1
+    quizCurrentPage = 1;
+    renderQuizPage();
+}
+
+function renderQuizPage() {
+    const totalPages = Math.max(1, Math.ceil(filteredQuizCards.length / QUIZZES_PER_PAGE));
+    if (quizCurrentPage > totalPages) quizCurrentPage = totalPages;
+
+    // Hide all
+    document.querySelectorAll('.quiz-analytics-card').forEach(c => c.style.display = 'none');
+
+    // Show current page items
+    const start = (quizCurrentPage - 1) * QUIZZES_PER_PAGE;
+    const end = start + QUIZZES_PER_PAGE;
+    for (let i = start; i < end && i < filteredQuizCards.length; i++) {
+        filteredQuizCards[i].style.display = '';
+    }
+
+    // Update pagination UI
+    document.getElementById('quizPageInfo').textContent = 'Page ' + quizCurrentPage + ' of ' + totalPages;
+    document.getElementById('quizPrevBtn').disabled = (quizCurrentPage <= 1);
+    document.getElementById('quizNextBtn').disabled = (quizCurrentPage >= totalPages);
+
+    // Show/hide pagination
+    const paginationEl = document.getElementById('quizPagination');
+    paginationEl.style.display = filteredQuizCards.length > QUIZZES_PER_PAGE ? 'flex' : 'none';
+}
+
+function changeQuizPage(delta) {
+    const totalPages = Math.max(1, Math.ceil(filteredQuizCards.length / QUIZZES_PER_PAGE));
+    quizCurrentPage += delta;
+    if (quizCurrentPage < 1) quizCurrentPage = 1;
+    if (quizCurrentPage > totalPages) quizCurrentPage = totalPages;
+    renderQuizPage();
+    // Scroll to top of quiz tab
+    document.getElementById('quiz-tab').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function filterGameTable() {
-    const section = document.getElementById('section-filter-game').value;
-    const search = document.getElementById('search-game').value.toLowerCase();
+    const section = document.getElementById('filterGameSection').value;
+    const search = document.getElementById('searchGame').value.toLowerCase().trim();
+    let visible = 0;
+
     document.querySelectorAll('#game-table tbody tr').forEach(row => {
         const rowSection = row.dataset.section;
-        const text = row.textContent.toLowerCase();
-        const sectionMatch = section === 'all' || rowSection === section;
-        row.style.display = (sectionMatch && text.includes(search)) ? '' : 'none';
+        const rowName = row.dataset.name || '';
+        const rowSid = row.dataset.sid || '';
+        let show = true;
+        if (section && rowSection !== section) show = false;
+        if (search && !rowName.includes(search) && !rowSid.includes(search)) show = false;
+        row.style.display = show ? '' : 'none';
+        if (show) visible++;
     });
+
+    document.getElementById('gameVisibleCount').textContent = visible;
 }
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', function() {
+    filterQuizCards();
+});
 </script>
 {% endblock %}

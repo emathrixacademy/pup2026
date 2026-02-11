@@ -24,23 +24,61 @@
         {% if sessions %}
         <ul class="session-list" style="padding: 1rem;">
             {% for session in sessions %}
-            <li class="session-item">
+            {% set progress = session_progress.get(session.id, {}) %}
+            {% set is_locked = session.id in locked_sessions %}
+            {% set steps_done = (progress.get('step_video', 0)|int + progress.get('step_slides', 0)|int + progress.get('step_reading', 0)|int + progress.get('step_activity', 0)|int + progress.get('step_quiz', 0)|int) %}
+            {% set is_complete = progress.get('completed', false) %}
+            <li class="session-item" style="{% if is_locked %}opacity: 0.6;{% endif %}">
                 <div class="session-info">
-                    <div class="session-number">{{ session.session_number }}</div>
+                    <div class="session-number" style="{% if is_complete %}background: #10B981;{% elif is_locked %}background: #94A3B8;{% endif %}">
+                        {% if is_complete %}
+                        <i class="fas fa-check" style="font-size: 0.9rem;"></i>
+                        {% elif is_locked %}
+                        <i class="fas fa-lock" style="font-size: 0.8rem;"></i>
+                        {% else %}
+                        {{ session.session_number }}
+                        {% endif %}
+                    </div>
                     <div>
                         <div class="session-title">{{ session.title }}</div>
                         <div class="session-meta">
-                            <i class="fas fa-book-reader"></i> Lesson & Activities
+                            {% if is_locked %}
+                            <span style="color: #94A3B8;"><i class="fas fa-lock"></i> Complete Session {{ session.session_number - 1 }} first</span>
+                            {% elif is_complete %}
+                            <span style="color: #10B981;"><i class="fas fa-check-circle"></i> Session completed</span>
+                            {% else %}
+                            <!-- Progress mini-bar -->
+                            <span style="color: #64748B;">Progress: {{ steps_done }}/5 steps</span>
+                            <div style="display: inline-flex; gap: 3px; margin-left: 8px; vertical-align: middle;">
+                                <div style="width: 12px; height: 12px; border-radius: 50%; background: {% if progress.get('step_video', 0) %}#10B981{% else %}#E2E8F0{% endif %};" title="Video"></div>
+                                <div style="width: 12px; height: 12px; border-radius: 50%; background: {% if progress.get('step_slides', 0) %}#10B981{% else %}#E2E8F0{% endif %};" title="Slides"></div>
+                                <div style="width: 12px; height: 12px; border-radius: 50%; background: {% if progress.get('step_reading', 0) %}#10B981{% else %}#E2E8F0{% endif %};" title="Reading"></div>
+                                <div style="width: 12px; height: 12px; border-radius: 50%; background: {% if progress.get('step_activity', 0) %}#10B981{% else %}#E2E8F0{% endif %};" title="Activity"></div>
+                                <div style="width: 12px; height: 12px; border-radius: 50%; background: {% if progress.get('step_quiz', 0) %}#10B981{% else %}#E2E8F0{% endif %};" title="Quiz"></div>
+                            </div>
+                            {% endif %}
                         </div>
                     </div>
                 </div>
                 <div class="session-actions">
+                    {% if is_locked %}
+                    <button class="btn btn-sm btn-secondary" disabled style="opacity: 0.5; cursor: not-allowed;">
+                        <i class="fas fa-lock"></i> Locked
+                    </button>
+                    {% else %}
                     <a href="{{ url_for('session_lesson', session_id=session.id) }}" class="btn btn-sm btn-success">
                         <i class="fas fa-play-circle"></i> Lesson
                     </a>
+                    {% if progress.get('step_video', 0) and progress.get('step_slides', 0) and progress.get('step_reading', 0) %}
                     <a href="{{ url_for('student_session_activities', session_id=session.id) }}" class="btn btn-sm btn-primary">
                         <i class="fas fa-tasks"></i> Activities
                     </a>
+                    {% else %}
+                    <button class="btn btn-sm btn-secondary" disabled title="Complete video, slides & reading first" style="opacity: 0.5; cursor: not-allowed;">
+                        <i class="fas fa-lock"></i> Activities
+                    </button>
+                    {% endif %}
+                    {% endif %}
                 </div>
             </li>
             {% endfor %}
@@ -63,7 +101,9 @@
         {% if quizzes %}
         <ul class="session-list" style="padding: 1rem;">
             {% for quiz in quizzes %}
-            <li class="session-item">
+            {% set qprogress = session_progress.get(quiz.session_id, {}) %}
+            {% set quiz_locked = quiz.session_id in locked_sessions or not qprogress.get('step_activity', 0) %}
+            <li class="session-item" style="{% if quiz_locked %}opacity: 0.6;{% endif %}">
                 <div class="session-info">
                     <div class="session-number" style="background: #8B5CF6;">{{ quiz.session_number }}</div>
                     <div>
@@ -77,9 +117,15 @@
                         </div>
                     </div>
                 </div>
+                {% if quiz_locked %}
+                <button class="btn btn-sm btn-secondary" disabled title="Complete the activity first" style="opacity: 0.5; cursor: not-allowed;">
+                    <i class="fas fa-lock"></i> Locked
+                </button>
+                {% else %}
                 <a href="{{ url_for('take_quiz', quiz_id=quiz.id) }}" class="btn btn-sm btn-violet">
                     <i class="fas fa-play"></i> Take Quiz
                 </a>
+                {% endif %}
             </li>
             {% endfor %}
         </ul>

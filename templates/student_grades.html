@@ -6,7 +6,7 @@
 <div class="page-header">
     <div>
         <h1><i class="fas fa-chart-line"></i> {% if current_user.role == 'instructor' %}Grades: {{ student.full_name }}{% else %}My Grades{% endif %}</h1>
-        <p class="page-subtitle">View your academic performance across enrolled subjects</p>
+        <p>View academic performance across enrolled subjects</p>
     </div>
     {% if current_user.role == 'instructor' %}
     <a href="{{ url_for('grades') }}" class="btn btn-secondary">
@@ -16,196 +16,171 @@
 </div>
 
 <!-- Student Info Card -->
-<div class="student-profile-card">
-    <div class="student-avatar">
-        <img src="{{ url_for('static', filename='uploads/photos/' + (student.photo or 'default.png')) }}"
-             alt="Profile"
-             onerror="this.src='https://ui-avatars.com/api/?name={{ student.full_name }}&background=6366F1&color=fff&size=100'">
-    </div>
-    <div class="student-details">
-        <h2>{{ student.full_name }}</h2>
-        <div class="student-meta">
-            <span><i class="fas fa-id-badge"></i> {{ student.student_id or 'N/A' }}</span>
-            <span><i class="fas fa-users"></i> {{ student.section or 'N/A' }}</span>
+<div class="card" style="margin-bottom: 1.5rem;">
+    <div class="card-body">
+        <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
+            <img src="{{ url_for('static', filename='uploads/photos/' + (student.photo or 'default.png')) }}"
+                 alt="Profile"
+                 style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 3px solid var(--primary-purple);"
+                 onerror="this.src='https://ui-avatars.com/api/?name={{ student.full_name }}&background=8B5CF6&color=fff&size=100'">
+            <div style="flex: 1;">
+                <h3 style="margin: 0 0 4px 0; color: var(--text-dark);">{{ student.full_name }}</h3>
+                <p style="color: var(--text-gray); margin: 0; font-size: 0.9rem;">
+                    <i class="fas fa-id-badge"></i> {{ student.student_id or 'N/A' }}
+                    &nbsp;&nbsp;<i class="fas fa-users"></i> {{ student.section or 'N/A' }}
+                </p>
+            </div>
+            {% if grades %}
+            <span class="badge badge-active"><i class="fas fa-book-open"></i> {{ grades|length }} Subject{{ 's' if grades|length != 1 }} Enrolled</span>
+            {% endif %}
         </div>
     </div>
 </div>
 
 {% if grades %}
 {% for g in grades %}
-{% set subject_color = 'blue' %}
+{% set color_class = 'blue' %}
 {% if 'COMP019' in g.subject.code %}
-    {% set subject_color = 'emerald' %}
+    {% set color_class = 'blue' %}
 {% elif 'COMP012' in g.subject.code %}
-    {% set subject_color = 'violet' %}
+    {% set color_class = 'green' %}
 {% elif 'CNS' in g.subject.code %}
-    {% set subject_color = 'amber' %}
+    {% set color_class = 'purple' %}
 {% elif 'ES' in g.subject.code %}
-    {% set subject_color = 'rose' %}
+    {% set color_class = 'orange' %}
 {% endif %}
 
-<div class="grades-card {{ subject_color }}">
-    <div class="grades-card-header">
-        <div class="subject-header-info">
-            <i class="fas fa-book-open"></i>
-            <div>
-                <h3>{{ g.subject.code }} - {{ g.subject.name }}</h3>
-            </div>
+<div class="card sg-card">
+    <!-- Subject Header -->
+    <div class="card-header sg-card-header {{ color_class }}">
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <i class="fas fa-book-open" style="font-size: 1.1rem; color: var(--primary-purple);"></i>
+            <span class="card-title" style="margin: 0;">{{ g.subject.code }} - {{ g.subject.name }}</span>
         </div>
-        <span class="section-badge">{{ g.subject.section }}</span>
+        <span class="schedule-badge">{{ g.subject.section }}</span>
     </div>
 
-    <div class="grades-card-body">
-        <!-- Activities Table -->
-        <div class="grades-section">
-            <div class="section-header activities">
-                <i class="fas fa-tasks"></i> ACTIVITIES (12)
-            </div>
-            <div class="scores-table-wrapper">
-                <table class="scores-table">
-                    <thead>
-                        <tr>
-                            <th class="label-col">COMPONENT</th>
-                            {% for i in range(1, 13) %}
-                            <th>A{{ i }}</th>
-                            {% endfor %}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td class="label-col"><i class="fas fa-check-square"></i> Score</td>
-                            {% for activity in g.activity_scores %}
-                            <td>
-                                {% if activity.score is not none %}
-                                    <span class="score-pill">{{ "%.0f"|format(activity.score) }}</span>
-                                {% elif activity.pending %}
-                                    <span class="score-pending"><i class="fas fa-clock"></i></span>
-                                {% else %}
-                                    <span class="score-empty">-</span>
-                                {% endif %}
-                            </td>
-                            {% endfor %}
-                        </tr>
-                    </tbody>
-                </table>
+    <!-- Activities -->
+    <div class="sg-section">
+        <div class="sg-section-bar blue">
+            <i class="fas fa-tasks"></i> Activities
+            <span class="sg-count-badge">12</span>
+        </div>
+        <div class="sg-grid-wrap">
+            <div class="sg-grid">
+                {% for i in range(1, 13) %}
+                <div class="sg-col">
+                    <div class="sg-col-head">A{{ i }}</div>
+                    <div class="sg-col-body">
+                        {% if g.activity_scores[i-1].score is not none %}
+                            <span class="sg-pill green">{{ "%.0f"|format(g.activity_scores[i-1].score) }}</span>
+                        {% elif g.activity_scores[i-1].pending %}
+                            <span class="sg-pill amber"><i class="fas fa-clock"></i></span>
+                        {% else %}
+                            <span class="sg-dash">&mdash;</span>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
             </div>
         </div>
+    </div>
 
-        <!-- Quizzes Table -->
-        <div class="grades-section">
-            <div class="section-header quizzes">
-                <i class="fas fa-question-circle"></i> QUIZZES (12)
-            </div>
-            <div class="scores-table-wrapper">
-                <table class="scores-table">
-                    <thead>
-                        <tr>
-                            <th class="label-col">COMPONENT</th>
-                            {% for i in range(1, 13) %}
-                            <th>Q{{ i }}</th>
-                            {% endfor %}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td class="label-col"><i class="fas fa-pen"></i> Score</td>
-                            {% for quiz in g.quiz_scores %}
-                            <td>
-                                {% if quiz.score is not none %}
-                                    <span class="score-pill quiz">{{ "%.0f"|format(quiz.score) }}</span>
-                                {% elif quiz.pending %}
-                                    <span class="score-pending"><i class="fas fa-clock"></i></span>
-                                {% else %}
-                                    <span class="score-empty">-</span>
-                                {% endif %}
-                            </td>
-                            {% endfor %}
-                        </tr>
-                    </tbody>
-                </table>
+    <!-- Quizzes -->
+    <div class="sg-section">
+        <div class="sg-section-bar purple">
+            <i class="fas fa-question-circle"></i> Quizzes
+            <span class="sg-count-badge">12</span>
+        </div>
+        <div class="sg-grid-wrap">
+            <div class="sg-grid">
+                {% for i in range(1, 13) %}
+                <div class="sg-col">
+                    <div class="sg-col-head">Q{{ i }}</div>
+                    <div class="sg-col-body">
+                        {% if g.quiz_scores[i-1].score is not none %}
+                            <span class="sg-pill purple">{{ "%.0f"|format(g.quiz_scores[i-1].score) }}</span>
+                        {% elif g.quiz_scores[i-1].pending %}
+                            <span class="sg-pill amber"><i class="fas fa-clock"></i></span>
+                        {% else %}
+                            <span class="sg-dash">&mdash;</span>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
             </div>
         </div>
+    </div>
 
-        <!-- Major Exams Table -->
-        <div class="grades-section">
-            <div class="section-header exams">
-                <i class="fas fa-file-alt"></i> MAJOR EXAMS
+    <!-- Major Exams -->
+    <div class="sg-section">
+        <div class="sg-section-bar amber">
+            <i class="fas fa-file-alt"></i> Major Exams
+        </div>
+        <div class="sg-exams">
+            <div class="sg-exam-item">
+                <div class="sg-exam-title">Midterm Exam</div>
+                {% if g.midterm is not none %}
+                    <span class="sg-pill lg {% if g.midterm >= 75 %}green{% else %}red{% endif %}">{{ "%.1f"|format(g.midterm) }}%</span>
+                {% elif g.midterm_pending %}
+                    <span class="sg-pill amber"><i class="fas fa-clock"></i> Pending</span>
+                {% else %}
+                    <span class="sg-exam-na">Not yet taken</span>
+                {% endif %}
             </div>
-            <div class="scores-table-wrapper">
-                <table class="scores-table exams-table">
-                    <thead>
-                        <tr>
-                            <th class="label-col">COMPONENT</th>
-                            <th>MIDTERM EXAM</th>
-                            <th>FINAL EXAM</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td class="label-col"><i class="fas fa-award"></i> Score</td>
-                            <td class="exam-cell">
-                                {% if g.midterm is not none %}
-                                    <span class="score-pill exam">{{ "%.1f"|format(g.midterm) }}%</span>
-                                {% elif g.midterm_pending %}
-                                    <span class="score-pending"><i class="fas fa-clock"></i> Pending</span>
-                                {% else %}
-                                    <span class="score-na">Not yet taken</span>
-                                {% endif %}
-                            </td>
-                            <td class="exam-cell">
-                                {% if g.final is not none %}
-                                    <span class="score-pill exam">{{ "%.1f"|format(g.final) }}%</span>
-                                {% elif g.final_pending %}
-                                    <span class="score-pending"><i class="fas fa-clock"></i> Pending</span>
-                                {% else %}
-                                    <span class="score-na">Not yet taken</span>
-                                {% endif %}
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
+            <div class="sg-exam-divider"></div>
+            <div class="sg-exam-item">
+                <div class="sg-exam-title">Final Exam</div>
+                {% if g.final is not none %}
+                    <span class="sg-pill lg {% if g.final >= 75 %}green{% else %}red{% endif %}">{{ "%.1f"|format(g.final) }}%</span>
+                {% elif g.final_pending %}
+                    <span class="sg-pill amber"><i class="fas fa-clock"></i> Pending</span>
+                {% else %}
+                    <span class="sg-exam-na">Not yet taken</span>
+                {% endif %}
             </div>
         </div>
+    </div>
 
-        <!-- Summary Section -->
-        <div class="grades-summary">
-            <div class="summary-stats">
-                <div class="stat-item">
-                    <span class="stat-label">Activity Avg (50%)</span>
-                    <span class="stat-value">{{ "%.1f"|format(g.activity_avg) }}%</span>
+    <!-- Summary -->
+    <div class="sg-summary">
+        <div class="sg-summary-row">
+            <div class="sg-summary-left">
+                <div class="sg-sum-chip">
+                    <span class="sg-sum-label">Activity Avg (50%)</span>
+                    <span class="sg-sum-val">{{ "%.1f"|format(g.activity_avg) }}%</span>
                 </div>
-                <div class="stat-item">
-                    <span class="stat-label">Quiz Avg (10%)</span>
-                    <span class="stat-value">{{ "%.1f"|format(g.quiz_avg) }}%</span>
+                <div class="sg-sum-chip">
+                    <span class="sg-sum-label">Quiz Avg (10%)</span>
+                    <span class="sg-sum-val">{{ "%.1f"|format(g.quiz_avg) }}%</span>
                 </div>
-                <div class="stat-item midterm">
-                    <span class="stat-label">Midterm (20%)</span>
-                    <span class="stat-value {% if g.midterm is not none %}{% if g.midterm >= 75 %}passing{% else %}failing{% endif %}{% endif %}">
-                        {% if g.midterm is not none %}{{ "%.1f"|format(g.midterm) }}%{% else %}--{% endif %}
-                    </span>
+                <div class="sg-sum-chip outline">
+                    <span class="sg-sum-label">Midterm (20%)</span>
+                    <span class="sg-sum-val">{% if g.midterm is not none %}{{ "%.1f"|format(g.midterm) }}%{% else %}&mdash;{% endif %}</span>
                 </div>
-                <div class="stat-item final">
-                    <span class="stat-label">Final (20%)</span>
-                    <span class="stat-value {% if g.final is not none %}{% if g.final >= 75 %}passing{% else %}failing{% endif %}{% endif %}">
-                        {% if g.final is not none %}{{ "%.1f"|format(g.final) }}%{% else %}--{% endif %}
-                    </span>
-                </div>
-                <div class="stat-item weighted">
-                    <span class="stat-label">Weighted Average</span>
-                    <span class="stat-value {% if g.weighted >= 75 %}passing{% else %}failing{% endif %}">{{ "%.2f"|format(g.weighted) }}%</span>
+                <div class="sg-sum-chip outline">
+                    <span class="sg-sum-label">Final (20%)</span>
+                    <span class="sg-sum-val">{% if g.final is not none %}{{ "%.1f"|format(g.final) }}%{% else %}&mdash;{% endif %}</span>
                 </div>
             </div>
-            <div class="final-grade">
-                <div class="pup-grade">
-                    <span class="grade-label">PUP Grade</span>
-                    <span class="grade-value {% if g.pup_grade <= 3.0 %}pass{% else %}fail{% endif %}">{{ "%.2f"|format(g.pup_grade) }}</span>
-                </div>
-                <div class="pass-status {% if g.weighted >= 75 %}passed{% else %}failed{% endif %}">
-                    {% if g.weighted >= 75 %}
-                    <i class="fas fa-check-circle"></i> PASSED
-                    {% else %}
-                    <i class="fas fa-times-circle"></i> FAILED
-                    {% endif %}
+            <div class="sg-summary-right">
+                <div class="sg-final-box">
+                    <div class="sg-final-item">
+                        <span class="sg-final-label">Weighted Avg</span>
+                        <span class="sg-final-val {% if g.weighted >= 75 %}pass{% else %}fail{% endif %}">{{ "%.2f"|format(g.weighted) }}%</span>
+                    </div>
+                    <div class="sg-final-divider"></div>
+                    <div class="sg-final-item">
+                        <span class="sg-final-label">PUP Grade</span>
+                        <span class="sg-final-val {% if g.pup_grade <= 3.0 %}pass{% else %}fail{% endif %}">{{ "%.2f"|format(g.pup_grade) }}</span>
+                    </div>
+                    <div class="sg-status {% if g.weighted >= 75 %}passed{% else %}failed{% endif %}">
+                        {% if g.weighted >= 75 %}
+                        <i class="fas fa-check-circle"></i> PASSED
+                        {% else %}
+                        <i class="fas fa-times-circle"></i> FAILED
+                        {% endif %}
+                    </div>
                 </div>
             </div>
         </div>
@@ -214,404 +189,281 @@
 {% endfor %}
 
 {% else %}
-<div class="empty-grades">
-    <div class="empty-icon">
-        <i class="fas fa-chart-bar"></i>
+<div class="card">
+    <div class="card-body" style="text-align: center; padding: 60px 20px;">
+        <i class="fas fa-chart-bar" style="font-size: 3rem; color: var(--text-light); margin-bottom: 1rem; display: block;"></i>
+        <h3 style="color: var(--text-dark); margin-bottom: 0.5rem;">No Grades Available</h3>
+        <p style="color: var(--text-gray); margin: 0;">You are not enrolled in any subjects yet, or no grades have been recorded.</p>
     </div>
-    <h3>No Grades Available</h3>
-    <p>You are not enrolled in any subjects yet, or no grades have been recorded.</p>
 </div>
 {% endif %}
 
 <style>
-.page-subtitle {
-    color: #64748B;
-    font-size: 0.95rem;
-    margin-top: 4px;
+/* ===== Student Grades — Purple Clean Skin ===== */
+
+/* Card header color variants (pastel backgrounds matching dashboard) */
+.sg-card-header.blue { background: var(--card-blue); }
+.sg-card-header.green { background: var(--card-green); }
+.sg-card-header.purple { background: var(--card-purple); }
+.sg-card-header.orange { background: var(--card-orange); }
+
+.sg-card-header .card-title { color: var(--text-dark); }
+.sg-card-header i { color: var(--primary-purple); }
+
+/* Sections */
+.sg-section {
+    border-bottom: 1px solid var(--border-gray);
 }
+.sg-section:last-of-type { border-bottom: none; }
 
-/* Student Profile Card */
-.student-profile-card {
-    display: flex;
-    align-items: center;
-    gap: 20px;
-    background: white;
-    padding: 24px;
-    border-radius: 16px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-    margin-bottom: 24px;
-}
-
-.student-avatar img {
-    width: 80px;
-    height: 80px;
-    border-radius: 50%;
-    object-fit: cover;
-    border: 4px solid #8B5CF6;
-    box-shadow: 0 4px 15px rgba(139, 92, 246, 0.4);
-}
-
-.student-details h2 {
-    margin: 0 0 8px 0;
-    font-size: 1.35rem;
-    color: #1E293B;
-}
-
-.student-meta {
-    display: flex;
-    gap: 20px;
-    color: #64748B;
-    font-size: 0.9rem;
-}
-
-.student-meta span {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-
-/* Grades Card */
-.grades-card {
-    background: white;
-    border-radius: 16px;
-    overflow: hidden;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-    margin-bottom: 24px;
-    border: 1px solid rgba(0, 0, 0, 0.05);
-}
-
-/* Color Variants for Header - Vibrant Gradients */
-.grades-card.emerald .grades-card-header { background: linear-gradient(135deg, #10B981, #059669); box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4); }
-.grades-card.violet .grades-card-header { background: linear-gradient(135deg, #8B5CF6, #6D28D9); box-shadow: 0 4px 15px rgba(139, 92, 246, 0.4); }
-.grades-card.amber .grades-card-header { background: linear-gradient(135deg, #F59E0B, #D97706); box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4); }
-.grades-card.rose .grades-card-header { background: linear-gradient(135deg, #F43F5E, #E11D48); box-shadow: 0 4px 15px rgba(244, 63, 94, 0.4); }
-.grades-card.blue .grades-card-header { background: linear-gradient(135deg, #8B5CF6, #6D28D9); box-shadow: 0 4px 15px rgba(139, 92, 246, 0.4); }
-
-.grades-card-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 18px 24px;
-    color: white;
-}
-
-.subject-header-info {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-
-.subject-header-info i {
-    font-size: 1.5rem;
-    opacity: 0.9;
-}
-
-.subject-header-info h3 {
-    margin: 0;
-    font-size: 1.1rem;
-    font-weight: 600;
-}
-
-.section-badge {
-    background: rgba(255, 255, 255, 0.2);
-    padding: 6px 14px;
-    border-radius: 20px;
-    font-size: 0.8rem;
-    font-weight: 600;
-    backdrop-filter: blur(10px);
-}
-
-.grades-card-body {
-    padding: 0;
-}
-
-/* Grades Sections */
-.grades-section {
-    border-bottom: 1px solid #E2E8F0;
-}
-
-.grades-section:last-of-type {
-    border-bottom: none;
-}
-
-.section-header {
-    padding: 12px 20px;
-    font-size: 0.85rem;
-    font-weight: 700;
-    color: white;
+.sg-section-bar {
     display: flex;
     align-items: center;
     gap: 8px;
+    padding: 10px 20px;
+    font-size: 0.82rem;
+    font-weight: 700;
+    text-transform: uppercase;
     letter-spacing: 0.5px;
 }
 
-.section-header.activities { background: linear-gradient(90deg, #0EA5E9, #38BDF8); }
-.section-header.quizzes { background: linear-gradient(90deg, #8B5CF6, #A78BFA); }
-.section-header.exams { background: linear-gradient(90deg, #F59E0B, #FBBF24); }
+.sg-section-bar.blue { background: #EFF6FF; color: #2563EB; }
+.sg-section-bar.purple { background: #EDE9FE; color: #7C3AED; }
+.sg-section-bar.amber { background: #FFFBEB; color: #D97706; }
 
-/* Scores Table */
-.scores-table-wrapper {
+.sg-count-badge {
+    background: rgba(0,0,0,0.08);
+    padding: 1px 8px;
+    border-radius: 10px;
+    font-size: 0.72rem;
+}
+
+/* Score Grid */
+.sg-grid-wrap {
     overflow-x: auto;
 }
 
-.scores-table {
-    width: 100%;
-    border-collapse: collapse;
+.sg-grid {
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    min-width: 580px;
 }
 
-.scores-table th,
-.scores-table td {
-    padding: 12px 8px;
+.sg-col {
     text-align: center;
-    font-size: 0.85rem;
+    border-right: 1px solid var(--light-gray);
 }
+.sg-col:last-child { border-right: none; }
 
-.scores-table th {
-    background: #F8FAFC;
-    color: #475569;
+.sg-col-head {
+    padding: 8px 4px;
+    font-size: 0.78rem;
     font-weight: 600;
-    border-bottom: 2px solid #E2E8F0;
+    color: var(--text-gray);
+    background: var(--light-gray);
+    border-bottom: 1px solid var(--border-gray);
 }
 
-.scores-table td {
-    border-bottom: 1px solid #F1F5F9;
-}
-
-.scores-table .label-col {
-    text-align: left;
-    padding-left: 20px;
-    font-weight: 500;
-    color: #1E293B;
-    width: 120px;
-}
-
-.scores-table .label-col i {
-    margin-right: 6px;
-    color: #64748B;
-}
-
-.exams-table th:not(.label-col),
-.exams-table td:not(.label-col) {
-    width: 35%;
-}
-
-.exam-cell {
-    background: #FFFBEB;
+.sg-col-body {
+    padding: 14px 4px;
+    min-height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 /* Score Pills */
-.score-pill {
-    display: inline-block;
-    padding: 4px 10px;
-    border-radius: 20px;
+.sg-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 4px 12px;
+    border-radius: 8px;
+    font-weight: 700;
+    font-size: 0.82rem;
+}
+
+.sg-pill.green { background: #D1FAE5; color: #059669; }
+.sg-pill.purple { background: #EDE9FE; color: #7C3AED; }
+.sg-pill.amber { background: #FEF3C7; color: #D97706; }
+.sg-pill.red { background: #FEE2E2; color: #DC2626; }
+.sg-pill.lg { padding: 6px 18px; font-size: 0.95rem; }
+
+.sg-dash { color: var(--text-light); font-size: 1rem; }
+
+/* Exams */
+.sg-exams {
+    display: flex;
+    align-items: center;
+}
+
+.sg-exam-item {
+    flex: 1;
+    text-align: center;
+    padding: 20px 16px;
+}
+
+.sg-exam-divider {
+    width: 1px;
+    height: 50px;
+    background: var(--border-gray);
+    flex-shrink: 0;
+}
+
+.sg-exam-title {
+    font-size: 0.78rem;
     font-weight: 600;
-    font-size: 0.8rem;
-    background: linear-gradient(135deg, #10B981, #059669);
-    color: white;
+    color: var(--text-gray);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    margin-bottom: 10px;
 }
 
-.score-pill.quiz {
-    background: linear-gradient(135deg, #8B5CF6, #7C3AED);
-}
-
-.score-pill.exam {
-    padding: 6px 14px;
-    font-size: 0.9rem;
-    background: linear-gradient(135deg, #F59E0B, #D97706);
-}
-
-.score-pending {
-    color: #F59E0B;
-}
-
-.score-empty {
-    color: #CBD5E1;
-}
-
-.score-na {
-    color: #94A3B8;
+.sg-exam-na {
+    color: var(--text-light);
     font-style: italic;
-    font-size: 0.8rem;
+    font-size: 0.88rem;
 }
 
-/* Summary Section */
-.grades-summary {
-    background: linear-gradient(135deg, #1a1a2e 0%, #2d1b4e 50%, #1a1a2e 100%);
-    padding: 20px 24px;
+/* Summary Footer */
+.sg-summary {
+    background: linear-gradient(135deg, #1E1B2E 0%, #2D2347 100%);
+    padding: 18px 20px;
+}
+
+.sg-summary-row {
     display: flex;
     justify-content: space-between;
     align-items: center;
     flex-wrap: wrap;
-    gap: 20px;
-}
-
-.summary-stats {
-    display: flex;
-    gap: 32px;
-    flex-wrap: wrap;
-}
-
-.stat-item {
-    text-align: center;
-    color: white;
-}
-
-.stat-label {
-    display: block;
-    font-size: 0.75rem;
-    color: #94A3B8;
-    margin-bottom: 4px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-.stat-value {
-    font-size: 1.25rem;
-    font-weight: 700;
-}
-
-.stat-value.passing { color: #34D399; }
-.stat-value.failing { color: #F87171; }
-
-.stat-item.midterm {
-    background: rgba(245, 158, 11, 0.1);
-    padding: 10px 15px;
-    border-radius: 10px;
-    border: 1px solid rgba(245, 158, 11, 0.3);
-}
-
-.stat-item.final {
-    background: rgba(239, 68, 68, 0.1);
-    padding: 10px 15px;
-    border-radius: 10px;
-    border: 1px solid rgba(239, 68, 68, 0.3);
-}
-
-.stat-item.weighted {
-    background: rgba(139, 92, 246, 0.2);
-    padding: 10px 15px;
-    border-radius: 10px;
-    border: 1px solid rgba(139, 92, 246, 0.4);
-}
-
-.final-grade {
-    display: flex;
-    align-items: center;
     gap: 16px;
 }
 
-.pup-grade {
-    text-align: center;
-    background: rgba(255, 255, 255, 0.1);
-    padding: 12px 20px;
-    border-radius: 12px;
+.sg-summary-left {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    align-items: center;
 }
 
-.grade-label {
+.sg-sum-chip {
+    text-align: center;
+    padding: 8px 14px;
+}
+
+.sg-sum-chip.outline {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 10px;
+}
+
+.sg-sum-label {
     display: block;
-    font-size: 0.7rem;
+    font-size: 0.65rem;
     color: #94A3B8;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-bottom: 4px;
+    letter-spacing: 0.3px;
+    margin-bottom: 2px;
+    white-space: nowrap;
 }
 
-.grade-value {
-    font-size: 1.5rem;
-    font-weight: 800;
-    display: block;
-}
-
-.grade-value.pass { color: #34D399; }
-.grade-value.fail { color: #F87171; }
-
-.pass-status {
-    padding: 12px 20px;
-    border-radius: 12px;
+.sg-sum-val {
+    font-size: 1.05rem;
     font-weight: 700;
-    font-size: 0.9rem;
+    color: #E2E8F0;
+}
+
+.sg-summary-right {
+    display: flex;
+    align-items: center;
+}
+
+.sg-final-box {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    background: rgba(255,255,255,0.06);
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.sg-final-item {
+    text-align: center;
+    padding: 10px 18px;
+}
+
+.sg-final-divider {
+    width: 1px;
+    height: 36px;
+    background: rgba(255,255,255,0.12);
+    flex-shrink: 0;
+}
+
+.sg-final-label {
+    display: block;
+    font-size: 0.65rem;
+    color: #A78BFA;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    margin-bottom: 2px;
+    white-space: nowrap;
+}
+
+.sg-final-val {
+    font-size: 1.15rem;
+    font-weight: 800;
+}
+
+.sg-final-val.pass { color: #34D399; }
+.sg-final-val.fail { color: #F87171; }
+
+.sg-status {
+    padding: 10px 18px;
+    font-weight: 700;
+    font-size: 0.82rem;
     color: white;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
+    white-space: nowrap;
+    border-left: 1px solid rgba(255,255,255,0.08);
 }
 
-.pass-status.passed { background: #10B981; }
-.pass-status.failed { background: #EF4444; }
-
-/* Empty State */
-.empty-grades {
-    text-align: center;
-    padding: 80px 40px;
-    background: white;
-    border-radius: 16px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-}
-
-.empty-grades .empty-icon {
-    width: 100px;
-    height: 100px;
-    background: linear-gradient(135deg, #F1F5F9, #E2E8F0);
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin: 0 auto 24px;
-}
-
-.empty-grades .empty-icon i {
-    font-size: 2.5rem;
-    color: #94A3B8;
-}
-
-.empty-grades h3 {
-    color: #1E293B;
-    margin-bottom: 8px;
-}
-
-.empty-grades p {
-    color: #64748B;
-}
+.sg-status.passed { background: #10B981; }
+.sg-status.failed { background: #EF4444; }
 
 /* Responsive */
 @media (max-width: 768px) {
-    .student-profile-card {
+    .sg-summary-row {
         flex-direction: column;
-        text-align: center;
     }
 
-    .student-meta {
+    .sg-summary-left {
+        justify-content: center;
+        width: 100%;
+    }
+
+    .sg-summary-right {
+        width: 100%;
+    }
+
+    .sg-final-box {
+        width: 100%;
         justify-content: center;
     }
 
-    .grades-summary {
-        flex-direction: column;
-        text-align: center;
-    }
+    .sg-final-item { flex: 1; }
+    .sg-status { justify-content: center; }
 
-    .summary-stats {
-        justify-content: center;
-    }
+    .sg-exams { flex-direction: column; }
+    .sg-exam-divider { width: 60%; height: 1px; }
 
-    .final-grade {
-        flex-direction: column;
-    }
+    .sg-grid { min-width: 500px; }
 
-    .scores-table .label-col {
-        width: 90px;
-        padding-left: 10px;
+    .sg-pill {
+        padding: 3px 8px;
         font-size: 0.75rem;
-    }
-
-    .scores-table th,
-    .scores-table td {
-        padding: 8px 4px;
-        font-size: 0.75rem;
-    }
-
-    .score-pill {
-        padding: 3px 6px;
-        font-size: 0.7rem;
     }
 }
 </style>

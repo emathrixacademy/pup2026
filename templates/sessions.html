@@ -10,6 +10,14 @@
         <p class="section-info">{{ subject.section }}</p>
     </div>
     <div class="flex gap-10">
+        {% if current_user.role == 'instructor' %}
+        <button class="btn btn-teal" onclick="bulkToggleVisibility('show')" id="btnShowAll" title="Show all sessions, activities, quizzes & exams to students">
+            <i class="fas fa-eye"></i> Show All
+        </button>
+        <button class="btn btn-danger" onclick="bulkToggleVisibility('hide')" id="btnHideAll" title="Hide all sessions, activities, quizzes & exams from students">
+            <i class="fas fa-eye-slash"></i> Hide All
+        </button>
+        {% endif %}
         <a href="{{ url_for('all_activities', subject_id=subject.id) }}" class="btn btn-success">
             <i class="fas fa-tasks"></i> All Activities
         </a>
@@ -125,6 +133,48 @@
                         </div>
                         {% endif %}
                         {% endif %}
+                        {% if current_user.role == 'instructor' %}
+                        <div class="youtube-url-section">
+                            <div class="youtube-input-group">
+                                <i class="fab fa-youtube" style="color: #FF0000; font-size: 1.1rem;"></i>
+                                <input type="text"
+                                       class="youtube-url-input"
+                                       id="youtube-url-{{ session.id }}"
+                                       value="{{ session.youtube_url or '' }}"
+                                       placeholder="Paste YouTube URL here..."
+                                       onkeydown="if(event.key==='Enter'){event.preventDefault();saveYoutubeUrl({{ session.id }});}">
+                                <input type="number"
+                                       id="video-duration-{{ session.id }}"
+                                       value="{{ session.video_duration or '' }}"
+                                       placeholder="Duration (sec)"
+                                       style="width: 110px; padding: 6px 8px; border: 1px solid #D1D5DB; border-radius: 6px; font-size: 0.85rem;"
+                                       title="Video duration in seconds">
+                                <button class="btn btn-sm btn-success" onclick="saveYoutubeUrl({{ session.id }})" title="Save YouTube URL">
+                                    <i class="fas fa-save"></i>
+                                </button>
+                                {% if session.youtube_url %}
+                                <button class="btn btn-sm btn-danger" onclick="clearYoutubeUrl({{ session.id }})" title="Remove video">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                                {% endif %}
+                            </div>
+                            <div style="margin-top: 6px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                                {% if session.youtube_url %}
+                                <span class="badge badge-visible">
+                                    <i class="fab fa-youtube"></i> Video linked
+                                </span>
+                                {% endif %}
+                                <button class="btn btn-sm {% if session.reading_materials %}btn-primary{% else %}btn-secondary{% endif %}"
+                                        onclick="openReadingEditor({{ session.id }}, '{{ session.title|e }}')" title="Edit reading materials">
+                                    <i class="fas fa-book-reader"></i>
+                                    {% if session.reading_materials %}Edit Reading{% else %}Add Reading{% endif %}
+                                </button>
+                                {% if session.reading_materials %}
+                                <span class="badge badge-visible"><i class="fas fa-book"></i> Reading added</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
                 <div class="session-actions">
@@ -147,6 +197,25 @@
                     <a href="{{ url_for('session_quiz', session_id=session.id) }}" class="btn btn-sm btn-violet">
                         <i class="fas fa-question-circle"></i> Quiz
                     </a>
+                    {% if current_user.role == 'instructor' and session.session_number > 1 %}
+                    <div class="unlock-dropdown" style="position: relative; display: inline-block;">
+                        <button class="btn btn-sm btn-warning" onclick="toggleUnlockMenu({{ session.id }})" title="Manually unlock this session for students">
+                            <i class="fas fa-unlock-alt"></i> Unlock
+                        </button>
+                        <div id="unlock-menu-{{ session.id }}" class="unlock-menu" style="display:none;">
+                            <div class="unlock-menu-header">Unlock Session {{ session.session_number }} for:</div>
+                            <button class="unlock-option" onclick="unlockSession({{ session.id }}, 'all')">
+                                <i class="fas fa-users"></i> All Students
+                            </button>
+                            {% for student in enrolled_students %}
+                            <button class="unlock-option" onclick="unlockSession({{ session.id }}, {{ student.id }})">
+                                <img src="/static/uploads/photos/{{ student.photo or 'default.png' }}" class="unlock-avatar" onerror="this.src='/static/uploads/photos/default.png'">
+                                {{ student.full_name }}
+                            </button>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
                 </div>
             </li>
             {% endfor %}
@@ -154,7 +223,79 @@
     </div>
 </div>
 
+<!-- Hidden reading materials data for TinyMCE editor -->
+{% for session in sessions %}
+<textarea id="reading-data-{{ session.id }}" style="display:none;">{{ session.reading_materials or '' }}</textarea>
+{% endfor %}
+
 <style>
+/* Reading Materials Modal */
+.reading-modal {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    z-index: 9999;
+    align-items: center;
+    justify-content: center;
+}
+.reading-modal-overlay {
+    position: absolute;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.5);
+}
+.reading-modal-content {
+    position: relative;
+    background: white;
+    border-radius: 16px;
+    width: 90%;
+    max-width: 900px;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    z-index: 1;
+}
+.reading-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid #E2E8F0;
+}
+.reading-modal-header h3 { margin: 0; font-size: 1.1rem; }
+.reading-modal-body { padding: 1rem 1.5rem; flex: 1; overflow-y: auto; }
+.reading-modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 1rem 1.5rem;
+    border-top: 1px solid #E2E8F0;
+}
+
+/* YouTube URL Section */
+.youtube-url-section {
+    margin-top: 8px;
+}
+.youtube-input-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    max-width: 650px;
+    flex-wrap: wrap;
+}
+.youtube-url-input {
+    flex: 1;
+    padding: 6px 10px;
+    border: 1px solid #D1D5DB;
+    border-radius: 6px;
+    font-size: 0.85rem;
+}
+.youtube-url-input:focus {
+    outline: none;
+    border-color: #FF0000;
+    box-shadow: 0 0 0 2px rgba(255, 0, 0, 0.1);
+}
+
 /* Enrolled Students Bar */
 .enrolled-bar {
     background: white;
@@ -364,6 +505,53 @@
 .perf-bar-fill.purple { background: #8B5CF6; }
 .perf-bar-fill.orange { background: #F59E0B; }
 
+/* Unlock Dropdown */
+.unlock-menu {
+    position: absolute;
+    right: 0;
+    top: 100%;
+    background: white;
+    border: 1px solid #E2E8F0;
+    border-radius: 10px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+    min-width: 220px;
+    max-height: 300px;
+    overflow-y: auto;
+    z-index: 100;
+    padding: 6px;
+}
+.unlock-menu-header {
+    padding: 8px 12px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #64748B;
+    border-bottom: 1px solid #E2E8F0;
+    margin-bottom: 4px;
+}
+.unlock-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 8px 12px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-size: 0.85rem;
+    border-radius: 6px;
+    text-align: left;
+    color: #1E293B;
+}
+.unlock-option:hover {
+    background: #F1F5F9;
+}
+.unlock-avatar {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
 @media (max-width: 768px) {
     .session-performance-stats {
         flex-direction: column;
@@ -378,6 +566,222 @@
 
 {% block extra_js %}
 <script>
+async function saveYoutubeUrl(sessionId) {
+    const input = document.getElementById('youtube-url-' + sessionId);
+    const url = input.value.trim();
+    const durationInput = document.getElementById('video-duration-' + sessionId);
+    const duration = parseInt(durationInput ? durationInput.value : 0) || 0;
+
+    try {
+        const response = await fetch('/api/session/youtube-url', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session_id: sessionId, youtube_url: url, video_duration: duration })
+        });
+        if (response.redirected || response.url.includes('/login')) {
+            alert('Session expired. Please log in again.');
+            location.href = '/login';
+            return;
+        }
+        const data = await response.json();
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Failed: ' + (data.error || 'Unknown error'));
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('An error occurred saving the YouTube URL. Please refresh the page and try again.');
+    }
+}
+
+async function clearYoutubeUrl(sessionId) {
+    if (!confirm('Remove the YouTube video link from this session?')) return;
+    document.getElementById('youtube-url-' + sessionId).value = '';
+    var durEl = document.getElementById('video-duration-' + sessionId);
+    if (durEl) durEl.value = '';
+    saveYoutubeUrl(sessionId);
+}
+
+// ==================== Reading Materials Editor ====================
+var currentEditSessionId = null;
+
+function openReadingEditor(sessionId, sessionTitle) {
+    currentEditSessionId = sessionId;
+    // Create modal if not exists
+    var modal = document.getElementById('readingModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'readingModal';
+        modal.innerHTML = `
+            <div class="reading-modal-overlay" onclick="closeReadingEditor()"></div>
+            <div class="reading-modal-content">
+                <div class="reading-modal-header">
+                    <h3><i class="fas fa-book-reader"></i> Edit Reading Materials - <span id="readingModalTitle"></span></h3>
+                    <button onclick="closeReadingEditor()" style="background:none;border:none;font-size:1.5rem;cursor:pointer;color:#64748B;">&times;</button>
+                </div>
+                <div class="reading-modal-body">
+                    <textarea id="readingEditor"></textarea>
+                </div>
+                <div class="reading-modal-footer">
+                    <button class="btn btn-secondary" onclick="closeReadingEditor()">Cancel</button>
+                    <button class="btn btn-success" onclick="saveReadingMaterials()" id="saveReadingBtn">
+                        <i class="fas fa-save"></i> Save
+                    </button>
+                </div>
+            </div>
+        `;
+        modal.className = 'reading-modal';
+        document.body.appendChild(modal);
+
+        // Initialize TinyMCE
+        if (typeof tinymce === 'undefined') {
+            var script = document.createElement('script');
+            script.src = 'https://cdn.tiny.cloud/1/no-api-key/tinymce/6/tinymce.min.js';
+            script.onload = function() { initTinyMCE(); loadReadingContent(sessionId); };
+            document.head.appendChild(script);
+        } else {
+            initTinyMCE();
+            loadReadingContent(sessionId);
+        }
+    } else {
+        loadReadingContent(sessionId);
+    }
+    document.getElementById('readingModalTitle').textContent = sessionTitle;
+    modal.style.display = 'flex';
+}
+
+function initTinyMCE() {
+    tinymce.init({
+        selector: '#readingEditor',
+        height: 400,
+        menubar: true,
+        plugins: 'lists link image table code wordcount',
+        toolbar: 'undo redo | blocks | bold italic underline | alignleft aligncenter alignright | bullist numlist | link image table | code',
+        content_style: 'body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 14px; }'
+    });
+}
+
+async function loadReadingContent(sessionId) {
+    try {
+        var r = await fetch('/api/session/' + sessionId + '/progress');
+        // We'll just load from the page — fetch the session reading
+    } catch(e) {}
+    // Load reading content by fetching the session reading page
+    try {
+        var r = await fetch('/session/' + sessionId + '/reading');
+        // Set content from existing data (we pass it via a hidden element)
+    } catch(e) {}
+    // For now, load from hidden data attribute
+    var existingContent = document.getElementById('reading-data-' + sessionId);
+    if (existingContent && tinymce.get('readingEditor')) {
+        tinymce.get('readingEditor').setContent(existingContent.value);
+    } else if (tinymce.get('readingEditor')) {
+        tinymce.get('readingEditor').setContent('');
+    }
+}
+
+function closeReadingEditor() {
+    var modal = document.getElementById('readingModal');
+    if (modal) modal.style.display = 'none';
+}
+
+async function saveReadingMaterials() {
+    var content = tinymce.get('readingEditor').getContent();
+    var btn = document.getElementById('saveReadingBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+    try {
+        var r = await fetch('/api/session/reading-materials', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session_id: currentEditSessionId, content: content })
+        });
+        if (r.redirected || r.url.includes('/login')) {
+            alert('Session expired.'); location.href = '/login'; return;
+        }
+        var d = await r.json();
+        if (d.success) {
+            closeReadingEditor();
+            location.reload();
+        } else {
+            alert(d.error || 'Error saving');
+        }
+    } catch(e) {
+        alert('Error: ' + e.message);
+    }
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-save"></i> Save';
+}
+
+async function bulkToggleVisibility(action) {
+    const label = action === 'show' ? 'SHOW' : 'HIDE';
+    if (!confirm(`Are you sure you want to ${label} all sessions, activities, quizzes, and exams for this subject?`)) return;
+
+    const btn = action === 'show' ? document.getElementById('btnShowAll') : document.getElementById('btnHideAll');
+    const originalHTML = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> ${action === 'show' ? 'Showing' : 'Hiding'}...`;
+
+    try {
+        const response = await fetch('/api/bulk-toggle-subject-visibility', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ subject_id: {{ subject.id }}, action: action })
+        });
+        const data = await response.json();
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Failed: ' + (data.error || 'Unknown error'));
+            btn.disabled = false;
+            btn.innerHTML = originalHTML;
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('An error occurred');
+        btn.disabled = false;
+        btn.innerHTML = originalHTML;
+    }
+}
+
+// ==================== Session Unlock ====================
+function toggleUnlockMenu(sessionId) {
+    // Close all other menus first
+    document.querySelectorAll('.unlock-menu').forEach(m => m.style.display = 'none');
+    var menu = document.getElementById('unlock-menu-' + sessionId);
+    menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+}
+
+// Close unlock menus when clicking outside
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('.unlock-dropdown')) {
+        document.querySelectorAll('.unlock-menu').forEach(m => m.style.display = 'none');
+    }
+});
+
+async function unlockSession(sessionId, studentId) {
+    var label = studentId === 'all' ? 'ALL enrolled students' : 'this student';
+    if (!confirm('Unlock this session for ' + label + '? This will mark the previous session as complete.')) return;
+    try {
+        var r = await fetch('/api/session/unlock', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session_id: sessionId, student_id: studentId })
+        });
+        if (r.redirected || r.url.includes('/login')) { alert('Session expired.'); location.href = '/login'; return; }
+        var d = await r.json();
+        if (d.success) {
+            alert('Session unlocked for ' + d.unlocked + ' student(s)!');
+            location.reload();
+        } else {
+            alert(d.error || 'Error unlocking');
+        }
+    } catch(e) {
+        alert('Error: ' + e.message);
+    }
+}
+
 async function toggleVisibility(type, id) {
     try {
         const response = await fetch('/api/toggle-visibility', {

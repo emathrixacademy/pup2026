@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify
+from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify, send_file
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
@@ -10,7 +10,10 @@ import base64
 import io
 import pandas as pd
 from PIL import Image
-from database import get_db, init_db
+from database import get_db, init_db, DATABASE
+import shutil
+import glob as glob_module
+import re
 
 app = Flask(__name__)
 app.secret_key = 'your-secret-key-change-this'
@@ -80,6 +83,99 @@ def from_json_filter(value):
         except:
             return []
     return []
+
+@app.template_filter('youtube_embed')
+def youtube_embed_filter(url):
+    """Convert YouTube URL to embed format."""
+    if not url:
+        return ''
+    # Handle youtu.be/VIDEO_ID
+    match = re.match(r'(?:https?://)?(?:www\.)?youtu\.be/([a-zA-Z0-9_-]+)', url)
+    if match:
+        return f'https://www.youtube.com/embed/{match.group(1)}'
+    # Handle youtube.com/watch?v=VIDEO_ID
+    match = re.match(r'(?:https?://)?(?:www\.)?youtube\.com/watch\?v=([a-zA-Z0-9_-]+)', url)
+    if match:
+        return f'https://www.youtube.com/embed/{match.group(1)}'
+    # Already embed format
+    if 'youtube.com/embed/' in url:
+        return url
+    return url
+
+# ==================== SESSION PROGRESS HELPERS ====================
+
+def get_session_progress(cursor, session_id, student_id):
+    """Get 5-step progress for a student in a session. Auto-completes steps that don't apply."""
+    cursor.execute('SELECT * FROM session_progress WHERE session_id = ? AND student_id = ?',
+                   (session_id, student_id))
+    row = cursor.fetchone()
+    progress = {
+        'step_video': row['step_video'] if row else 0,
+        'step_slides': row['step_slides'] if row else 0,
+        'step_reading': row['step_reading'] if row else 0,
+        'step_activity': row['step_activity'] if row else 0,
+        'step_quiz': row['step_quiz'] if row else 0,
+        'completed_at': row['completed_at'] if row else None,
+    }
+    # Auto-complete steps that don't apply for this session
+    cursor.execute('SELECT youtube_url, reading_materials FROM sessions WHERE id = ?', (session_id,))
+    sess = cursor.fetchone()
+    if sess:
+        if not sess['youtube_url']:
+            progress['step_video'] = 1
+        if not sess['reading_materials']:
+            progress['step_reading'] = 1
+    # Check if activities exist for this session
+    cursor.execute('SELECT COUNT(*) as cnt FROM activities WHERE session_id = ? AND is_visible = 1', (session_id,))
+    act_count = cursor.fetchone()['cnt']
+    if act_count == 0:
+        progress['step_activity'] = 1
+    # Check if quizzes exist for this session
+    cursor.execute('SELECT COUNT(*) as cnt FROM quizzes WHERE session_id = ? AND is_visible = 1', (session_id,))
+    quiz_count = cursor.fetchone()['cnt']
+    if quiz_count == 0:
+        progress['step_quiz'] = 1
+    progress['completed'] = all([
+        progress['step_video'], progress['step_slides'], progress['step_reading'],
+        progress['step_activity'], progress['step_quiz']
+    ])
+    return progress
+
+def check_previous_session_complete(cursor, session_id, student_id):
+    """Check if the previous session (by session_number) is fully completed."""
+    cursor.execute('SELECT session_number, subject_id FROM sessions WHERE id = ?', (session_id,))
+    current = cursor.fetchone()
+    if not current or current['session_number'] <= 1:
+        return True
+    # Find previous visible session in same subject
+    cursor.execute('''
+        SELECT id FROM sessions
+        WHERE subject_id = ? AND session_number = ? AND is_visible = 1
+    ''', (current['subject_id'], current['session_number'] - 1))
+    prev = cursor.fetchone()
+    if not prev:
+        return True  # No previous visible session, allow access
+    cursor.execute('''
+        SELECT completed_at FROM session_progress
+        WHERE session_id = ? AND student_id = ?
+    ''', (prev['id'], student_id))
+    prog = cursor.fetchone()
+    if prog and prog['completed_at']:
+        return True
+    # Also check via get_session_progress in case all steps auto-complete
+    prev_progress = get_session_progress(cursor, prev['id'], student_id)
+    return prev_progress['completed']
+
+def check_and_mark_session_complete(cursor, session_id, student_id):
+    """If all applicable steps are done, mark session as completed."""
+    progress = get_session_progress(cursor, session_id, student_id)
+    if progress['completed'] and not progress['completed_at']:
+        cursor.execute('''
+            INSERT INTO session_progress (session_id, student_id, step_video, step_slides, step_reading, step_activity, step_quiz, completed_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(session_id, student_id) DO UPDATE SET completed_at = CURRENT_TIMESTAMP
+        ''', (session_id, student_id, progress['step_video'], progress['step_slides'],
+              progress['step_reading'], progress['step_activity'], progress['step_quiz']))
 
 # Ensure upload folder exists
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
@@ -709,6 +805,260 @@ def toggle_visibility():
     conn.close()
     return jsonify({'success': True, 'is_visible': bool(new_value)})
 
+@app.route('/api/session/youtube-url', methods=['POST'])
+@login_required
+def save_session_youtube_url():
+    if current_user.role != 'instructor':
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    data = request.get_json()
+    session_id = data.get('session_id')
+    youtube_url = data.get('youtube_url', '').strip()
+    video_duration = data.get('video_duration', 0)
+
+    # Validate YouTube URL format (allow empty to clear)
+    if youtube_url and not any(domain in youtube_url for domain in ['youtube.com', 'youtu.be']):
+        return jsonify({'error': 'Invalid YouTube URL'}), 400
+
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('UPDATE sessions SET youtube_url = ?, video_duration = ? WHERE id = ?',
+                   (youtube_url or None, video_duration or 0, session_id))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True, 'youtube_url': youtube_url})
+
+@app.route('/api/session/video-heartbeat', methods=['POST'])
+@login_required
+def video_heartbeat():
+    """Track video watch progress with anti-cheat validation."""
+    if current_user.role != 'student':
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    data = request.get_json()
+    session_id = data.get('session_id')
+    current_time = data.get('current_time', 0)  # seconds
+    duration = data.get('duration', 0)  # total video duration in seconds
+
+    if not session_id or duration <= 0:
+        return jsonify({'error': 'Invalid data'}), 400
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # Verify session has a YouTube URL
+    cursor.execute('SELECT youtube_url, video_duration FROM sessions WHERE id = ?', (session_id,))
+    sess = cursor.fetchone()
+    if not sess or not sess['youtube_url']:
+        conn.close()
+        return jsonify({'error': 'No video for this session'}), 400
+
+    # Update video_duration if not set yet
+    if not sess['video_duration'] and duration > 0:
+        cursor.execute('UPDATE sessions SET video_duration = ? WHERE id = ?', (int(duration), session_id))
+
+    # Get or create watch record
+    cursor.execute('''
+        SELECT * FROM session_video_watches WHERE session_id = ? AND student_id = ?
+    ''', (session_id, current_user.id))
+    watch = cursor.fetchone()
+
+    if watch:
+        last_pos = watch['last_position'] or 0
+        delta = current_time - last_pos
+        # Anti-cheat: max 10 seconds per heartbeat (5s interval + 5s tolerance)
+        # Also handle backward seeks (delta < 0) — that's fine, just don't add time
+        if delta > 10:
+            delta = 5  # Cap to normal heartbeat interval
+        if delta < 0:
+            delta = 0
+        new_watched = (watch['watched_seconds'] or 0) + delta
+        completed = 1 if new_watched >= duration * 0.98 else (watch['completed'] or 0)  # 98% threshold for rounding
+        cursor.execute('''
+            UPDATE session_video_watches
+            SET watched_seconds = ?, last_position = ?, last_heartbeat_at = CURRENT_TIMESTAMP, completed = ?
+            WHERE session_id = ? AND student_id = ?
+        ''', (int(new_watched), int(current_time), completed, session_id, current_user.id))
+    else:
+        new_watched = min(current_time, 5)  # First heartbeat
+        completed = 1 if new_watched >= duration * 0.98 else 0
+        cursor.execute('''
+            INSERT INTO session_video_watches (session_id, student_id, watched_seconds, last_position, last_heartbeat_at, completed)
+            VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
+        ''', (session_id, current_user.id, int(new_watched), int(current_time), completed))
+
+    # If completed, update session progress
+    if completed:
+        cursor.execute('''
+            INSERT INTO session_progress (session_id, student_id, step_video)
+            VALUES (?, ?, 1)
+            ON CONFLICT(session_id, student_id) DO UPDATE SET step_video = 1
+        ''', (session_id, current_user.id))
+        check_and_mark_session_complete(cursor, session_id, current_user.id)
+
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True, 'watched_seconds': int(new_watched), 'completed': bool(completed)})
+
+@app.route('/api/session/complete-slides', methods=['POST'])
+@login_required
+def complete_slides():
+    """Mark slides as read for a session."""
+    if current_user.role != 'student':
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    data = request.get_json()
+    session_id = data.get('session_id')
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # Check video step is complete first
+    progress = get_session_progress(cursor, session_id, current_user.id)
+    if not progress['step_video']:
+        conn.close()
+        return jsonify({'error': 'Watch the video first'}), 400
+
+    cursor.execute('''
+        INSERT INTO session_progress (session_id, student_id, step_slides)
+        VALUES (?, ?, 1)
+        ON CONFLICT(session_id, student_id) DO UPDATE SET step_slides = 1
+    ''', (session_id, current_user.id))
+    check_and_mark_session_complete(cursor, session_id, current_user.id)
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+
+@app.route('/api/session/complete-reading', methods=['POST'])
+@login_required
+def complete_reading():
+    """Mark reading materials as finished for a session."""
+    if current_user.role != 'student':
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    data = request.get_json()
+    session_id = data.get('session_id')
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # Check slides step is complete first
+    progress = get_session_progress(cursor, session_id, current_user.id)
+    if not progress['step_slides']:
+        conn.close()
+        return jsonify({'error': 'Complete the slides first'}), 400
+
+    cursor.execute('''
+        INSERT INTO session_progress (session_id, student_id, step_reading)
+        VALUES (?, ?, 1)
+        ON CONFLICT(session_id, student_id) DO UPDATE SET step_reading = 1
+    ''', (session_id, current_user.id))
+    check_and_mark_session_complete(cursor, session_id, current_user.id)
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+
+@app.route('/api/session/<int:session_id>/progress')
+@login_required
+def get_progress(session_id):
+    """Get full progress for a student in a session."""
+    conn = get_db()
+    cursor = conn.cursor()
+    progress = get_session_progress(cursor, session_id, current_user.id)
+
+    # Also get video watch seconds
+    cursor.execute('''
+        SELECT watched_seconds, completed FROM session_video_watches
+        WHERE session_id = ? AND student_id = ?
+    ''', (session_id, current_user.id))
+    watch = cursor.fetchone()
+    progress['watched_seconds'] = watch['watched_seconds'] if watch else 0
+    progress['video_completed'] = bool(watch['completed']) if watch else False
+
+    # Get video duration
+    cursor.execute('SELECT video_duration FROM sessions WHERE id = ?', (session_id,))
+    sess = cursor.fetchone()
+    progress['video_duration'] = sess['video_duration'] if sess else 0
+
+    conn.close()
+    return jsonify(progress)
+
+@app.route('/api/session/reading-materials', methods=['POST'])
+@login_required
+def save_reading_materials():
+    """Save reading materials for a session (instructor only)."""
+    if current_user.role != 'instructor':
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    data = request.get_json()
+    session_id = data.get('session_id')
+    content = data.get('content', '').strip()
+
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('UPDATE sessions SET reading_materials = ? WHERE id = ?',
+                   (content or None, session_id))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+
+@app.route('/api/session/unlock', methods=['POST'])
+@login_required
+def unlock_session_for_students():
+    """Instructor manually unlocks a session by marking the PREVIOUS session as complete."""
+    if current_user.role != 'instructor':
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    data = request.get_json()
+    session_id = data.get('session_id')
+    student_id = data.get('student_id')  # specific student or 'all'
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # Get session info
+    cursor.execute('SELECT id, subject_id, session_number FROM sessions WHERE id = ?', (session_id,))
+    session = cursor.fetchone()
+    if not session:
+        conn.close()
+        return jsonify({'error': 'Session not found'}), 404
+
+    # Find the previous session to mark as complete
+    cursor.execute('''
+        SELECT id FROM sessions
+        WHERE subject_id = ? AND session_number = ? AND is_visible = 1
+    ''', (session['subject_id'], session['session_number'] - 1))
+    prev_session = cursor.fetchone()
+
+    # Determine which session to mark complete
+    # If session_number == 1, we mark THIS session's progress steps as complete
+    # Otherwise, we mark the PREVIOUS session as complete to unlock THIS one
+    target_session_id = prev_session['id'] if prev_session else session_id
+
+    # Get students to unlock for
+    if student_id == 'all':
+        cursor.execute('''
+            SELECT student_id FROM enrollments WHERE subject_id = ?
+        ''', (session['subject_id'],))
+        student_ids = [row['student_id'] for row in cursor.fetchall()]
+    else:
+        student_ids = [int(student_id)]
+
+    unlocked = 0
+    for sid in student_ids:
+        cursor.execute('''
+            INSERT INTO session_progress (session_id, student_id, step_video, step_slides, step_reading, step_activity, step_quiz, completed_at)
+            VALUES (?, ?, 1, 1, 1, 1, 1, CURRENT_TIMESTAMP)
+            ON CONFLICT(session_id, student_id) DO UPDATE SET
+                step_video = 1, step_slides = 1, step_reading = 1,
+                step_activity = 1, step_quiz = 1, completed_at = CURRENT_TIMESTAMP
+        ''', (target_session_id, sid))
+        unlocked += 1
+
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True, 'unlocked': unlocked})
+
 @app.route('/api/bulk-visibility', methods=['POST'])
 @login_required
 def bulk_visibility():
@@ -728,6 +1078,80 @@ def bulk_visibility():
     conn.close()
 
     return jsonify({'success': True, 'count': count})
+
+@app.route('/api/bulk-toggle-subject-visibility', methods=['POST'])
+@login_required
+def bulk_toggle_subject_visibility():
+    """Show or hide ALL sessions, activities, quizzes, and exams for a subject at once."""
+    if current_user.role != 'instructor':
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    data = request.get_json()
+    subject_id = data.get('subject_id')
+    action = data.get('action')  # 'show' or 'hide'
+
+    if not subject_id or action not in ('show', 'hide'):
+        return jsonify({'error': 'Invalid parameters'}), 400
+
+    new_value = 1 if action == 'show' else 0
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # Update all sessions
+    cursor.execute('UPDATE sessions SET is_visible = ? WHERE subject_id = ?', (new_value, subject_id))
+    session_count = cursor.rowcount
+
+    # Update all activities within those sessions
+    cursor.execute('''
+        UPDATE activities SET is_visible = ?
+        WHERE session_id IN (SELECT id FROM sessions WHERE subject_id = ?)
+    ''', (new_value, subject_id))
+
+    # Update all quizzes within those sessions
+    cursor.execute('''
+        UPDATE quizzes SET is_visible = ?
+        WHERE session_id IN (SELECT id FROM sessions WHERE subject_id = ?)
+    ''', (new_value, subject_id))
+
+    # Update all exams for this subject
+    cursor.execute('''
+        UPDATE exams SET is_visible = ?
+        WHERE subject_id = ?
+    ''', (new_value, subject_id))
+
+    conn.commit()
+    conn.close()
+
+    return jsonify({'success': True, 'action': action, 'sessions': session_count})
+
+@app.route('/api/bulk-toggle-activities', methods=['POST'])
+@login_required
+def bulk_toggle_activities():
+    """Open or close all activities for a given subject at once."""
+    if current_user.role != 'instructor':
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    data = request.get_json()
+    subject_id = data.get('subject_id')
+    action = data.get('action')  # 'open' or 'close'
+
+    if not subject_id or action not in ('open', 'close'):
+        return jsonify({'error': 'Invalid parameters'}), 400
+
+    new_value = 1 if action == 'open' else 0
+
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('''
+        UPDATE activities SET is_active = ?
+        WHERE session_id IN (SELECT id FROM sessions WHERE subject_id = ?)
+    ''', (new_value, subject_id))
+    count = cursor.rowcount
+    conn.commit()
+    conn.close()
+
+    return jsonify({'success': True, 'count': count, 'action': action})
 
 # ==================== INSTRUCTOR DASHBOARD ====================
 
@@ -888,6 +1312,52 @@ def manage_enrollments(student_id):
 
     conn.close()
     return render_template('manage_enrollments.html', student=student, subjects=subjects, enrolled_ids=enrolled_ids)
+
+@app.route('/students/bulk-enroll', methods=['POST'])
+@login_required
+def bulk_enroll_students():
+    if current_user.role != 'instructor':
+        return redirect(url_for('student_dashboard'))
+
+    subject_ids = request.form.getlist('subjects')
+    student_ids_str = request.form.get('student_ids', '')  # comma-separated
+    mode = request.form.get('mode', 'all')  # 'all' or 'selected'
+
+    if not subject_ids:
+        flash('Please select at least one subject.', 'error')
+        return redirect(url_for('students'))
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # Get student list
+    if mode == 'selected' and student_ids_str:
+        student_id_list = [int(sid) for sid in student_ids_str.split(',') if sid.strip()]
+        placeholders = ','.join('?' * len(student_id_list))
+        cursor.execute(f'SELECT id, full_name FROM users WHERE role = "student" AND id IN ({placeholders})', student_id_list)
+    else:
+        cursor.execute('SELECT id, full_name FROM users WHERE role = "student"')
+
+    student_list = cursor.fetchall()
+    enrolled_count = 0
+
+    for student in student_list:
+        for subj_id in subject_ids:
+            try:
+                cursor.execute('''
+                    INSERT OR IGNORE INTO enrollments (student_id, subject_id)
+                    VALUES (?, ?)
+                ''', (student['id'], int(subj_id)))
+                if cursor.rowcount > 0:
+                    enrolled_count += 1
+            except:
+                pass
+
+    conn.commit()
+    conn.close()
+
+    flash(f'Bulk enrollment complete! {enrolled_count} new enrollment(s) added for {len(student_list)} student(s).', 'success')
+    return redirect(url_for('students'))
 
 @app.route('/students/bulk-upload', methods=['POST'])
 @login_required
@@ -1696,6 +2166,9 @@ def submit_activity(activity_id):
             VALUES (?, ?, ?)
         ''', (submission_id, file_info['file_path'], file_info['file_name']))
 
+    # Note: step_activity is NOT marked here on submission.
+    # It will be marked when the instructor grades the submission (grade_activity route).
+
     conn.commit()
     conn.close()
 
@@ -1720,7 +2193,7 @@ def grade_activity(activity_id):
 
     # Get the submission and activity info
     cursor.execute('''
-        SELECT s.*, a.points, a.enable_peer_review
+        SELECT s.*, a.points, a.enable_peer_review, a.session_id as activity_session_id
         FROM submissions s
         JOIN activities a ON s.activity_id = a.id
         WHERE s.id = ?
@@ -1777,6 +2250,29 @@ def grade_activity(activity_id):
             SET score = ?, instructor_score = ?, final_score = ?, feedback = ?
             WHERE id = ?
         ''', (instructor_score, instructor_score, final_score, feedback, submission_id))
+
+    # Check if ALL visible activities for this session are graded for this student
+    act_session_id = submission['activity_session_id']
+    cursor.execute('''
+        SELECT COUNT(*) as total FROM activities WHERE session_id = ? AND is_visible = 1
+    ''', (act_session_id,))
+    total_activities = cursor.fetchone()['total']
+
+    cursor.execute('''
+        SELECT COUNT(DISTINCT a.id) as graded
+        FROM activities a
+        JOIN submissions s ON s.activity_id = a.id
+        WHERE a.session_id = ? AND s.student_id = ? AND s.final_score IS NOT NULL AND a.is_visible = 1
+    ''', (act_session_id, student_id))
+    graded_activities = cursor.fetchone()['graded']
+
+    if graded_activities >= total_activities:
+        cursor.execute('''
+            INSERT INTO session_progress (session_id, student_id, step_activity)
+            VALUES (?, ?, 1)
+            ON CONFLICT(session_id, student_id) DO UPDATE SET step_activity = 1
+        ''', (act_session_id, student_id))
+        check_and_mark_session_complete(cursor, act_session_id, student_id)
 
     conn.commit()
     conn.close()
@@ -2695,16 +3191,38 @@ def session_lesson(session_id):
         WHERE s.id = ?
     ''', (session_id,))
     session_data = cursor.fetchone()
-    conn.close()
 
     if not session_data:
+        conn.close()
         flash('Session not found', 'error')
         return redirect(url_for('dashboard'))
 
     # Check visibility for students
     if current_user.role == 'student' and not session_data['is_visible']:
+        conn.close()
         flash('This lesson is not yet available.', 'warning')
         return redirect(url_for('student_dashboard'))
+
+    # Check session gating for students (previous session must be complete)
+    progress = {}
+    video_watched = True
+    video_watch_seconds = 0
+    if current_user.role == 'student':
+        if not check_previous_session_complete(cursor, session_id, current_user.id):
+            conn.close()
+            flash('You must complete the previous session first.', 'warning')
+            return redirect(url_for('student_subject', subject_id=session_data['subject_id']))
+
+        progress = get_session_progress(cursor, session_id, current_user.id)
+        video_watched = bool(progress['step_video'])
+
+        # Get video watch seconds
+        cursor.execute('SELECT watched_seconds, completed FROM session_video_watches WHERE session_id = ? AND student_id = ?',
+                       (session_id, current_user.id))
+        watch_row = cursor.fetchone()
+        video_watch_seconds = watch_row['watched_seconds'] if watch_row else 0
+
+    conn.close()
 
     # Route to subject-specific lesson templates
     subject_code = session_data['subject_code']
@@ -2720,11 +3238,55 @@ def session_lesson(session_id):
     else:
         template_name = 'lesson.html'
 
+    tpl_data = dict(session=session_data, video_watched=video_watched,
+                    progress=progress, video_watch_seconds=video_watch_seconds)
+
     # Try to use subject-specific template, fallback to generic
     try:
-        return render_template(template_name, session=session_data)
+        return render_template(template_name, **tpl_data)
     except:
-        return render_template('lesson.html', session=session_data)
+        return render_template('lesson.html', **tpl_data)
+
+@app.route('/session/<int:session_id>/reading')
+@login_required
+def session_reading(session_id):
+    """Student reading materials page."""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT s.*, sub.code as subject_code, sub.name as subject_name, sub.id as subject_id
+        FROM sessions s
+        JOIN subjects sub ON s.subject_id = sub.id
+        WHERE s.id = ?
+    ''', (session_id,))
+    session_data = cursor.fetchone()
+
+    if not session_data:
+        conn.close()
+        flash('Session not found', 'error')
+        return redirect(url_for('dashboard'))
+
+    if current_user.role == 'student':
+        if not session_data['is_visible']:
+            conn.close()
+            flash('This session is not available.', 'warning')
+            return redirect(url_for('student_dashboard'))
+
+        if not check_previous_session_complete(cursor, session_id, current_user.id):
+            conn.close()
+            flash('You must complete the previous session first.', 'warning')
+            return redirect(url_for('student_subject', subject_id=session_data['subject_id']))
+
+        progress = get_session_progress(cursor, session_id, current_user.id)
+        if not progress['step_slides']:
+            conn.close()
+            flash('You must complete the slides first.', 'warning')
+            return redirect(url_for('session_lesson', session_id=session_id))
+    else:
+        progress = {}
+
+    conn.close()
+    return render_template('session_reading.html', session=session_data, progress=progress)
 
 # ==================== QUIZZES ====================
 
@@ -2954,6 +3516,19 @@ def take_quiz(quiz_id):
         flash('This quiz is not yet available.', 'warning')
         return redirect(url_for('student_dashboard'))
 
+    # Check session progress — must complete activity step before quiz
+    session_id_for_quiz = quiz['session_id']
+    if not check_previous_session_complete(cursor, session_id_for_quiz, current_user.id):
+        conn.close()
+        flash('You must complete the previous session first.', 'warning')
+        return redirect(url_for('student_dashboard'))
+
+    progress = get_session_progress(cursor, session_id_for_quiz, current_user.id)
+    if not progress['step_activity']:
+        conn.close()
+        flash('You must complete the activity before taking the quiz.', 'warning')
+        return redirect(url_for('student_session_activities', session_id=session_id_for_quiz))
+
     # Check if already taken
     cursor.execute('SELECT * FROM quiz_attempts WHERE quiz_id = ? AND student_id = ?',
                    (quiz_id, current_user.id))
@@ -2966,9 +3541,19 @@ def take_quiz(quiz_id):
 
     cursor.execute('SELECT id, question_text, question_type, options, points FROM quiz_questions WHERE quiz_id = ? ORDER BY id', (quiz_id,))
     questions = cursor.fetchall()
+
+    # Get session data for stepper
+    cursor.execute('''
+        SELECT s.*, sub.code as subject_code, sub.name as subject_name, sub.id as subject_id
+        FROM sessions s JOIN subjects sub ON s.subject_id = sub.id
+        WHERE s.id = ?
+    ''', (session_id_for_quiz,))
+    session_data = cursor.fetchone()
+
     conn.close()
 
-    return render_template('quiz_take.html', quiz=quiz, questions=questions)
+    return render_template('quiz_take.html', quiz=quiz, questions=questions,
+                           session=session_data, progress=progress)
 
 @app.route('/quiz/<int:quiz_id>/submit', methods=['POST'])
 @login_required
@@ -3005,6 +3590,17 @@ def submit_quiz(quiz_id):
         INSERT INTO quiz_attempts (quiz_id, student_id, answers, score)
         VALUES (?, ?, ?, ?)
     ''', (quiz_id, current_user.id, json.dumps(answers), percentage))
+
+    # Mark quiz step complete in session progress
+    cursor.execute('SELECT session_id FROM quizzes WHERE id = ?', (quiz_id,))
+    quiz_row = cursor.fetchone()
+    if quiz_row:
+        cursor.execute('''
+            INSERT INTO session_progress (session_id, student_id, step_quiz)
+            VALUES (?, ?, 1)
+            ON CONFLICT(session_id, student_id) DO UPDATE SET step_quiz = 1
+        ''', (quiz_row['session_id'], current_user.id))
+        check_and_mark_session_complete(cursor, quiz_row['session_id'], current_user.id)
 
     conn.commit()
     conn.close()
@@ -3586,9 +4182,20 @@ def student_subject(subject_id):
     ''', (subject_id,))
     sessions = cursor.fetchall()
 
+    # Get progress and gating status for each session
+    session_progress = {}
+    locked_sessions = set()
+    prev_completed = True  # First session is always unlocked
+    for s in sessions:
+        progress = get_session_progress(cursor, s['id'], current_user.id)
+        session_progress[s['id']] = progress
+        if not prev_completed:
+            locked_sessions.add(s['id'])
+        prev_completed = progress['completed'] or bool(progress.get('completed_at'))
+
     # Get available quizzes (only visible quizzes from visible sessions)
     cursor.execute('''
-        SELECT q.*, s.session_number
+        SELECT q.*, s.session_number, q.session_id
         FROM quizzes q
         JOIN sessions s ON q.session_id = s.id
         WHERE s.subject_id = ? AND s.is_visible = 1 AND q.is_visible = 1
@@ -3600,7 +4207,9 @@ def student_subject(subject_id):
     exams = cursor.fetchall()
 
     conn.close()
-    return render_template('student_subject.html', subject=subject, sessions=sessions, quizzes=quizzes, exams=exams)
+    return render_template('student_subject.html', subject=subject, sessions=sessions,
+                           quizzes=quizzes, exams=exams, session_progress=session_progress,
+                           locked_sessions=locked_sessions)
 
 @app.route('/student/session/<int:session_id>/activities')
 @login_required
@@ -3624,6 +4233,19 @@ def student_session_activities(session_id):
         flash('This session is not available.', 'warning')
         conn.close()
         return redirect(url_for('student_dashboard'))
+
+    # Check session gating (previous session must be complete)
+    if not check_previous_session_complete(cursor, session_id, current_user.id):
+        conn.close()
+        flash('You must complete the previous session first.', 'warning')
+        return redirect(url_for('student_subject', subject_id=session_data['subject_id']))
+
+    # Check step enforcement: video + slides + reading must be complete
+    progress = get_session_progress(cursor, session_id, current_user.id)
+    if not progress['step_video'] or not progress['step_slides'] or not progress['step_reading']:
+        flash('You must complete the video, slides, and reading materials before accessing activities.', 'warning')
+        conn.close()
+        return redirect(url_for('session_lesson', session_id=session_id))
 
     # Only show visible activities
     cursor.execute('''
@@ -3654,7 +4276,8 @@ def student_session_activities(session_id):
                            session=session_data,
                            activities=activities,
                            submissions=submissions,
-                           now_str=now_str)
+                           now_str=now_str,
+                           progress=progress)
 
 @app.route('/student/my-grades')
 @login_required
@@ -3749,11 +4372,24 @@ def student_performance():
     ''')
     sections = [r['section'] for r in cursor.fetchall()]
 
+    # Get subjects for filter
+    cursor.execute('SELECT DISTINCT name FROM subjects ORDER BY name')
+    subjects = [r['name'] for r in cursor.fetchall()]
+
+    # Summary stats
+    total_attempts = sum(q['attempt_count'] for q in quizzes)
+    overall_avg = round(sum(q.get('avg_score') or 0 for q in quizzes if q['attempt_count'] > 0) / max(1, sum(1 for q in quizzes if q['attempt_count'] > 0)), 1)
+    total_perfect = sum(q['perfect_count'] for q in quizzes)
+
     conn.close()
     return render_template('student_performance.html',
                            quizzes=quizzes,
                            game_players=game_players,
-                           sections=sections)
+                           sections=sections,
+                           subjects=subjects,
+                           total_attempts=total_attempts,
+                           overall_avg=overall_avg,
+                           total_perfect=total_perfect)
 
 
 @app.route('/typing-game')
@@ -4476,6 +5112,327 @@ def send_message():
     conn.close()
     return redirect(url_for('messages'))
 
+# ============== DATABASE BACKUP & RESTORE ==============
+
+BACKUP_FOLDER = 'backups'
+os.makedirs(BACKUP_FOLDER, exist_ok=True)
+
+AUTO_BACKUP_INTERVAL = 24  # hours
+REMINDER_BEFORE_HOURS = 5  # remind 5 hours before auto-backup deadline
+
+
+def get_last_backup_time():
+    """Get the timestamp of the most recent backup file."""
+    backups = glob_module.glob(os.path.join(BACKUP_FOLDER, '*.db'))
+    if not backups:
+        return None
+    latest = max(backups, key=os.path.getmtime)
+    return datetime.fromtimestamp(os.path.getmtime(latest))
+
+
+def get_hours_since_last_backup():
+    """Get hours elapsed since the last backup."""
+    last = get_last_backup_time()
+    if last is None:
+        return float('inf')
+    delta = datetime.now() - last
+    return delta.total_seconds() / 3600
+
+
+def create_auto_backup():
+    """Create an automatic backup of the database."""
+    import sqlite3 as _sqlite3
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    backup_name = f'auto_{timestamp}.db'
+    backup_path = os.path.join(BACKUP_FOLDER, backup_name)
+    try:
+        source = _sqlite3.connect(DATABASE)
+        dest = _sqlite3.connect(backup_path)
+        source.backup(dest)
+        dest.close()
+        source.close()
+        print(f'[Auto-Backup] Created: {backup_name}')
+        return True
+    except Exception as e:
+        print(f'[Auto-Backup] Failed: {e}')
+        return False
+
+
+def send_backup_reminder():
+    """Send a notification to all instructors reminding them to back up."""
+    import sqlite3 as _sqlite3
+    try:
+        conn = _sqlite3.connect(DATABASE)
+        conn.row_factory = _sqlite3.Row
+        cursor = conn.cursor()
+
+        # Check if we already sent a reminder in the last 20 hours (avoid spam)
+        cursor.execute('''
+            SELECT COUNT(*) FROM notifications
+            WHERE message LIKE '%backup reminder%'
+            AND created_at > datetime('now', '-20 hours')
+        ''')
+        if cursor.fetchone()[0] > 0:
+            conn.close()
+            return
+
+        cursor.execute('SELECT id FROM users WHERE role = "instructor"')
+        instructors = cursor.fetchall()
+        for inst in instructors:
+            cursor.execute('''
+                INSERT INTO notifications (user_id, type, icon, message, link)
+                VALUES (?, 'warning', 'exclamation-triangle',
+                        'Backup reminder: No database backup in the last 19 hours. Please create a backup soon or one will be created automatically.',
+                        '/admin/backup')
+            ''', (inst['id'],))
+        conn.commit()
+        conn.close()
+        print('[Auto-Backup] Reminder notifications sent to instructors.')
+    except Exception as e:
+        print(f'[Auto-Backup] Reminder failed: {e}')
+
+
+def backup_scheduler():
+    """Background thread that checks backup status every 30 minutes."""
+    import time
+    # Wait 60 seconds on startup before first check
+    time.sleep(60)
+    while True:
+        try:
+            hours = get_hours_since_last_backup()
+            reminder_threshold = AUTO_BACKUP_INTERVAL - REMINDER_BEFORE_HOURS  # 19 hours
+
+            if hours >= AUTO_BACKUP_INTERVAL:
+                # 24+ hours with no backup -> auto-backup
+                create_auto_backup()
+            elif hours >= reminder_threshold:
+                # 19+ hours with no backup -> send reminder
+                send_backup_reminder()
+        except Exception as e:
+            print(f'[Auto-Backup] Scheduler error: {e}')
+
+        time.sleep(1800)  # Check every 30 minutes
+
+
+# Start the backup scheduler in a background thread
+import threading
+_backup_thread = threading.Thread(target=backup_scheduler, daemon=True)
+_backup_thread.start()
+
+
+@app.route('/admin/backup')
+@login_required
+def backup_page():
+    if current_user.role != 'instructor':
+        flash('Access denied.', 'error')
+        return redirect(url_for('student_dashboard'))
+
+    # List existing backups
+    backup_files = []
+    for f in sorted(glob_module.glob(os.path.join(BACKUP_FOLDER, '*.db')), key=os.path.getmtime, reverse=True):
+        stat = os.stat(f)
+        backup_files.append({
+            'filename': os.path.basename(f),
+            'size': round(stat.st_size / (1024 * 1024), 2),  # MB
+            'created': datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %I:%M %p')
+        })
+
+    # Current DB size
+    db_size = round(os.path.getsize(DATABASE) / (1024 * 1024), 2) if os.path.exists(DATABASE) else 0
+
+    # Count records
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('SELECT COUNT(*) FROM users WHERE role = "student"')
+    student_count = cursor.fetchone()[0]
+    cursor.execute('SELECT COUNT(*) FROM subjects')
+    subject_count = cursor.fetchone()[0]
+    cursor.execute('SELECT COUNT(*) FROM submissions')
+    submission_count = cursor.fetchone()[0]
+    cursor.execute('SELECT COUNT(*) FROM quiz_attempts')
+    quiz_attempt_count = cursor.fetchone()[0]
+    conn.close()
+
+    # Auto-backup timing info
+    last_backup = get_last_backup_time()
+    hours_since_raw = get_hours_since_last_backup()
+    hours_since = round(hours_since_raw, 1) if hours_since_raw != float('inf') else 0
+    if last_backup:
+        from datetime import timedelta
+        next_auto = last_backup + timedelta(hours=AUTO_BACKUP_INTERVAL)
+        hours_remaining = max(0, round(AUTO_BACKUP_INTERVAL - hours_since_raw, 1))
+    else:
+        next_auto = None
+        hours_remaining = 0
+
+    return render_template('backup.html',
+        backups=backup_files,
+        db_size=db_size,
+        student_count=student_count,
+        subject_count=subject_count,
+        submission_count=submission_count,
+        quiz_attempt_count=quiz_attempt_count,
+        last_backup=last_backup,
+        hours_since=hours_since,
+        hours_remaining=round(hours_remaining, 1),
+        next_auto=next_auto,
+        auto_interval=AUTO_BACKUP_INTERVAL,
+        reminder_hours=REMINDER_BEFORE_HOURS
+    )
+
+
+@app.route('/admin/backup/create', methods=['POST'])
+@login_required
+def create_backup():
+    if current_user.role != 'instructor':
+        flash('Access denied.', 'error')
+        return redirect(url_for('student_dashboard'))
+
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    backup_name = f'backup_{timestamp}.db'
+    backup_path = os.path.join(BACKUP_FOLDER, backup_name)
+
+    try:
+        # Use SQLite backup API for safe copy
+        import sqlite3
+        source = sqlite3.connect(DATABASE)
+        dest = sqlite3.connect(backup_path)
+        source.backup(dest)
+        dest.close()
+        source.close()
+        flash(f'Backup created successfully: {backup_name}', 'success')
+    except Exception as e:
+        flash(f'Backup failed: {str(e)}', 'error')
+
+    return redirect(url_for('backup_page'))
+
+
+@app.route('/admin/backup/download/<filename>')
+@login_required
+def download_backup(filename):
+    if current_user.role != 'instructor':
+        flash('Access denied.', 'error')
+        return redirect(url_for('student_dashboard'))
+
+    safe_name = secure_filename(filename)
+    backup_path = os.path.join(BACKUP_FOLDER, safe_name)
+
+    if not os.path.exists(backup_path):
+        flash('Backup file not found.', 'error')
+        return redirect(url_for('backup_page'))
+
+    return send_file(backup_path, as_attachment=True, download_name=safe_name)
+
+
+@app.route('/admin/backup/download-current')
+@login_required
+def download_current_db():
+    if current_user.role != 'instructor':
+        flash('Access denied.', 'error')
+        return redirect(url_for('student_dashboard'))
+
+    if not os.path.exists(DATABASE):
+        flash('Database file not found.', 'error')
+        return redirect(url_for('backup_page'))
+
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    return send_file(DATABASE, as_attachment=True, download_name=f'classroom_lms_{timestamp}.db')
+
+
+@app.route('/admin/backup/restore/<filename>', methods=['POST'])
+@login_required
+def restore_backup(filename):
+    if current_user.role != 'instructor':
+        flash('Access denied.', 'error')
+        return redirect(url_for('student_dashboard'))
+
+    safe_name = secure_filename(filename)
+    backup_path = os.path.join(BACKUP_FOLDER, safe_name)
+
+    if not os.path.exists(backup_path):
+        flash('Backup file not found.', 'error')
+        return redirect(url_for('backup_page'))
+
+    try:
+        # Auto-backup current DB before restoring
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        auto_backup = os.path.join(BACKUP_FOLDER, f'pre_restore_{timestamp}.db')
+        import sqlite3
+        source = sqlite3.connect(DATABASE)
+        dest = sqlite3.connect(auto_backup)
+        source.backup(dest)
+        dest.close()
+        source.close()
+
+        # Restore: copy backup over current DB
+        shutil.copy2(backup_path, DATABASE)
+        flash(f'Database restored from {safe_name}. A pre-restore backup was saved automatically.', 'success')
+    except Exception as e:
+        flash(f'Restore failed: {str(e)}', 'error')
+
+    return redirect(url_for('backup_page'))
+
+
+@app.route('/admin/backup/upload', methods=['POST'])
+@login_required
+def upload_backup():
+    if current_user.role != 'instructor':
+        flash('Access denied.', 'error')
+        return redirect(url_for('student_dashboard'))
+
+    if 'backup_file' not in request.files:
+        flash('No file selected.', 'error')
+        return redirect(url_for('backup_page'))
+
+    file = request.files['backup_file']
+    if file.filename == '':
+        flash('No file selected.', 'error')
+        return redirect(url_for('backup_page'))
+
+    if not file.filename.endswith('.db'):
+        flash('Invalid file type. Only .db files are accepted.', 'error')
+        return redirect(url_for('backup_page'))
+
+    try:
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        safe_name = f'uploaded_{timestamp}.db'
+        upload_path = os.path.join(BACKUP_FOLDER, safe_name)
+        file.save(upload_path)
+
+        # Validate it's a real SQLite database
+        import sqlite3
+        test_conn = sqlite3.connect(upload_path)
+        test_conn.execute('SELECT count(*) FROM sqlite_master')
+        test_conn.close()
+
+        flash(f'Backup file uploaded: {safe_name}', 'success')
+    except Exception as e:
+        if os.path.exists(upload_path):
+            os.remove(upload_path)
+        flash(f'Invalid database file: {str(e)}', 'error')
+
+    return redirect(url_for('backup_page'))
+
+
+@app.route('/admin/backup/delete/<filename>', methods=['POST'])
+@login_required
+def delete_backup(filename):
+    if current_user.role != 'instructor':
+        flash('Access denied.', 'error')
+        return redirect(url_for('student_dashboard'))
+
+    safe_name = secure_filename(filename)
+    backup_path = os.path.join(BACKUP_FOLDER, safe_name)
+
+    if os.path.exists(backup_path):
+        os.remove(backup_path)
+        flash(f'Backup deleted: {safe_name}', 'success')
+    else:
+        flash('Backup file not found.', 'error')
+
+    return redirect(url_for('backup_page'))
+
+
 if __name__ == '__main__':
     init_db()
-    app.run(debug=True)
+    app.run(debug=True, port=3000)

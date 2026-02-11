@@ -10,6 +10,14 @@
         <p class="section-info">{{ subject.name }} - {{ subject.section }}</p>
     </div>
     <div class="flex gap-10">
+        {% if current_user.role == 'instructor' %}
+        <button class="btn btn-success" onclick="bulkToggleActivities('open')" id="btnOpenAll">
+            <i class="fas fa-unlock"></i> Open All
+        </button>
+        <button class="btn btn-danger" onclick="bulkToggleActivities('close')" id="btnCloseAll">
+            <i class="fas fa-lock"></i> Close All
+        </button>
+        {% endif %}
         <a href="{{ url_for('subject_detail', id=subject.id) }}" class="btn btn-secondary">
             <i class="fas fa-arrow-left"></i> Back to Sessions
         </a>
@@ -497,6 +505,37 @@ input:checked + .toggle-slider:before { transform: translateX(18px); }
 
 {% if current_user.role == 'instructor' %}
 <script>
+async function bulkToggleActivities(action) {
+    const label = action === 'open' ? 'OPEN' : 'CLOSE';
+    if (!confirm(`Are you sure you want to ${label} all activities for this subject?`)) return;
+
+    const btn = action === 'open' ? document.getElementById('btnOpenAll') : document.getElementById('btnCloseAll');
+    const originalHTML = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> ${action === 'open' ? 'Opening' : 'Closing'}...`;
+
+    try {
+        const response = await fetch('/api/bulk-toggle-activities', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ subject_id: {{ subject.id }}, action: action })
+        });
+        const data = await response.json();
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Failed: ' + (data.error || 'Unknown error'));
+            btn.disabled = false;
+            btn.innerHTML = originalHTML;
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('An error occurred');
+        btn.disabled = false;
+        btn.innerHTML = originalHTML;
+    }
+}
+
 async function toggleActivityActive(activityId) {
     try {
         const response = await fetch('/api/toggle-visibility', {

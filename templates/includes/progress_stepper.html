@@ -1,0 +1,133 @@
+<!-- Session Progress Stepper -->
+<div class="session-stepper">
+    <div class="stepper-header">
+        <h4><i class="fas fa-tasks"></i> Session {{ session.session_number }} Progress</h4>
+    </div>
+    <div class="stepper-steps">
+        {% set steps = [
+            {'key': 'step_video', 'icon': 'fas fa-play-circle', 'label': 'Video', 'url': url_for('session_lesson', session_id=session.id)},
+            {'key': 'step_slides', 'icon': 'fas fa-desktop', 'label': 'Slides', 'url': url_for('session_lesson', session_id=session.id)},
+            {'key': 'step_reading', 'icon': 'fas fa-book-reader', 'label': 'Reading', 'url': url_for('session_reading', session_id=session.id)},
+            {'key': 'step_activity', 'icon': 'fas fa-pencil-alt', 'label': 'Activity', 'url': url_for('student_session_activities', session_id=session.id)},
+            {'key': 'step_quiz', 'icon': 'fas fa-question-circle', 'label': 'Quiz', 'url': url_for('student_session_activities', session_id=session.id)}
+        ] %}
+        {% for step in steps %}
+        {% set is_complete = progress.get(step.key, 0) == 1 %}
+        {% set prev_complete = loop.first or progress.get(steps[loop.index0 - 1].key, 0) == 1 %}
+        {% set is_current = not is_complete and prev_complete %}
+        <div class="stepper-step {% if is_complete %}completed{% elif is_current %}current{% else %}locked{% endif %}">
+            {% if is_complete %}
+            <a href="{{ step.url }}" class="step-circle completed" title="{{ step.label }} - Completed">
+                <i class="fas fa-check"></i>
+            </a>
+            {% elif is_current %}
+            <a href="{{ step.url }}" class="step-circle current" title="{{ step.label }} - In Progress">
+                <i class="{{ step.icon }}"></i>
+            </a>
+            {% else %}
+            <div class="step-circle locked" title="{{ step.label }} - Locked">
+                <i class="fas fa-lock"></i>
+            </div>
+            {% endif %}
+            <span class="step-label">{{ step.label }}</span>
+            {% if not loop.last %}
+            <div class="step-connector {% if is_complete %}completed{% endif %}"></div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<style>
+.session-stepper {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+    padding: 1rem 1.5rem;
+    margin-bottom: 1.5rem;
+    max-width: 1100px;
+    margin-left: auto;
+    margin-right: auto;
+}
+.stepper-header h4 {
+    margin: 0 0 1rem;
+    font-size: 1rem;
+    color: #1E293B;
+}
+.stepper-steps {
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 0;
+    position: relative;
+}
+.stepper-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+    flex: 1;
+    min-width: 0;
+}
+.step-circle {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    transition: all 0.3s;
+    text-decoration: none;
+    position: relative;
+    z-index: 2;
+}
+.step-circle.completed {
+    background: #10B981;
+    color: white;
+    box-shadow: 0 3px 10px rgba(16, 185, 129, 0.3);
+}
+.step-circle.current {
+    background: #3B82F6;
+    color: white;
+    box-shadow: 0 3px 10px rgba(59, 130, 246, 0.3);
+    animation: pulse-step 2s infinite;
+}
+.step-circle.locked {
+    background: #E2E8F0;
+    color: #94A3B8;
+}
+a.step-circle:hover {
+    transform: scale(1.1);
+}
+.step-label {
+    font-size: 0.75rem;
+    color: #64748B;
+    margin-top: 6px;
+    font-weight: 500;
+    text-align: center;
+}
+.stepper-step.completed .step-label { color: #10B981; font-weight: 600; }
+.stepper-step.current .step-label { color: #3B82F6; font-weight: 600; }
+.step-connector {
+    position: absolute;
+    top: 22px;
+    left: calc(50% + 22px);
+    width: calc(100% - 44px);
+    height: 3px;
+    background: #E2E8F0;
+    z-index: 1;
+}
+.step-connector.completed {
+    background: #10B981;
+}
+@keyframes pulse-step {
+    0%, 100% { box-shadow: 0 3px 10px rgba(59, 130, 246, 0.3); }
+    50% { box-shadow: 0 3px 20px rgba(59, 130, 246, 0.5); }
+}
+@media (max-width: 600px) {
+    .step-circle { width: 36px; height: 36px; font-size: 0.85rem; }
+    .step-connector { top: 18px; left: calc(50% + 18px); width: calc(100% - 36px); }
+    .step-label { font-size: 0.65rem; }
+}
+</style>

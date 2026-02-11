@@ -331,6 +331,37 @@ def init_db():
         )
     ''')
 
+    # Session video watches table - tracks which students watched session videos
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS session_video_watches (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id INTEGER NOT NULL,
+            student_id INTEGER NOT NULL,
+            watched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (session_id) REFERENCES sessions (id),
+            FOREIGN KEY (student_id) REFERENCES users (id),
+            UNIQUE(session_id, student_id)
+        )
+    ''')
+
+    # Session progress table - tracks 5-step completion per student per session
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS session_progress (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id INTEGER NOT NULL,
+            student_id INTEGER NOT NULL,
+            step_video INTEGER DEFAULT 0,
+            step_slides INTEGER DEFAULT 0,
+            step_reading INTEGER DEFAULT 0,
+            step_activity INTEGER DEFAULT 0,
+            step_quiz INTEGER DEFAULT 0,
+            completed_at TIMESTAMP,
+            FOREIGN KEY (session_id) REFERENCES sessions (id),
+            FOREIGN KEY (student_id) REFERENCES users (id),
+            UNIQUE(session_id, student_id)
+        )
+    ''')
+
     conn.commit()
 
     # Migration: Add new columns to existing tables if they don't exist
@@ -356,6 +387,14 @@ def init_db():
         ("sessions", "is_visible", "INTEGER DEFAULT 1"),
         ("sessions", "visible_from", "TEXT"),
         ("sessions", "visible_until", "TEXT"),
+        ("sessions", "youtube_url", "TEXT"),
+        ("sessions", "video_duration", "INTEGER DEFAULT 0"),
+        ("sessions", "reading_materials", "TEXT"),
+        # Session video watches table migrations
+        ("session_video_watches", "watched_seconds", "INTEGER DEFAULT 0"),
+        ("session_video_watches", "last_position", "INTEGER DEFAULT 0"),
+        ("session_video_watches", "last_heartbeat_at", "TIMESTAMP"),
+        ("session_video_watches", "completed", "INTEGER DEFAULT 0"),
         # Activities table migrations
         ("activities", "is_visible", "INTEGER DEFAULT 1"),
         ("activities", "visible_from", "TEXT"),

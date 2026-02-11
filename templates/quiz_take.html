@@ -3,6 +3,14 @@
 {% block title %}Take Quiz - {{ quiz.title }}{% endblock %}
 
 {% block content %}
+
+<!-- Progress Stepper -->
+{% if session and progress %}
+<div style="max-width: 1100px; margin: 0 auto 1rem; padding: 0 20px;">
+    {% include 'includes/progress_stepper.html' %}
+</div>
+{% endif %}
+
 <div class="quiz-container">
     <!-- Quiz Header -->
     <div class="quiz-header">

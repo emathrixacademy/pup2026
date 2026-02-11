@@ -3,6 +3,62 @@
 {% block title %}Session {{ session.session_number }}: {{ session.title }}{% endblock %}
 
 {% block content %}
+
+<!-- Progress Stepper -->
+{% if current_user.role == 'student' and progress %}
+<div style="max-width: 1100px; margin: 0 auto; padding: 0 20px;">
+    {% include 'includes/progress_stepper.html' %}
+</div>
+{% endif %}
+
+{% if session.youtube_url %}
+<div class="video-section" style="max-width: 1100px; margin: 0 auto 1.5rem; padding: 0 20px;">
+    <div style="background: white; border-radius: 16px; box-shadow: 0 10px 40px rgba(0,0,0,0.1); overflow: hidden;">
+        <div style="padding: 16px 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #E2E8F0;">
+            <h3 style="margin: 0; font-size: 1.1rem; color: #1E293B;">
+                <i class="fab fa-youtube" style="color: #FF0000;"></i> Session Video
+            </h3>
+            {% if current_user.role == 'student' %}
+                {% if video_watched %}
+                <span class="badge badge-visible"><i class="fas fa-check-circle"></i> Watched</span>
+                {% else %}
+                <span class="badge badge-hidden"><i class="fas fa-exclamation-circle"></i> Must watch to unlock slides</span>
+                {% endif %}
+            {% endif %}
+        </div>
+        <div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden;">
+            <div id="ytPlayer" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"></div>
+        </div>
+        {% if current_user.role == 'student' %}
+        <div id="videoProgressBar" style="padding: 10px 20px; background: #F8FAFC; border-top: 1px solid #E2E8F0;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <span style="font-size: 0.85rem; color: #64748B; white-space: nowrap;">
+                    <i class="fas fa-clock"></i> Watched: <span id="watchedTime">{{ video_watch_seconds // 60 }}:{{ '%02d' % (video_watch_seconds % 60) }}</span>
+                    / <span id="totalDuration">--:--</span>
+                </span>
+                <div style="flex: 1; background: #E2E8F0; border-radius: 10px; height: 8px; overflow: hidden;">
+                    <div id="watchProgressFill" style="height: 100%; background: linear-gradient(90deg, #3B82F6, #10B981); border-radius: 10px; transition: width 0.5s; width: 0%;"></div>
+                </div>
+                {% if video_watched %}
+                <span class="badge badge-visible" style="font-size: 0.75rem;"><i class="fas fa-check"></i> Complete</span>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+<!-- Slides Section: locked until video is complete for students -->
+{% if current_user.role == 'student' and progress and not progress.get('step_video') %}
+<div style="max-width: 1100px; margin: 1.5rem auto; padding: 0 20px;">
+    <div style="background: white; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); padding: 3rem 2rem; text-align: center;">
+        <i class="fas fa-lock" style="font-size: 3rem; color: #CBD5E1; margin-bottom: 1rem;"></i>
+        <h3 style="color: #475569; margin: 0 0 0.5rem;">Slides Locked</h3>
+        <p style="color: #94A3B8; margin: 0;">Watch the entire video above to unlock the presentation slides.</p>
+    </div>
+</div>
+{% else %}
 <div class="lesson-wrapper">
     <!-- Progress Bar -->
     <div class="progress-container">
@@ -438,6 +494,47 @@
 
     <a href="{{ url_for('subject_detail', id=session.subject_id) }}" class="back-to-sessions">&#8592; Back to Sessions</a>
 </div>
+{% endif %}
+<!-- end slides lock -->
+
+<!-- Slides Completion & Next Steps (students only) -->
+{% if current_user.role == 'student' and progress %}
+<div style="max-width: 1100px; margin: 1.5rem auto; padding: 0 20px;">
+    <div style="background: white; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); padding: 1.5rem; text-align: center;">
+        {% if progress.get('step_slides') %}
+        <div style="margin-bottom: 1rem;">
+            <span style="background: #ECFDF5; color: #065F46; padding: 8px 16px; border-radius: 20px; font-weight: 600;">
+                <i class="fas fa-check-circle" style="color: #10B981;"></i> Slides completed
+            </span>
+        </div>
+        {% if session.reading_materials %}
+            {% if progress.get('step_reading') %}
+            <a href="{{ url_for('student_session_activities', session_id=session.id) }}" class="btn btn-primary" style="padding: 10px 24px;">
+                <i class="fas fa-arrow-right"></i> Go to Activities
+            </a>
+            {% else %}
+            <a href="{{ url_for('session_reading', session_id=session.id) }}" class="btn btn-primary" style="padding: 10px 24px;">
+                <i class="fas fa-book-reader"></i> Go to Reading Materials
+            </a>
+            {% endif %}
+        {% else %}
+        <a href="{{ url_for('student_session_activities', session_id=session.id) }}" class="btn btn-primary" style="padding: 10px 24px;">
+            <i class="fas fa-arrow-right"></i> Go to Activities
+        </a>
+        {% endif %}
+        {% elif progress.get('step_video') %}
+        <p style="color: #64748B; margin: 0 0 12px;">You've finished the slides. Mark them as read to proceed.</p>
+        <button id="markSlidesBtn" class="btn btn-success" onclick="markSlidesComplete({{ session.id }})" style="padding: 10px 24px; font-size: 1rem;">
+            <i class="fas fa-check"></i> Mark Slides as Read
+        </button>
+        {% else %}
+        <p style="color: #94A3B8; margin: 0;">
+            <i class="fas fa-lock"></i> Complete the video first to unlock the slides completion step.
+        </p>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
 
 <style>
 :root {
@@ -715,6 +812,76 @@ function showLayerInfo(layer) {
         1: 'PHYSICAL: Transmits raw bits over physical media (Cables, Hubs, Signals)'
     };
     alert('Layer ' + layer + ': ' + info[layer]);
+}
+
+// ==================== YouTube IFrame API + Heartbeat ====================
+{% if session.youtube_url %}
+var ytPlayer;
+var heartbeatInterval = null;
+var sessionId = {{ session.id }};
+var videoCompleted = {{ 'true' if video_watched else 'false' }};
+var watchedSeconds = {{ video_watch_seconds }};
+
+var tag = document.createElement('script');
+tag.src = "https://www.youtube.com/iframe_api";
+var firstScriptTag = document.getElementsByTagName('script')[0];
+firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+
+var embedUrl = "{{ session.youtube_url | youtube_embed }}";
+var videoId = embedUrl.split('/embed/')[1];
+if (videoId && videoId.includes('?')) videoId = videoId.split('?')[0];
+
+function onYouTubeIframeAPIReady() {
+    ytPlayer = new YT.Player('ytPlayer', {
+        videoId: videoId,
+        playerVars: { 'rel': 0, 'modestbranding': 1, 'disablekb': {{ '0' if video_watched else '1' }} },
+        events: { 'onReady': onPlayerReady, 'onStateChange': onPlayerStateChange }
+    });
+}
+function onPlayerReady(event) {
+    var duration = ytPlayer.getDuration();
+    var el = document.getElementById('totalDuration');
+    if (el) { var m = Math.floor(duration/60), s = Math.floor(duration%60); el.textContent = m+':'+(s<10?'0':'')+s; }
+    if (document.getElementById('watchProgressFill') && duration > 0) {
+        document.getElementById('watchProgressFill').style.width = Math.min(100,(watchedSeconds/duration)*100)+'%';
+    }
+}
+function onPlayerStateChange(event) {
+    if (videoCompleted) return;
+    if (event.data === YT.PlayerState.PLAYING) { if (!heartbeatInterval) heartbeatInterval = setInterval(sendHeartbeat, 5000); }
+    else { if (heartbeatInterval) { clearInterval(heartbeatInterval); heartbeatInterval = null; } sendHeartbeat(); }
+}
+async function sendHeartbeat() {
+    if (!ytPlayer || videoCompleted) return;
+    try {
+        var ct = Math.floor(ytPlayer.getCurrentTime()), dur = Math.floor(ytPlayer.getDuration());
+        if (dur <= 0) return;
+        var r = await fetch('/api/session/video-heartbeat', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({session_id:sessionId, current_time:ct, duration:dur}) });
+        if (r.redirected || r.url.includes('/login')) return;
+        var d = await r.json();
+        if (d.success) {
+            watchedSeconds = d.watched_seconds;
+            var el = document.getElementById('watchedTime');
+            if (el) { var m=Math.floor(watchedSeconds/60),s=Math.floor(watchedSeconds%60); el.textContent=m+':'+(s<10?'0':'')+s; }
+            var fill = document.getElementById('watchProgressFill');
+            if (fill && dur>0) fill.style.width = Math.min(100,(watchedSeconds/dur)*100)+'%';
+            if (d.completed) { videoCompleted=true; if(heartbeatInterval){clearInterval(heartbeatInterval);heartbeatInterval=null;} location.reload(); }
+        }
+    } catch(e) { console.error('Heartbeat error:',e); }
+}
+{% endif %}
+
+async function markSlidesComplete(sid) {
+    var btn = document.getElementById('markSlidesBtn');
+    if (!btn) return;
+    btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+    try {
+        var r = await fetch('/api/session/complete-slides', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({session_id:sid}) });
+        if (r.redirected || r.url.includes('/login')) { alert('Session expired.'); window.location.href='/login'; return; }
+        var d = await r.json();
+        if (d.success) location.reload();
+        else { alert(d.error||'Error'); btn.disabled=false; btn.innerHTML='<i class="fas fa-check"></i> Mark Slides as Read'; }
+    } catch(e) { alert('Error: '+e.message); btn.disabled=false; btn.innerHTML='<i class="fas fa-check"></i> Mark Slides as Read'; }
 }
 </script>
 {% endblock %}

@@ -8,9 +8,14 @@
         <h1><i class="fas fa-users"></i> Student Management</h1>
         <p>Manage student accounts and enrollments</p>
     </div>
-    <button class="btn btn-success" onclick="openModal('addStudentModal')">
-        <i class="fas fa-user-plus"></i> Add Student
-    </button>
+    <div style="display: flex; gap: 10px;">
+        <button class="btn btn-primary" onclick="openModal('bulkEnrollModal')">
+            <i class="fas fa-book-open"></i> Enroll All
+        </button>
+        <button class="btn btn-success" onclick="openModal('addStudentModal')">
+            <i class="fas fa-user-plus"></i> Add Student
+        </button>
+    </div>
 </div>
 
 <!-- Filters -->
@@ -176,7 +181,115 @@
     </div>
 </div>
 
+<!-- Bulk Enroll Modal -->
+<div id="bulkEnrollModal" class="modal">
+    <div class="modal-content" style="max-width: 550px;">
+        <div class="modal-header">
+            <h3><i class="fas fa-book-open"></i> Bulk Enroll Students</h3>
+            <span class="modal-close" onclick="closeModal('bulkEnrollModal')">&times;</span>
+        </div>
+        <form action="{{ url_for('bulk_enroll_students') }}" method="POST" onsubmit="return prepareBulkEnroll()">
+            <input type="hidden" name="mode" id="bulkEnrollMode" value="all">
+            <input type="hidden" name="student_ids" id="bulkEnrollStudentIds" value="">
+
+            <!-- Enroll scope -->
+            <div class="bulk-enroll-scope">
+                <label class="scope-option active" onclick="setBulkScope('all', this)">
+                    <input type="radio" name="scope" value="all" checked style="display:none;">
+                    <i class="fas fa-users"></i>
+                    <div>
+                        <strong>All Students</strong>
+                        <small>Enroll all {{ students|length }} students</small>
+                    </div>
+                </label>
+                <label class="scope-option" onclick="setBulkScope('filtered', this)">
+                    <input type="radio" name="scope" value="filtered" style="display:none;">
+                    <i class="fas fa-filter"></i>
+                    <div>
+                        <strong>Filtered Only</strong>
+                        <small>Enroll only currently visible students</small>
+                    </div>
+                </label>
+            </div>
+
+            <div class="form-group" style="margin-top: 1rem;">
+                <label><i class="fas fa-book"></i> Select Subjects to Enroll In</label>
+                <p style="font-size: 0.82rem; color: #6B7280; margin-bottom: 0.5rem;">
+                    Students already enrolled in a subject will be skipped (no duplicates).
+                </p>
+                <div class="bulk-subject-list">
+                    {% for subject in subjects %}
+                    <label class="bulk-subject-item">
+                        <input type="checkbox" name="subjects" value="{{ subject.id }}">
+                        <span class="bulk-subject-info">
+                            <strong>{{ subject.code }}</strong> - {{ subject.name }}
+                            <small>{{ subject.section }} | {{ subject.day }} {{ subject.time_schedule }}</small>
+                        </span>
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-full" style="margin-top: 1rem;">
+                <i class="fas fa-check-double"></i> Enroll Students
+            </button>
+        </form>
+    </div>
+</div>
+
 <style>
+/* Bulk Enroll Modal */
+.bulk-enroll-scope {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 0.5rem;
+}
+
+.scope-option {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px;
+    border: 2px solid #E5E7EB;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.scope-option:hover { border-color: #C4B5FD; background: #FAFAFE; }
+.scope-option.active { border-color: #8B5CF6; background: #EDE9FE; }
+
+.scope-option i { font-size: 1.3rem; color: #8B5CF6; }
+.scope-option strong { display: block; font-size: 0.9rem; color: #1F2937; }
+.scope-option small { color: #6B7280; font-size: 0.78rem; }
+
+.bulk-subject-list {
+    max-height: 250px;
+    overflow-y: auto;
+    border: 1px solid #E5E7EB;
+    border-radius: 8px;
+    padding: 0.5rem;
+}
+
+.bulk-subject-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: background 0.15s;
+}
+
+.bulk-subject-item:hover { background: #F3F4F6; }
+
+.bulk-subject-item input[type="checkbox"] { width: 18px; height: 18px; accent-color: #8B5CF6; flex-shrink: 0; }
+
+.bulk-subject-info { flex: 1; }
+.bulk-subject-info strong { color: #1F2937; font-size: 0.88rem; }
+.bulk-subject-info small { display: block; color: #6B7280; font-size: 0.78rem; margin-top: 2px; }
+
 /* Filter Bar */
 .filter-bar {
     display: flex;
@@ -367,6 +480,47 @@ function filterStudents() {
     });
 
     document.getElementById('visibleCount').textContent = visible;
+}
+
+function setBulkScope(scope, el) {
+    document.querySelectorAll('.scope-option').forEach(o => o.classList.remove('active'));
+    el.classList.add('active');
+    document.getElementById('bulkEnrollMode').value = scope === 'all' ? 'all' : 'selected';
+}
+
+function prepareBulkEnroll() {
+    const mode = document.getElementById('bulkEnrollMode').value;
+    const checked = document.querySelectorAll('#bulkEnrollModal input[name="subjects"]:checked');
+
+    if (checked.length === 0) {
+        alert('Please select at least one subject.');
+        return false;
+    }
+
+    if (mode === 'selected') {
+        // Collect IDs of currently visible student rows
+        const visibleIds = [];
+        document.querySelectorAll('.student-row').forEach(row => {
+            if (row.style.display !== 'none') {
+                // Extract student ID from the enroll link href
+                const enrollLink = row.querySelector('a[href*="/enrollments"]');
+                if (enrollLink) {
+                    const match = enrollLink.href.match(/\/students\/(\d+)\/enrollments/);
+                    if (match) visibleIds.push(match[1]);
+                }
+            }
+        });
+        document.getElementById('bulkEnrollStudentIds').value = visibleIds.join(',');
+
+        if (visibleIds.length === 0) {
+            alert('No students are visible with the current filters.');
+            return false;
+        }
+
+        return confirm('Enroll ' + visibleIds.length + ' filtered student(s) in ' + checked.length + ' subject(s)?');
+    }
+
+    return confirm('Enroll ALL {{ students|length }} students in ' + checked.length + ' subject(s)?');
 }
 </script>
 {% endblock %}

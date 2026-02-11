@@ -1,0 +1,126 @@
+{% extends 'base.html' %}
+
+{% block title %}Reading Materials - Session {{ session.session_number }}{% endblock %}
+
+{% block content %}
+<div style="max-width: 1100px; margin: 0 auto; padding: 0 20px;">
+
+    <!-- Back Navigation -->
+    <div style="margin-bottom: 1rem;">
+        <a href="{{ url_for('session_lesson', session_id=session.id) }}" class="btn btn-secondary btn-sm">
+            <i class="fas fa-arrow-left"></i> Back to Lesson
+        </a>
+    </div>
+
+    <!-- Progress Stepper -->
+    {% if current_user.role == 'student' and progress %}
+    {% include 'includes/progress_stepper.html' %}
+    {% endif %}
+
+    <!-- Reading Materials Content -->
+    <div class="card" style="margin-bottom: 1.5rem;">
+        <div class="card-header">
+            <h3><i class="fas fa-book-reader"></i> Reading Materials — Session {{ session.session_number }}: {{ session.title }}</h3>
+        </div>
+        <div class="card-body">
+            {% if session.reading_materials %}
+            <div id="readingContent" class="reading-content" style="max-height: 600px; overflow-y: auto; padding: 1.5rem; line-height: 1.8; font-size: 1rem;">
+                {{ session.reading_materials | safe }}
+            </div>
+            {% else %}
+            <div class="empty-state" style="padding: 3rem;">
+                <i class="fas fa-book-open" style="font-size: 3rem; color: #CBD5E1;"></i>
+                <p>No reading materials have been added for this session yet.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Mark as Read Button (students only, if reading step not yet complete) -->
+    {% if current_user.role == 'student' and progress %}
+        {% if progress.get('step_reading') %}
+        <div style="text-align: center; padding: 1rem;">
+            <div style="background: #ECFDF5; border: 2px solid #10B981; border-radius: 12px; padding: 1rem 2rem; display: inline-block;">
+                <i class="fas fa-check-circle" style="color: #10B981; font-size: 1.2rem;"></i>
+                <span style="color: #065F46; font-weight: 600; margin-left: 8px;">Reading materials completed!</span>
+            </div>
+            <div style="margin-top: 1rem;">
+                <a href="{{ url_for('student_session_activities', session_id=session.id) }}" class="btn btn-primary">
+                    <i class="fas fa-arrow-right"></i> Go to Activities
+                </a>
+            </div>
+        </div>
+        {% elif session.reading_materials %}
+        <div id="readingCompleteSection" style="text-align: center; padding: 1rem;">
+            <p id="scrollHint" style="color: #94A3B8; font-size: 0.9rem;">
+                <i class="fas fa-arrow-down"></i> Scroll to the bottom of the reading materials to enable the button
+            </p>
+            <button id="markReadBtn" class="btn btn-success" onclick="markReadingComplete({{ session.id }})" disabled
+                    style="padding: 10px 28px; font-size: 1rem; opacity: 0.5; cursor: not-allowed;">
+                <i class="fas fa-check"></i> I have finished reading
+            </button>
+        </div>
+        {% endif %}
+    {% endif %}
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+{% if current_user.role == 'student' and not progress.get('step_reading') and session.reading_materials %}
+// Enable button when user scrolls to the bottom of reading content
+const readingEl = document.getElementById('readingContent');
+const markBtn = document.getElementById('markReadBtn');
+const scrollHint = document.getElementById('scrollHint');
+
+if (readingEl && markBtn) {
+    readingEl.addEventListener('scroll', function() {
+        const atBottom = readingEl.scrollTop + readingEl.clientHeight >= readingEl.scrollHeight - 30;
+        if (atBottom) {
+            markBtn.disabled = false;
+            markBtn.style.opacity = '1';
+            markBtn.style.cursor = 'pointer';
+            if (scrollHint) scrollHint.style.display = 'none';
+        }
+    });
+    // If content is short enough to not need scrolling, enable immediately
+    if (readingEl.scrollHeight <= readingEl.clientHeight + 30) {
+        markBtn.disabled = false;
+        markBtn.style.opacity = '1';
+        markBtn.style.cursor = 'pointer';
+        if (scrollHint) scrollHint.style.display = 'none';
+    }
+}
+
+async function markReadingComplete(sessionId) {
+    markBtn.disabled = true;
+    markBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+    try {
+        const response = await fetch('/api/session/complete-reading', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session_id: sessionId })
+        });
+        if (response.redirected || response.url.includes('/login')) {
+            alert('Session expired. Please log in again.');
+            window.location.href = '/login';
+            return;
+        }
+        const data = await response.json();
+        if (data.success) {
+            window.location.href = '/student/session/' + sessionId + '/activities';
+        } else {
+            alert(data.error || 'Error completing reading');
+            markBtn.disabled = false;
+            markBtn.innerHTML = '<i class="fas fa-check"></i> I have finished reading';
+        }
+    } catch (err) {
+        alert('Error: ' + err.message);
+        markBtn.disabled = false;
+        markBtn.innerHTML = '<i class="fas fa-check"></i> I have finished reading';
+    }
+}
+{% endif %}
+</script>
+{% endblock %}

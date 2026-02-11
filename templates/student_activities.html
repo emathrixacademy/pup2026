@@ -3,6 +3,14 @@
 {% block title %}Activities - Sangrenes LMS Portal{% endblock %}
 
 {% block content %}
+
+<!-- Progress Stepper -->
+{% if progress %}
+<div style="max-width: 1100px; margin: 0 auto; padding: 0 20px;">
+    {% include 'includes/progress_stepper.html' %}
+</div>
+{% endif %}
+
 <div class="page-header">
     <h1>{{ session.subject_code }} - Session {{ session.session_number }}</h1>
     <a href="{{ url_for('student_subject', subject_id=session.subject_id) }}" class="btn btn-secondary">Back to Subject</a>
