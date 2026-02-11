@@ -362,6 +362,63 @@ def init_db():
         )
     ''')
 
+    # Project groups for finals (sessions 13-16)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS project_groups (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            subject_id INTEGER NOT NULL,
+            group_number INTEGER NOT NULL,
+            group_name TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (subject_id) REFERENCES subjects (id),
+            UNIQUE(subject_id, group_number)
+        )
+    ''')
+
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS project_group_members (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            group_id INTEGER NOT NULL,
+            student_id INTEGER NOT NULL,
+            role TEXT DEFAULT 'member',
+            FOREIGN KEY (group_id) REFERENCES project_groups (id),
+            FOREIGN KEY (student_id) REFERENCES users (id),
+            UNIQUE(group_id, student_id)
+        )
+    ''')
+
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS project_progress (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            group_id INTEGER NOT NULL,
+            session_number INTEGER NOT NULL,
+            percentage INTEGER DEFAULT 0,
+            notes TEXT,
+            updated_by INTEGER,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (group_id) REFERENCES project_groups (id),
+            FOREIGN KEY (updated_by) REFERENCES users (id),
+            UNIQUE(group_id, session_number)
+        )
+    ''')
+
+    # Performance alerts for instructor monitoring
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS performance_alerts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            student_id INTEGER NOT NULL,
+            subject_id INTEGER NOT NULL,
+            alert_type TEXT NOT NULL,
+            severity TEXT DEFAULT 'warning',
+            message TEXT NOT NULL,
+            is_resolved INTEGER DEFAULT 0,
+            notification_sent INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (student_id) REFERENCES users (id),
+            FOREIGN KEY (subject_id) REFERENCES subjects (id)
+        )
+    ''')
+
     conn.commit()
 
     # Migration: Add new columns to existing tables if they don't exist
@@ -390,6 +447,7 @@ def init_db():
         ("sessions", "youtube_url", "TEXT"),
         ("sessions", "video_duration", "INTEGER DEFAULT 0"),
         ("sessions", "reading_materials", "TEXT"),
+        ("sessions", "reading_audio", "TEXT"),
         # Session video watches table migrations
         ("session_video_watches", "watched_seconds", "INTEGER DEFAULT 0"),
         ("session_video_watches", "last_position", "INTEGER DEFAULT 0"),

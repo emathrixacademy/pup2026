@@ -1,0 +1,187 @@
+{% extends 'base.html' %}
+
+{% block title %}Project Groups - {{ subject.code }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1><i class="fas fa-users-cog"></i> Project Groups</h1>
+        <p style="color: #64748B;">{{ subject.code }} - {{ subject.name }} ({{ subject.section }})</p>
+    </div>
+    <div class="flex gap-10">
+        {% if groups|length == 0 %}
+        <button class="btn btn-success" onclick="assignGroups()" id="btnAssign">
+            <i class="fas fa-random"></i> Randomize Groups (3 per group)
+        </button>
+        {% else %}
+        <button class="btn btn-warning" onclick="reRandomize()" id="btnReassign">
+            <i class="fas fa-redo"></i> Re-randomize
+        </button>
+        {% endif %}
+        <a href="{{ url_for('subject_sessions', subject_id=subject.id) }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Back to Sessions
+        </a>
+    </div>
+</div>
+
+<!-- Summary Stats -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 1.5rem;">
+    <div style="background: white; border-radius: 12px; padding: 1.25rem; box-shadow: 0 2px 10px rgba(0,0,0,0.05); border-left: 4px solid #8B5CF6;">
+        <div style="font-size: 2rem; font-weight: 700; color: #8B5CF6;">{{ groups|length }}</div>
+        <div style="font-size: 0.85rem; color: #64748B;">Groups Created</div>
+    </div>
+    <div style="background: white; border-radius: 12px; padding: 1.25rem; box-shadow: 0 2px 10px rgba(0,0,0,0.05); border-left: 4px solid #3B82F6;">
+        <div style="font-size: 2rem; font-weight: 700; color: #3B82F6;">{{ total_enrolled }}</div>
+        <div style="font-size: 0.85rem; color: #64748B;">Students Enrolled</div>
+    </div>
+    <div style="background: white; border-radius: 12px; padding: 1.25rem; box-shadow: 0 2px 10px rgba(0,0,0,0.05); border-left: 4px solid #10B981;">
+        {% set total_avg = namespace(val=0) %}
+        {% for g in groups %}{% set total_avg.val = total_avg.val + g.avg_progress %}{% endfor %}
+        <div style="font-size: 2rem; font-weight: 700; color: #10B981;">{{ '%.0f'|format(total_avg.val / groups|length if groups|length > 0 else 0) }}%</div>
+        <div style="font-size: 0.85rem; color: #64748B;">Avg Completion</div>
+    </div>
+</div>
+
+{% if groups|length == 0 %}
+<div class="card">
+    <div class="card-body" style="text-align: center; padding: 3rem;">
+        <i class="fas fa-users" style="font-size: 3rem; color: #CBD5E1; margin-bottom: 1rem;"></i>
+        <h3 style="color: #475569;">No Groups Assigned Yet</h3>
+        <p style="color: #94A3B8;">Click "Randomize Groups" to automatically create groups of 3 students for the finals project (Sessions 13-16).</p>
+    </div>
+</div>
+{% else %}
+
+<!-- Groups Grid -->
+<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 20px;">
+    {% for group in groups %}
+    <div class="card" style="overflow: hidden;">
+        <div style="background: linear-gradient(135deg, #667eea, #764ba2); padding: 1rem 1.25rem; display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <h3 style="margin: 0; color: white; font-size: 1.1rem;">
+                    <i class="fas fa-users"></i> {{ group.group_name }}
+                </h3>
+                <span style="color: rgba(255,255,255,0.8); font-size: 0.8rem;">{{ group.members|length }} members</span>
+            </div>
+            <div style="background: rgba(255,255,255,0.2); border-radius: 20px; padding: 4px 14px;">
+                <span style="color: white; font-weight: 700; font-size: 1.1rem;">{{ '%.0f'|format(group.avg_progress) }}%</span>
+            </div>
+        </div>
+
+        <!-- Members -->
+        <div style="padding: 1rem 1.25rem; border-bottom: 1px solid #E2E8F0;">
+            {% for member in group.members %}
+            <div style="display: flex; align-items: center; gap: 10px; padding: 6px 0;">
+                <img src="/static/uploads/photos/{{ member.photo or 'default.png' }}" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 2px solid {{ '#F59E0B' if member.role == 'leader' else '#E2E8F0' }};" onerror="this.src='/static/uploads/photos/default.png'">
+                <span style="font-size: 0.9rem; font-weight: 500; color: #1E293B;">{{ member.full_name }}</span>
+                {% if member.role == 'leader' %}
+                <span style="background: #FEF3C7; color: #92400E; font-size: 0.7rem; padding: 2px 8px; border-radius: 10px; font-weight: 600;">Leader</span>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Progress per Session -->
+        <div style="padding: 1rem 1.25rem;">
+            <h4 style="margin: 0 0 12px; font-size: 0.9rem; color: #475569;">
+                <i class="fas fa-chart-bar"></i> Sprint Progress
+            </h4>
+            {% for sn in [13, 14, 15, 16] %}
+            {% set p = group.progress.get(sn, {'percentage': 0, 'notes': ''}) %}
+            <div style="margin-bottom: 12px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                    <span style="font-size: 0.8rem; color: #64748B; font-weight: 500;">
+                        {% if sn == 13 %}Sprint 1{% elif sn == 14 %}Sprint 2{% elif sn == 15 %}Sprint 3{% else %}Defense{% endif %}
+                        (Session {{ sn }})
+                    </span>
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                        <input type="number" min="0" max="100" value="{{ p.percentage }}"
+                               id="pct-{{ group.id }}-{{ sn }}" style="width: 60px; padding: 3px 6px; border: 1px solid #D1D5DB; border-radius: 6px; text-align: center; font-size: 0.85rem;">
+                        <span style="font-size: 0.8rem; color: #64748B;">%</span>
+                        <button class="btn btn-sm btn-success" onclick="saveProgress({{ group.id }}, {{ sn }})" style="padding: 3px 8px; font-size: 0.75rem;">
+                            <i class="fas fa-save"></i>
+                        </button>
+                    </div>
+                </div>
+                <div style="background: #E2E8F0; border-radius: 6px; height: 8px; overflow: hidden;">
+                    <div style="height: 100%; background: linear-gradient(90deg, {{ '#10B981' if p.percentage >= 75 else ('#F59E0B' if p.percentage >= 50 else '#3B82F6') }}, {{ '#059669' if p.percentage >= 75 else ('#D97706' if p.percentage >= 50 else '#2563EB') }}); width: {{ p.percentage }}%; border-radius: 6px; transition: width 0.5s;"></div>
+                </div>
+                {% if p.notes %}
+                <div style="font-size: 0.75rem; color: #94A3B8; margin-top: 2px;"><i class="fas fa-sticky-note"></i> {{ p.notes }}</div>
+                {% endif %}
+            </div>
+            {% endfor %}
+            <!-- Notes input -->
+            <div style="margin-top: 8px;">
+                <input type="text" id="notes-{{ group.id }}" placeholder="Add notes for this group..." style="width: 100%; padding: 6px 10px; border: 1px solid #D1D5DB; border-radius: 6px; font-size: 0.8rem;">
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function assignGroups() {
+    if (!confirm('Randomly assign all enrolled students into groups of 3 for the finals project?')) return;
+    var btn = document.getElementById('btnAssign');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Assigning...';
+    try {
+        var r = await fetch('/api/groups/assign/{{ subject.id }}', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}' });
+        var d = await r.json();
+        if (d.success) {
+            alert(d.groups_created + ' groups created with ' + d.students_assigned + ' students!');
+            location.reload();
+        } else {
+            alert(d.error || 'Error assigning groups');
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-random"></i> Randomize Groups (3 per group)';
+        }
+    } catch(e) { alert('Error: ' + e.message); btn.disabled = false; }
+}
+
+async function reRandomize() {
+    if (!confirm('WARNING: This will DELETE all existing groups and progress data, then create new random groups. Continue?')) return;
+    try {
+        var r = await fetch('/api/groups/delete/{{ subject.id }}', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}' });
+        var d = await r.json();
+        if (d.success) {
+            // Now assign new groups
+            var r2 = await fetch('/api/groups/assign/{{ subject.id }}', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}' });
+            var d2 = await r2.json();
+            if (d2.success) {
+                alert('Re-randomized! ' + d2.groups_created + ' new groups created.');
+                location.reload();
+            } else {
+                alert(d2.error || 'Error re-assigning');
+                location.reload();
+            }
+        } else {
+            alert(d.error || 'Error deleting groups');
+        }
+    } catch(e) { alert('Error: ' + e.message); }
+}
+
+async function saveProgress(groupId, sessionNumber) {
+    var pct = document.getElementById('pct-' + groupId + '-' + sessionNumber).value;
+    var notes = document.getElementById('notes-' + groupId).value;
+    try {
+        var r = await fetch('/api/groups/progress', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ group_id: groupId, session_number: sessionNumber, percentage: parseInt(pct), notes: notes })
+        });
+        var d = await r.json();
+        if (d.success) {
+            location.reload();
+        } else {
+            alert(d.error || 'Error saving progress');
+        }
+    } catch(e) { alert('Error: ' + e.message); }
+}
+</script>
+{% endblock %}

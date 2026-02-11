@@ -37,6 +37,9 @@
                 <a href="{{ url_for('grades') }}" class="{% if 'grade' in request.endpoint %}active{% endif %}">
                     <i class="fas fa-chart-bar"></i> Grades
                 </a>
+                <a href="{{ url_for('instructor_monitoring') }}" class="{% if request.endpoint == 'instructor_monitoring' %}active{% endif %}">
+                    <i class="fas fa-heartbeat"></i> Monitoring
+                </a>
             {% else %}
                 <a href="{{ url_for('student_dashboard') }}" class="{% if request.endpoint == 'student_dashboard' %}active{% endif %}">
                     <i class="fas fa-home"></i> Dashboard

@@ -291,6 +291,100 @@ def get_grade_weights(subject_code):
         'final_project': 0.00 # Included in activities if applicable
     }
 
+# ==================== GRADE & PERFORMANCE HELPERS ====================
+
+def compute_weighted_grade(cursor, subject_id, student_id):
+    """Compute weighted grade percentage for a student in a subject."""
+    weights = get_grade_weights('')
+    # Activity average (using final_score if available, else score)
+    cursor.execute('''
+        SELECT AVG(COALESCE(sub.final_score, sub.score)) as avg_score
+        FROM submissions sub
+        JOIN activities a ON sub.activity_id = a.id
+        JOIN sessions ses ON a.session_id = ses.id
+        WHERE ses.subject_id = ? AND sub.student_id = ?
+        AND COALESCE(sub.final_score, sub.score) IS NOT NULL
+    ''', (subject_id, student_id))
+    activity_avg = cursor.fetchone()['avg_score'] or 0
+
+    # Quiz average
+    cursor.execute('''
+        SELECT AVG(qa.score) as avg_score
+        FROM quiz_attempts qa
+        JOIN quizzes q ON qa.quiz_id = q.id
+        JOIN sessions ses ON q.session_id = ses.id
+        WHERE ses.subject_id = ? AND qa.student_id = ? AND qa.score IS NOT NULL
+    ''', (subject_id, student_id))
+    quiz_avg = cursor.fetchone()['avg_score'] or 0
+
+    # Exams
+    midterm = 0
+    final_exam = 0
+    cursor.execute('''
+        SELECT ea.score, e.exam_type
+        FROM exam_attempts ea
+        JOIN exams e ON ea.exam_id = e.id
+        WHERE e.subject_id = ? AND ea.student_id = ?
+    ''', (subject_id, student_id))
+    for exam in cursor.fetchall():
+        if exam['exam_type'] == 'midterm':
+            midterm = exam['score'] or 0
+        elif exam['exam_type'] == 'final':
+            final_exam = exam['score'] or 0
+
+    # If no final exam but project groups exist, use project grade
+    if final_exam == 0:
+        proj = compute_project_grade(cursor, subject_id, student_id)
+        if proj is not None and proj > 0:
+            final_exam = proj
+
+    return (activity_avg * weights['activities'] +
+            quiz_avg * weights['quizzes'] +
+            midterm * weights['midterm'] +
+            final_exam * weights['final'])
+
+
+def compute_project_grade(cursor, subject_id, student_id):
+    """Compute project grade (0-100) based on group project progress for sessions 13-16."""
+    cursor.execute('''
+        SELECT pg.id FROM project_groups pg
+        JOIN project_group_members pgm ON pg.id = pgm.group_id
+        WHERE pg.subject_id = ? AND pgm.student_id = ?
+    ''', (subject_id, student_id))
+    group = cursor.fetchone()
+    if not group:
+        return None
+    cursor.execute('''
+        SELECT session_number, percentage FROM project_progress
+        WHERE group_id = ?
+    ''', (group['id'],))
+    progress = {r['session_number']: r['percentage'] for r in cursor.fetchall()}
+    if not progress:
+        return 0
+    total = sum(progress.get(sn, 0) for sn in [13, 14, 15, 16])
+    return total / 4
+
+
+def build_guidance_message(activity_avg, quiz_avg, sessions_behind, subject_code):
+    """Generate smart guidance text based on student performance patterns."""
+    parts = []
+    if activity_avg >= 85 and quiz_avg < 75 and quiz_avg > 0:
+        parts.append(f"Your activity work in {subject_code} is strong, but quiz scores need improvement. Review the lesson materials before taking quizzes.")
+    elif quiz_avg >= 85 and activity_avg < 75 and activity_avg > 0:
+        parts.append(f"You're doing well on quizzes in {subject_code}, showing solid understanding. Focus on submitting activities on time to boost your grade.")
+    elif activity_avg < 75 and activity_avg > 0 and quiz_avg < 75 and quiz_avg > 0:
+        parts.append(f"Both activity and quiz scores in {subject_code} need improvement. Consider reviewing lesson materials and attending office hours.")
+    elif activity_avg >= 85 and quiz_avg >= 85:
+        parts.append(f"Excellent work in {subject_code}! Keep up the outstanding performance.")
+    if sessions_behind >= 3:
+        parts.append(f"You're {sessions_behind} lessons behind. Complete the video and reading materials before moving to activities.")
+    elif sessions_behind >= 2:
+        parts.append(f"You're {sessions_behind} lessons behind. Try to catch up this week.")
+    if not parts:
+        parts.append(f"Keep up the work in {subject_code} and submit all requirements on time.")
+    return ' '.join(parts)
+
+
 # ==================== AUTH ROUTES ====================
 
 @app.route('/')
@@ -1002,6 +1096,72 @@ def save_reading_materials():
     conn.close()
     return jsonify({'success': True})
 
+@app.route('/api/session/reading-audio', methods=['POST'])
+@login_required
+def upload_reading_audio():
+    """Upload MP3 audio for reading materials (instructor only)."""
+    if current_user.role != 'instructor':
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    session_id = request.form.get('session_id')
+    if not session_id:
+        return jsonify({'error': 'Missing session_id'}), 400
+
+    if 'audio' not in request.files:
+        return jsonify({'error': 'No audio file provided'}), 400
+
+    audio_file = request.files['audio']
+    if audio_file.filename == '':
+        return jsonify({'error': 'No file selected'}), 400
+
+    # Validate file extension
+    allowed_extensions = {'.mp3', '.wav', '.ogg', '.m4a'}
+    ext = os.path.splitext(audio_file.filename)[1].lower()
+    if ext not in allowed_extensions:
+        return jsonify({'error': 'Invalid file type. Allowed: MP3, WAV, OGG, M4A'}), 400
+
+    # Save file
+    filename = f"reading_audio_{session_id}{ext}"
+    audio_dir = os.path.join(app.root_path, 'static', 'uploads', 'audio')
+    os.makedirs(audio_dir, exist_ok=True)
+    filepath = os.path.join(audio_dir, filename)
+    audio_file.save(filepath)
+
+    # Update database
+    relative_path = f"uploads/audio/{filename}"
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('UPDATE sessions SET reading_audio = ? WHERE id = ?',
+                   (relative_path, session_id))
+    conn.commit()
+    conn.close()
+
+    return jsonify({'success': True, 'audio_path': relative_path})
+
+@app.route('/api/session/reading-audio/delete', methods=['POST'])
+@login_required
+def delete_reading_audio():
+    """Delete reading audio for a session (instructor only)."""
+    if current_user.role != 'instructor':
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    data = request.get_json()
+    session_id = data.get('session_id')
+
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('SELECT reading_audio FROM sessions WHERE id = ?', (session_id,))
+    session = cursor.fetchone()
+    if session and session['reading_audio']:
+        # Delete file
+        filepath = os.path.join(app.root_path, 'static', session['reading_audio'])
+        if os.path.exists(filepath):
+            os.remove(filepath)
+    cursor.execute('UPDATE sessions SET reading_audio = NULL WHERE id = ?', (session_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+
 @app.route('/api/session/unlock', methods=['POST'])
 @login_required
 def unlock_session_for_students():
@@ -1058,6 +1218,406 @@ def unlock_session_for_students():
     conn.commit()
     conn.close()
     return jsonify({'success': True, 'unlocked': unlocked})
+
+# ==================== PROJECT GROUP MANAGEMENT ====================
+
+@app.route('/subject/<int:subject_id>/groups')
+@login_required
+def project_groups(subject_id):
+    if current_user.role != 'instructor':
+        return redirect(url_for('student_dashboard'))
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM subjects WHERE id = ?', (subject_id,))
+    subject = cursor.fetchone()
+    if not subject:
+        conn.close()
+        flash('Subject not found', 'error')
+        return redirect(url_for('dashboard'))
+
+    # Get groups with members
+    cursor.execute('SELECT * FROM project_groups WHERE subject_id = ? ORDER BY group_number', (subject_id,))
+    groups = [dict(g) for g in cursor.fetchall()]
+    for group in groups:
+        cursor.execute('''
+            SELECT u.id, u.full_name, u.photo, u.student_id as sid, pgm.role
+            FROM project_group_members pgm
+            JOIN users u ON pgm.student_id = u.id
+            WHERE pgm.group_id = ?
+            ORDER BY pgm.role DESC, u.full_name
+        ''', (group['id'],))
+        group['members'] = [dict(m) for m in cursor.fetchall()]
+        cursor.execute('SELECT * FROM project_progress WHERE group_id = ? ORDER BY session_number', (group['id'],))
+        prog_rows = cursor.fetchall()
+        group['progress'] = {r['session_number']: dict(r) for r in prog_rows}
+        total_pct = sum(r['percentage'] for r in prog_rows)
+        group['avg_progress'] = total_pct / 4 if prog_rows else 0
+
+    # Get enrolled students for count
+    cursor.execute('''
+        SELECT COUNT(*) as cnt FROM users u
+        JOIN enrollments e ON u.id = e.student_id
+        WHERE e.subject_id = ? AND u.is_approved = 1
+    ''', (subject_id,))
+    total_enrolled = cursor.fetchone()['cnt']
+
+    conn.close()
+    return render_template('project_groups.html', subject=subject, groups=groups, total_enrolled=total_enrolled)
+
+
+@app.route('/api/groups/assign/<int:subject_id>', methods=['POST'])
+@login_required
+def assign_project_groups(subject_id):
+    if current_user.role != 'instructor':
+        return jsonify({'error': 'Unauthorized'}), 403
+    import random
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # Check existing groups
+    cursor.execute('SELECT COUNT(*) as cnt FROM project_groups WHERE subject_id = ?', (subject_id,))
+    if cursor.fetchone()['cnt'] > 0:
+        conn.close()
+        return jsonify({'error': 'Groups already exist. Delete them first to re-randomize.'}), 400
+
+    # Get enrolled students
+    cursor.execute('''
+        SELECT u.id, u.full_name FROM users u
+        JOIN enrollments e ON u.id = e.student_id
+        WHERE e.subject_id = ? AND u.is_approved = 1
+        ORDER BY u.full_name
+    ''', (subject_id,))
+    students = [dict(s) for s in cursor.fetchall()]
+    if len(students) < 2:
+        conn.close()
+        return jsonify({'error': 'Need at least 2 enrolled students'}), 400
+
+    random.shuffle(students)
+
+    # Divide into groups of 3
+    groups = []
+    i = 0
+    while i < len(students):
+        remaining = len(students) - i
+        if remaining == 4:
+            groups.append(students[i:i+4])
+            i += 4
+        elif remaining == 2:
+            groups.append(students[i:i+2])
+            i += 2
+        else:
+            groups.append(students[i:i+3])
+            i += 3
+
+    # Insert groups
+    for idx, group_students in enumerate(groups):
+        gnum = idx + 1
+        cursor.execute('INSERT INTO project_groups (subject_id, group_number, group_name) VALUES (?, ?, ?)',
+                        (subject_id, gnum, f'Group {gnum}'))
+        group_id = cursor.lastrowid
+        for j, student in enumerate(group_students):
+            role = 'leader' if j == 0 else 'member'
+            cursor.execute('INSERT INTO project_group_members (group_id, student_id, role) VALUES (?, ?, ?)',
+                            (group_id, student['id'], role))
+        # Initialize progress for sessions 13-16
+        for sn in [13, 14, 15, 16]:
+            cursor.execute('INSERT OR IGNORE INTO project_progress (group_id, session_number, percentage) VALUES (?, ?, 0)',
+                            (group_id, sn))
+        # Notify members
+        member_names = ', '.join(s['full_name'] for s in group_students)
+        for student in group_students:
+            cursor.execute('''
+                INSERT INTO notifications (user_id, type, icon, message, link)
+                VALUES (?, 'info', 'users', ?, ?)
+            ''', (student['id'],
+                  f'You have been assigned to Group {gnum} for the finals project! Members: {member_names}',
+                  f'/student/dashboard'))
+
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True, 'groups_created': len(groups), 'students_assigned': len(students)})
+
+
+@app.route('/api/groups/delete/<int:subject_id>', methods=['POST'])
+@login_required
+def delete_project_groups(subject_id):
+    if current_user.role != 'instructor':
+        return jsonify({'error': 'Unauthorized'}), 403
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('SELECT id FROM project_groups WHERE subject_id = ?', (subject_id,))
+    group_ids = [r['id'] for r in cursor.fetchall()]
+    if group_ids:
+        ph = ','.join('?' * len(group_ids))
+        cursor.execute(f'DELETE FROM project_progress WHERE group_id IN ({ph})', group_ids)
+        cursor.execute(f'DELETE FROM project_group_members WHERE group_id IN ({ph})', group_ids)
+        cursor.execute('DELETE FROM project_groups WHERE subject_id = ?', (subject_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+
+
+@app.route('/api/groups/progress', methods=['POST'])
+@login_required
+def update_group_progress():
+    if current_user.role != 'instructor':
+        return jsonify({'error': 'Unauthorized'}), 403
+    data = request.get_json()
+    group_id = data['group_id']
+    session_number = data['session_number']
+    percentage = min(100, max(0, int(data['percentage'])))
+    notes = data.get('notes', '')
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT INTO project_progress (group_id, session_number, percentage, notes, updated_by, updated_at)
+        VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(group_id, session_number) DO UPDATE SET
+            percentage = ?, notes = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP
+    ''', (group_id, session_number, percentage, notes, current_user.id,
+          percentage, notes, current_user.id))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+
+
+# ==================== INSTRUCTOR MONITORING ====================
+
+@app.route('/instructor/monitoring')
+@login_required
+def instructor_monitoring():
+    if current_user.role != 'instructor':
+        return redirect(url_for('student_dashboard'))
+    filter_subject = request.args.get('subject_id', type=int)
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM subjects ORDER BY code, section')
+    subjects = cursor.fetchall()
+
+    at_risk_students = []
+    missed_deadline_count = 0
+    low_grade_count = 0
+    behind_count = 0
+
+    target_subjects = [s for s in subjects if s['id'] == filter_subject] if filter_subject else subjects
+    for subj in target_subjects:
+        cursor.execute('''
+            SELECT u.* FROM users u
+            JOIN enrollments e ON u.id = e.student_id
+            WHERE e.subject_id = ? AND u.is_approved = 1
+            ORDER BY u.full_name
+        ''', (subj['id'],))
+        students = cursor.fetchall()
+        for student in students:
+            issues = []
+            # 1. Missed deadlines
+            cursor.execute('''
+                SELECT a.title, a.due_date, ses.session_number
+                FROM activities a
+                JOIN sessions ses ON a.session_id = ses.id
+                WHERE ses.subject_id = ? AND a.due_date IS NOT NULL
+                AND a.due_date < date('now') AND a.is_visible = 1
+                AND a.id NOT IN (SELECT activity_id FROM submissions WHERE student_id = ?)
+            ''', (subj['id'], student['id']))
+            missed = cursor.fetchall()
+            for m in missed:
+                issues.append({'type': 'missed_deadline', 'severity': 'critical',
+                               'message': f'Missed {m["title"]} (Session {m["session_number"]}, due {m["due_date"]})',
+                               'icon': 'clock'})
+                missed_deadline_count += 1
+
+            # 2. Low grades
+            weighted = compute_weighted_grade(cursor, subj['id'], student['id'])
+            if weighted > 0 and weighted < 75:
+                issues.append({'type': 'low_grade', 'severity': 'critical',
+                               'message': f'Failing: {weighted:.1f}% (needs 75%)',
+                               'icon': 'exclamation-triangle'})
+                low_grade_count += 1
+            elif weighted > 0 and weighted < 82:
+                issues.append({'type': 'low_grade', 'severity': 'warning',
+                               'message': f'At risk: {weighted:.1f}%',
+                               'icon': 'exclamation-circle'})
+                low_grade_count += 1
+
+            # 3. Behind on sessions
+            cursor.execute('SELECT id FROM sessions WHERE subject_id = ? AND is_visible = 1', (subj['id'],))
+            visible_sessions = cursor.fetchall()
+            completed_count = 0
+            for vs in visible_sessions:
+                prog = get_session_progress(cursor, vs['id'], student['id'])
+                if prog.get('completed'):
+                    completed_count += 1
+            sessions_behind = len(visible_sessions) - completed_count
+            if sessions_behind >= 3:
+                issues.append({'type': 'behind_progress', 'severity': 'critical',
+                               'message': f'{sessions_behind} sessions behind ({completed_count}/{len(visible_sessions)})',
+                               'icon': 'tasks'})
+                behind_count += 1
+            elif sessions_behind >= 2:
+                issues.append({'type': 'behind_progress', 'severity': 'warning',
+                               'message': f'{sessions_behind} sessions behind',
+                               'icon': 'tasks'})
+                behind_count += 1
+
+            if issues:
+                at_risk_students.append({
+                    'student': student, 'subject': subj, 'issues': issues,
+                    'issue_count': len(issues),
+                    'max_severity': 'critical' if any(i['severity'] == 'critical' for i in issues) else 'warning',
+                    'weighted_grade': weighted
+                })
+
+    at_risk_students.sort(key=lambda x: (0 if x['max_severity'] == 'critical' else 1, -x['issue_count']))
+
+    # Count alerts already sent
+    cursor.execute('SELECT COUNT(*) as cnt FROM performance_alerts WHERE notification_sent = 1')
+    alerts_sent = cursor.fetchone()['cnt']
+    conn.close()
+
+    return render_template('instructor_monitoring.html',
+                           subjects=subjects, at_risk_students=at_risk_students,
+                           filter_subject=filter_subject,
+                           missed_deadline_count=missed_deadline_count,
+                           low_grade_count=low_grade_count, behind_count=behind_count,
+                           alerts_sent=alerts_sent)
+
+
+@app.route('/api/monitoring/send-reminders', methods=['POST'])
+@login_required
+def send_performance_reminders():
+    if current_user.role != 'instructor':
+        return jsonify({'error': 'Unauthorized'}), 403
+    data = request.get_json()
+    subject_id = data.get('subject_id')
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # Compute at-risk students
+    target_subjects = []
+    if subject_id:
+        cursor.execute('SELECT * FROM subjects WHERE id = ?', (subject_id,))
+        s = cursor.fetchone()
+        if s:
+            target_subjects = [s]
+    else:
+        cursor.execute('SELECT * FROM subjects ORDER BY code')
+        target_subjects = cursor.fetchall()
+
+    notifs_sent = 0
+    for subj in target_subjects:
+        cursor.execute('''
+            SELECT u.id, u.full_name FROM users u
+            JOIN enrollments e ON u.id = e.student_id
+            WHERE e.subject_id = ? AND u.is_approved = 1
+        ''', (subj['id'],))
+        students = cursor.fetchall()
+        for student in students:
+            messages = []
+            # Check missed deadlines
+            cursor.execute('''
+                SELECT a.title FROM activities a
+                JOIN sessions ses ON a.session_id = ses.id
+                WHERE ses.subject_id = ? AND a.due_date IS NOT NULL
+                AND a.due_date < date('now') AND a.is_visible = 1
+                AND a.id NOT IN (SELECT activity_id FROM submissions WHERE student_id = ?)
+            ''', (subj['id'], student['id']))
+            missed = cursor.fetchall()
+            if missed:
+                titles = ', '.join(m['title'] for m in missed[:3])
+                messages.append(f"You have {len(missed)} missed deadline(s) in {subj['code']}: {titles}. Submit ASAP.")
+
+            # Check low grade
+            weighted = compute_weighted_grade(cursor, subj['id'], student['id'])
+            if weighted > 0 and weighted < 75:
+                messages.append(f"Academic alert: Your grade in {subj['code']} is {weighted:.1f}%. You need 75% to pass.")
+
+            # Check behind
+            cursor.execute('SELECT id FROM sessions WHERE subject_id = ? AND is_visible = 1', (subj['id'],))
+            vis = cursor.fetchall()
+            done = 0
+            for v in vis:
+                p = get_session_progress(cursor, v['id'], student['id'])
+                if p.get('completed'):
+                    done += 1
+            behind = len(vis) - done
+            if behind >= 3:
+                messages.append(f"You are {behind} sessions behind in {subj['code']}. Complete your lessons.")
+
+            for msg in messages:
+                # Check if we already sent this exact message recently
+                cursor.execute('''
+                    SELECT id FROM performance_alerts
+                    WHERE student_id = ? AND subject_id = ? AND message = ? AND notification_sent = 1
+                    AND created_at > datetime('now', '-7 days')
+                ''', (student['id'], subj['id'], msg))
+                if cursor.fetchone():
+                    continue
+                # Create alert record
+                alert_type = 'missed_deadline' if 'missed' in msg.lower() else ('low_grade' if 'grade' in msg.lower() else 'behind_progress')
+                severity = 'critical' if 'need 75%' in msg or behind >= 3 else 'warning'
+                cursor.execute('''
+                    INSERT INTO performance_alerts (student_id, subject_id, alert_type, severity, message, notification_sent)
+                    VALUES (?, ?, ?, ?, ?, 1)
+                ''', (student['id'], subj['id'], alert_type, severity, msg))
+                # Send notification
+                icon = 'clock' if alert_type == 'missed_deadline' else ('chart-line' if alert_type == 'low_grade' else 'tasks')
+                cursor.execute('''
+                    INSERT INTO notifications (user_id, type, icon, message, link)
+                    VALUES (?, 'warning', ?, ?, '/student/dashboard')
+                ''', (student['id'], icon, msg))
+                notifs_sent += 1
+
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True, 'notifications_sent': notifs_sent})
+
+
+@app.route('/api/monitoring/send-guidance', methods=['POST'])
+@login_required
+def send_performance_guidance():
+    if current_user.role != 'instructor':
+        return jsonify({'error': 'Unauthorized'}), 403
+    data = request.get_json()
+    student_id = data['student_id']
+    subject_id = data['subject_id']
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM subjects WHERE id = ?', (subject_id,))
+    subject = cursor.fetchone()
+    if not subject:
+        conn.close()
+        return jsonify({'error': 'Subject not found'}), 404
+
+    # Compute component averages
+    cursor.execute('''
+        SELECT AVG(COALESCE(sub.final_score, sub.score)) as avg
+        FROM submissions sub JOIN activities a ON sub.activity_id = a.id
+        JOIN sessions ses ON a.session_id = ses.id
+        WHERE ses.subject_id = ? AND sub.student_id = ? AND COALESCE(sub.final_score, sub.score) IS NOT NULL
+    ''', (subject_id, student_id))
+    activity_avg = cursor.fetchone()['avg'] or 0
+
+    cursor.execute('''
+        SELECT AVG(qa.score) as avg FROM quiz_attempts qa
+        JOIN quizzes q ON qa.quiz_id = q.id JOIN sessions ses ON q.session_id = ses.id
+        WHERE ses.subject_id = ? AND qa.student_id = ? AND qa.score IS NOT NULL
+    ''', (subject_id, student_id))
+    quiz_avg = cursor.fetchone()['avg'] or 0
+
+    cursor.execute('SELECT id FROM sessions WHERE subject_id = ? AND is_visible = 1', (subject_id,))
+    vis = cursor.fetchall()
+    done = sum(1 for v in vis if get_session_progress(cursor, v['id'], student_id).get('completed'))
+    sessions_behind = len(vis) - done
+
+    msg = build_guidance_message(activity_avg, quiz_avg, sessions_behind, subject['code'])
+    cursor.execute('''
+        INSERT INTO notifications (user_id, type, icon, message, link)
+        VALUES (?, 'info', 'lightbulb', ?, '/my_grades')
+    ''', (student_id, msg))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True, 'message': msg})
+
 
 @app.route('/api/bulk-visibility', methods=['POST'])
 @login_required
@@ -4100,13 +4660,22 @@ def student_grades(student_id):
                 else:
                     final_pending = True
 
+        # Check for project grade if no final exam
+        project_grade = None
+        final_for_calc = final_exam or 0
+        if final_for_calc == 0:
+            proj = compute_project_grade(cursor, subject['id'], student_id)
+            if proj is not None and proj > 0:
+                project_grade = proj
+                final_for_calc = proj
+
         # Calculate weighted grade based on subject-specific weights
         # Activities: 50%, Quizzes: 10%, Midterm: 20%, Final: 20%
         weighted = (
             (activity_avg * weights['activities']) +
             (quiz_avg * weights['quizzes']) +
             ((midterm or 0) * weights['midterm']) +
-            ((final_exam or 0) * weights['final'])
+            (final_for_calc * weights['final'])
         )
 
         # Get PUP grade equivalent
@@ -4122,6 +4691,7 @@ def student_grades(student_id):
             'midterm_pending': midterm_pending,
             'final': final_exam,
             'final_pending': final_pending,
+            'project_grade': project_grade,
             'weighted': weighted,
             'pup_grade': pup_grade,
             'weights': weights
@@ -4141,7 +4711,6 @@ def student_dashboard():
 
     conn = get_db()
     cursor = conn.cursor()
-    # Only get subjects the student is enrolled in
     cursor.execute('''
         SELECT s.* FROM subjects s
         INNER JOIN enrollments e ON s.id = e.subject_id
@@ -4149,8 +4718,134 @@ def student_dashboard():
         ORDER BY s.code, s.section
     ''', (current_user.id,))
     subjects = cursor.fetchall()
+
+    # Compute per-subject performance
+    subject_performance = []
+    total_activities_done = 0
+    total_activities = 0
+    total_quizzes_done = 0
+    total_quizzes = 0
+    total_sessions_completed = 0
+    total_sessions = 0
+    overall_weighted_sum = 0
+    overall_count = 0
+    strength_areas = []
+    weakness_areas = []
+
+    for subj in subjects:
+        # Activity stats
+        cursor.execute('''
+            SELECT COUNT(*) as total FROM activities a
+            JOIN sessions s ON a.session_id = s.id
+            WHERE s.subject_id = ? AND a.is_visible = 1
+        ''', (subj['id'],))
+        act_total = cursor.fetchone()['total']
+
+        cursor.execute('''
+            SELECT COUNT(*) as done, AVG(COALESCE(sub.final_score, sub.score)) as avg
+            FROM submissions sub
+            JOIN activities a ON sub.activity_id = a.id
+            JOIN sessions s ON a.session_id = s.id
+            WHERE s.subject_id = ? AND sub.student_id = ?
+        ''', (subj['id'], current_user.id))
+        act_row = cursor.fetchone()
+        act_done = act_row['done']
+        act_avg = act_row['avg'] or 0
+
+        # Quiz stats
+        cursor.execute('''
+            SELECT COUNT(*) as total FROM quizzes q
+            JOIN sessions s ON q.session_id = s.id
+            WHERE s.subject_id = ? AND q.is_visible = 1
+        ''', (subj['id'],))
+        quiz_total = cursor.fetchone()['total']
+
+        cursor.execute('''
+            SELECT COUNT(*) as done, AVG(qa.score) as avg FROM quiz_attempts qa
+            JOIN quizzes q ON qa.quiz_id = q.id
+            JOIN sessions s ON q.session_id = s.id
+            WHERE s.subject_id = ? AND qa.student_id = ?
+        ''', (subj['id'], current_user.id))
+        quiz_row = cursor.fetchone()
+        quiz_done = quiz_row['done']
+        quiz_avg = quiz_row['avg'] or 0
+
+        # Session progress
+        cursor.execute('SELECT id FROM sessions WHERE subject_id = ? AND is_visible = 1', (subj['id'],))
+        vis_sessions = cursor.fetchall()
+        sess_completed = sum(1 for v in vis_sessions if get_session_progress(cursor, v['id'], current_user.id).get('completed'))
+
+        total_activities += act_total
+        total_activities_done += act_done
+        total_quizzes += quiz_total
+        total_quizzes_done += quiz_done
+        total_sessions += len(vis_sessions)
+        total_sessions_completed += sess_completed
+
+        # Weighted grade
+        weighted = compute_weighted_grade(cursor, subj['id'], current_user.id)
+        pup = get_pup_grade(weighted)
+        if weighted > 0:
+            overall_weighted_sum += weighted
+            overall_count += 1
+
+        # Strengths/weaknesses
+        if act_avg >= 85:
+            strength_areas.append((f"{subj['code']} Activities", act_avg))
+        elif 0 < act_avg < 75:
+            weakness_areas.append((f"{subj['code']} Activities", act_avg))
+        if quiz_avg >= 85:
+            strength_areas.append((f"{subj['code']} Quizzes", quiz_avg))
+        elif 0 < quiz_avg < 75:
+            weakness_areas.append((f"{subj['code']} Quizzes", quiz_avg))
+
+        subject_performance.append({
+            'subject': subj, 'activity_done': act_done, 'activity_total': act_total,
+            'activity_avg': act_avg, 'quiz_done': quiz_done, 'quiz_total': quiz_total,
+            'quiz_avg': quiz_avg, 'sessions_completed': sess_completed,
+            'sessions_total': len(vis_sessions), 'weighted': weighted, 'pup_grade': pup,
+            'passed': pup <= 3.00 if weighted > 0 else None
+        })
+
+    # Upcoming deadlines
+    cursor.execute('''
+        SELECT a.title, a.due_date, a.due_time, ses.session_number, sub.code as subject_code
+        FROM activities a
+        JOIN sessions ses ON a.session_id = ses.id
+        JOIN subjects sub ON ses.subject_id = sub.id
+        JOIN enrollments e ON sub.id = e.subject_id
+        WHERE e.student_id = ? AND a.due_date >= date('now') AND a.is_visible = 1
+        AND a.id NOT IN (SELECT activity_id FROM submissions WHERE student_id = ?)
+        ORDER BY a.due_date, a.due_time
+        LIMIT 5
+    ''', (current_user.id, current_user.id))
+    upcoming_deadlines = cursor.fetchall()
+
+    # Project groups
+    cursor.execute('''
+        SELECT pg.group_name, pg.subject_id, sub.code as subject_code,
+               (SELECT AVG(pp.percentage) FROM project_progress pp WHERE pp.group_id = pg.id) as avg_progress
+        FROM project_groups pg
+        JOIN project_group_members pgm ON pg.id = pgm.group_id
+        JOIN subjects sub ON pg.subject_id = sub.id
+        WHERE pgm.student_id = ?
+    ''', (current_user.id,))
+    my_groups = [dict(r) for r in cursor.fetchall()]
+
+    overall_avg = overall_weighted_sum / overall_count if overall_count > 0 else 0
+    overall_pup = get_pup_grade(overall_avg) if overall_avg > 0 else None
+    strength_areas.sort(key=lambda x: -x[1])
+    weakness_areas.sort(key=lambda x: x[1])
+
     conn.close()
-    return render_template('student_dashboard.html', subjects=subjects)
+    return render_template('student_dashboard.html',
+                           subjects=subjects, subject_performance=subject_performance,
+                           overall_avg=overall_avg, overall_pup=overall_pup,
+                           total_activities_done=total_activities_done, total_activities=total_activities,
+                           total_quizzes_done=total_quizzes_done, total_quizzes=total_quizzes,
+                           total_sessions_completed=total_sessions_completed, total_sessions=total_sessions,
+                           strength_areas=strength_areas[:5], weakness_areas=weakness_areas[:5],
+                           upcoming_deadlines=upcoming_deadlines, my_groups=my_groups)
 
 @app.route('/student/subject/<int:subject_id>')
 @login_required

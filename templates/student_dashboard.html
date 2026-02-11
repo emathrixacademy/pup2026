@@ -6,14 +6,14 @@
 <div class="page-header">
     <div>
         <h1><i class="fas fa-home"></i> Welcome, {{ current_user.full_name }}!</h1>
-        <p>Access your classes, activities, and grades</p>
+        <p>Your academic performance hub</p>
     </div>
 </div>
 
 <!-- Student Info Card -->
-<div class="card" style="margin-bottom: 2rem;">
+<div class="card" style="margin-bottom: 1.5rem;">
     <div class="card-body">
-        <div class="flex gap-2 items-center" style="flex-wrap: wrap;">
+        <div style="display: flex; align-items: center; gap: 20px; flex-wrap: wrap;">
             <img src="{{ url_for('static', filename='uploads/photos/' + (current_user.photo or 'default.png')) }}"
                  alt="Profile"
                  style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover; border: 3px solid var(--primary-blue);"
@@ -22,15 +22,176 @@
                 <h3 style="margin-bottom: 0.25rem;">{{ current_user.full_name }}</h3>
                 <p style="color: var(--text-gray); margin-bottom: 0.5rem;">
                     <i class="fas fa-id-card"></i> {{ current_user.student_id or 'N/A' }} |
-                    <i class="fas fa-users"></i> {{ current_user.section or 'N/A' }}
+                    <i class="fas fa-users"></i> {{ current_user.section or 'N/A' }} |
+                    <i class="fas fa-book"></i> {{ subjects|length }} subject(s)
                 </p>
-                <span class="badge badge-active"><i class="fas fa-check-circle"></i> Active Student</span>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                    <span class="badge badge-active"><i class="fas fa-check-circle"></i> Active Student</span>
+                    {% if overall_avg > 0 %}
+                    <span style="background: {{ '#D1FAE5' if overall_pup and overall_pup <= 3.00 else '#FEE2E2' }};
+                                 color: {{ '#065F46' if overall_pup and overall_pup <= 3.00 else '#991B1B' }};
+                                 padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 700;">
+                        GWA: {{ '%.2f'|format(overall_pup) if overall_pup else 'N/A' }} ({{ '%.1f'|format(overall_avg) }}%)
+                    </span>
+                    {% endif %}
+                </div>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Available Subjects -->
+<!-- Overall Stats Grid -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 1.5rem;">
+    <div style="background: white; border-radius: 12px; padding: 1.25rem; box-shadow: 0 2px 10px rgba(0,0,0,0.05); border-left: 4px solid #8B5CF6;">
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <div style="width: 44px; height: 44px; border-radius: 10px; background: #EDE9FE; display: flex; align-items: center; justify-content: center;">
+                <i class="fas fa-chart-line" style="color: #8B5CF6; font-size: 1.2rem;"></i>
+            </div>
+            <div>
+                <div style="font-size: 1.5rem; font-weight: 700; color: #8B5CF6;">{{ '%.1f'|format(overall_avg) }}%</div>
+                <div style="font-size: 0.8rem; color: #64748B;">Overall Average</div>
+            </div>
+        </div>
+    </div>
+    <div style="background: white; border-radius: 12px; padding: 1.25rem; box-shadow: 0 2px 10px rgba(0,0,0,0.05); border-left: 4px solid #3B82F6;">
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <div style="width: 44px; height: 44px; border-radius: 10px; background: #DBEAFE; display: flex; align-items: center; justify-content: center;">
+                <i class="fas fa-tasks" style="color: #3B82F6; font-size: 1.2rem;"></i>
+            </div>
+            <div>
+                <div style="font-size: 1.5rem; font-weight: 700; color: #3B82F6;">{{ total_activities_done }}/{{ total_activities }}</div>
+                <div style="font-size: 0.8rem; color: #64748B;">Activities Done</div>
+            </div>
+        </div>
+    </div>
+    <div style="background: white; border-radius: 12px; padding: 1.25rem; box-shadow: 0 2px 10px rgba(0,0,0,0.05); border-left: 4px solid #F59E0B;">
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <div style="width: 44px; height: 44px; border-radius: 10px; background: #FEF3C7; display: flex; align-items: center; justify-content: center;">
+                <i class="fas fa-question-circle" style="color: #F59E0B; font-size: 1.2rem;"></i>
+            </div>
+            <div>
+                <div style="font-size: 1.5rem; font-weight: 700; color: #F59E0B;">{{ total_quizzes_done }}/{{ total_quizzes }}</div>
+                <div style="font-size: 0.8rem; color: #64748B;">Quizzes Taken</div>
+            </div>
+        </div>
+    </div>
+    <div style="background: white; border-radius: 12px; padding: 1.25rem; box-shadow: 0 2px 10px rgba(0,0,0,0.05); border-left: 4px solid #10B981;">
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <div style="width: 44px; height: 44px; border-radius: 10px; background: #D1FAE5; display: flex; align-items: center; justify-content: center;">
+                <i class="fas fa-play-circle" style="color: #10B981; font-size: 1.2rem;"></i>
+            </div>
+            <div>
+                <div style="font-size: 1.5rem; font-weight: 700; color: #10B981;">{{ total_sessions_completed }}/{{ total_sessions }}</div>
+                <div style="font-size: 0.8rem; color: #64748B;">Sessions Completed</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Two-Column: Deadlines + Strengths -->
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 1.5rem;">
+
+    <!-- Upcoming Deadlines -->
+    <div class="card" style="overflow: hidden;">
+        <div class="card-header" style="background: linear-gradient(135deg, #FEF3C7, #FDE68A); border-bottom: none;">
+            <h3 style="margin: 0; font-size: 1rem; color: #92400E;">
+                <i class="fas fa-clock"></i> Upcoming Deadlines
+            </h3>
+        </div>
+        <div class="card-body" style="padding: 0;">
+            {% if upcoming_deadlines %}
+            {% for dl in upcoming_deadlines %}
+            <div style="display: flex; align-items: center; gap: 12px; padding: 10px 1.25rem; border-bottom: 1px solid #F1F5F9;">
+                <div style="width: 36px; height: 36px; border-radius: 8px; background: #FEF3C7; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                    <i class="fas fa-file-alt" style="color: #F59E0B;"></i>
+                </div>
+                <div style="flex: 1; min-width: 0;">
+                    <div style="font-size: 0.85rem; font-weight: 600; color: #1E293B; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ dl.title }}</div>
+                    <div style="font-size: 0.75rem; color: #64748B;">{{ dl.subject_code }} &middot; Session {{ dl.session_number }}</div>
+                </div>
+                <span style="background: #FEE2E2; color: #991B1B; padding: 2px 10px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; white-space: nowrap;">
+                    {{ dl.due_date }}
+                </span>
+            </div>
+            {% endfor %}
+            {% else %}
+            <div style="text-align: center; padding: 2rem; color: #94A3B8;">
+                <i class="fas fa-check-circle" style="font-size: 1.5rem; margin-bottom: 0.5rem;"></i>
+                <p style="margin: 0; font-size: 0.85rem;">No upcoming deadlines!</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Strengths & Weaknesses -->
+    <div class="card" style="overflow: hidden;">
+        <div class="card-header" style="background: linear-gradient(135deg, #D1FAE5, #A7F3D0); border-bottom: none;">
+            <h3 style="margin: 0; font-size: 1rem; color: #065F46;">
+                <i class="fas fa-chart-bar"></i> Strengths & Areas to Improve
+            </h3>
+        </div>
+        <div class="card-body">
+            {% if strength_areas %}
+            <div style="margin-bottom: 12px;">
+                <span style="font-size: 0.8rem; font-weight: 600; color: #065F46;"><i class="fas fa-arrow-up"></i> Strengths</span>
+                <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px;">
+                    {% for name, score in strength_areas %}
+                    <span style="background: #D1FAE5; color: #065F46; padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 500;">
+                        {{ name }} ({{ '%.0f'|format(score) }}%)
+                    </span>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+            {% if weakness_areas %}
+            <div>
+                <span style="font-size: 0.8rem; font-weight: 600; color: #92400E;"><i class="fas fa-arrow-down"></i> Needs Improvement</span>
+                <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px;">
+                    {% for name, score in weakness_areas %}
+                    <span style="background: #FEF3C7; color: #92400E; padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 500;">
+                        {{ name }} ({{ '%.0f'|format(score) }}%)
+                    </span>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+            {% if not strength_areas and not weakness_areas %}
+            <div style="text-align: center; padding: 1.5rem; color: #94A3B8;">
+                <i class="fas fa-info-circle" style="font-size: 1.5rem; margin-bottom: 0.5rem;"></i>
+                <p style="margin: 0; font-size: 0.85rem;">Complete more activities and quizzes to see your performance analysis.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- My Project Groups -->
+{% if my_groups %}
+<div class="card" style="margin-bottom: 1.5rem;">
+    <div class="card-header">
+        <h3><i class="fas fa-users"></i> My Project Groups</h3>
+    </div>
+    <div class="card-body" style="padding: 0;">
+        {% for g in my_groups %}
+        <div style="display: flex; align-items: center; gap: 16px; padding: 12px 1.25rem; border-bottom: 1px solid #F1F5F9;">
+            <div style="width: 40px; height: 40px; border-radius: 10px; background: linear-gradient(135deg, #667eea, #764ba2); display: flex; align-items: center; justify-content: center;">
+                <i class="fas fa-users" style="color: white;"></i>
+            </div>
+            <div style="flex: 1;">
+                <div style="font-weight: 600; color: #1E293B;">{{ g.group_name }}</div>
+                <div style="font-size: 0.8rem; color: #64748B;">{{ g.subject_code }} - Finals Project</div>
+            </div>
+            <div style="text-align: right;">
+                <div style="font-weight: 700; color: #8B5CF6;">{{ '%.0f'|format(g.avg_progress or 0) }}%</div>
+                <div style="font-size: 0.75rem; color: #64748B;">Progress</div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<!-- Enrolled Subjects with Performance -->
 <div class="card">
     <div class="card-header">
         <h3><i class="fas fa-book"></i> My Enrolled Subjects</h3>
@@ -38,17 +199,13 @@
     <div class="card-body">
         {% if subjects %}
         <div class="dashboard-grid">
-            {% for subject in subjects %}
+            {% for perf in subject_performance %}
+            {% set subject = perf.subject %}
             {% set color_class = 'blue' %}
-            {% if subject.code == 'COMP019' %}
-                {% set color_class = 'blue' %}
-            {% elif subject.code == 'COMP012' %}
-                {% set color_class = 'green' %}
-            {% elif subject.code == 'CNS' %}
-                {% set color_class = 'purple' %}
-            {% elif subject.code == 'ES' %}
-                {% set color_class = 'orange' %}
-            {% endif %}
+            {% if subject.code == 'COMP019' %}{% set color_class = 'blue' %}
+            {% elif subject.code == 'COMP012' %}{% set color_class = 'green' %}
+            {% elif subject.code == 'CNS' %}{% set color_class = 'purple' %}
+            {% elif subject.code == 'ES' %}{% set color_class = 'orange' %}{% endif %}
             <div class="subject-card">
                 <div class="subject-card-header {{ color_class }}">
                     <span class="schedule-badge">
@@ -58,12 +215,40 @@
                     <p class="section-info">{{ subject.section }}</p>
                 </div>
                 <div class="subject-card-body">
-                    <a href="{{ url_for('student_subject', subject_id=subject.id) }}" class="btn btn-primary btn-sm">
-                        <i class="fas fa-folder-open"></i> Open
-                    </a>
-                    <a href="{{ url_for('my_grades') }}" class="btn btn-secondary btn-sm">
-                        <i class="fas fa-chart-bar"></i> Grades
-                    </a>
+                    <!-- Progress Summary -->
+                    <div style="width: 100%; margin-bottom: 12px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                            <span style="font-size: 0.8rem; color: #64748B;">
+                                Sessions: {{ perf.sessions_completed }}/{{ perf.sessions_total }}
+                            </span>
+                            {% if perf.weighted > 0 %}
+                            <span style="font-size: 0.85rem; font-weight: 700; color: {{ '#10B981' if perf.passed else '#EF4444' }};">
+                                {{ '%.1f'|format(perf.weighted) }}% ({{ '%.2f'|format(perf.pup_grade) }})
+                            </span>
+                            {% endif %}
+                        </div>
+                        <div style="background: #E2E8F0; border-radius: 6px; height: 6px; overflow: hidden;">
+                            <div style="height: 100%; border-radius: 6px; transition: width 0.5s;
+                                        background: {{ '#10B981' if perf.sessions_completed == perf.sessions_total and perf.sessions_total > 0 else '#3B82F6' }};
+                                        width: {{ (perf.sessions_completed / perf.sessions_total * 100)|round|int if perf.sessions_total > 0 else 0 }}%;"></div>
+                        </div>
+                        <div style="display: flex; gap: 12px; margin-top: 6px;">
+                            <span style="font-size: 0.75rem; color: #64748B;">
+                                <i class="fas fa-tasks" style="color: #3B82F6;"></i> {{ perf.activity_done }}/{{ perf.activity_total }} activities
+                            </span>
+                            <span style="font-size: 0.75rem; color: #64748B;">
+                                <i class="fas fa-question-circle" style="color: #F59E0B;"></i> {{ perf.quiz_done }}/{{ perf.quiz_total }} quizzes
+                            </span>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <a href="{{ url_for('student_subject', subject_id=subject.id) }}" class="btn btn-primary btn-sm">
+                            <i class="fas fa-folder-open"></i> Open
+                        </a>
+                        <a href="{{ url_for('my_grades') }}" class="btn btn-secondary btn-sm">
+                            <i class="fas fa-chart-bar"></i> Grades
+                        </a>
+                    </div>
                 </div>
             </div>
             {% endfor %}
@@ -77,4 +262,12 @@
         {% endif %}
     </div>
 </div>
+
+<style>
+@media (max-width: 768px) {
+    div[style*="grid-template-columns: 1fr 1fr"] {
+        grid-template-columns: 1fr !important;
+    }
+}
+</style>
 {% endblock %}

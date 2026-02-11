@@ -24,6 +24,11 @@
         <a href="{{ url_for('subject_exams', subject_id=subject.id) }}" class="btn btn-violet">
             <i class="fas fa-file-alt"></i> Exams
         </a>
+        {% if current_user.role == 'instructor' %}
+        <a href="{{ url_for('project_groups', subject_id=subject.id) }}" class="btn btn-warning">
+            <i class="fas fa-users-cog"></i> Project Groups
+        </a>
+        {% endif %}
         <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">
             <i class="fas fa-arrow-left"></i> Back
         </a>
@@ -171,6 +176,19 @@
                                 </button>
                                 {% if session.reading_materials %}
                                 <span class="badge badge-visible"><i class="fas fa-book"></i> Reading added</span>
+                                {% endif %}
+                                <!-- Audio Upload -->
+                                <label class="btn btn-sm {% if session.reading_audio %}btn-teal{% else %}btn-secondary{% endif %}" title="Upload podcast audio for reading materials" style="cursor:pointer; margin:0;">
+                                    <i class="fas fa-podcast"></i>
+                                    {% if session.reading_audio %}Change Audio{% else %}Upload Audio{% endif %}
+                                    <input type="file" accept=".mp3,.wav,.ogg,.m4a" style="display:none;"
+                                           onchange="uploadReadingAudio({{ session.id }}, this)">
+                                </label>
+                                {% if session.reading_audio %}
+                                <span class="badge badge-visible"><i class="fas fa-headphones"></i> Audio added</span>
+                                <button class="btn btn-sm btn-danger" onclick="deleteReadingAudio({{ session.id }})" title="Remove audio">
+                                    <i class="fas fa-times"></i>
+                                </button>
                                 {% endif %}
                             </div>
                         </div>
@@ -776,6 +794,72 @@ async function unlockSession(sessionId, studentId) {
             location.reload();
         } else {
             alert(d.error || 'Error unlocking');
+        }
+    } catch(e) {
+        alert('Error: ' + e.message);
+    }
+}
+
+// ==================== Audio Upload ====================
+async function uploadReadingAudio(sessionId, input) {
+    if (!input.files || !input.files[0]) return;
+    var file = input.files[0];
+    var allowed = ['.mp3', '.wav', '.ogg', '.m4a'];
+    var ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+    if (!allowed.includes(ext)) {
+        alert('Only MP3, WAV, OGG, and M4A files are allowed.');
+        input.value = '';
+        return;
+    }
+    if (file.size > 50 * 1024 * 1024) {
+        alert('File too large. Maximum 50MB allowed.');
+        input.value = '';
+        return;
+    }
+    var formData = new FormData();
+    formData.append('session_id', sessionId);
+    formData.append('audio', file);
+    // Show uploading state
+    var label = input.parentElement;
+    var origHTML = label.innerHTML;
+    label.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
+    try {
+        var r = await fetch('/api/session/reading-audio', {
+            method: 'POST',
+            body: formData
+        });
+        if (r.redirected || r.url.includes('/login')) {
+            alert('Session expired.'); location.href = '/login'; return;
+        }
+        var d = await r.json();
+        if (d.success) {
+            location.reload();
+        } else {
+            alert(d.error || 'Error uploading audio');
+            label.innerHTML = origHTML;
+        }
+    } catch(e) {
+        alert('Error: ' + e.message);
+        label.innerHTML = origHTML;
+    }
+}
+
+async function deleteReadingAudio(sessionId) {
+    if (!confirm('Remove the podcast audio from this session?')) return;
+    try {
+        var r = await fetch('/api/session/reading-audio/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session_id: sessionId })
+        });
+        if (r.redirected || r.url.includes('/login')) {
+            alert('Session expired.'); location.href = '/login'; return;
+        }
+        var d = await r.json();
+        if (d.success) {
+            location.reload();
+        } else {
+            alert(d.error || 'Error removing audio');
         }
     } catch(e) {
         alert('Error: ' + e.message);
