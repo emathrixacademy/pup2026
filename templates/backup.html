@@ -1,0 +1,556 @@
+{% extends 'base.html' %}
+
+{% block title %}Database Backup - Sangrenes LMS Portal{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1><i class="fas fa-database"></i> Database Backup & Restore</h1>
+        <p>Manage backups to protect your data</p>
+    </div>
+    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+        <form action="{{ url_for('create_backup') }}" method="POST" style="display:inline;">
+            <button type="submit" class="btn btn-primary">
+                <i class="fas fa-plus-circle"></i> Create Backup
+            </button>
+        </form>
+        <a href="{{ url_for('download_current_db') }}" class="btn btn-success">
+            <i class="fas fa-download"></i> Download Live DB
+        </a>
+        <form action="{{ url_for('email_backup_now') }}" method="POST" style="display:inline;">
+            <button type="submit" class="btn btn-warning" {% if not email_configured %}disabled title="Set SMTP_EMAIL and SMTP_PASSWORD env vars to enable"{% endif %}>
+                <i class="fas fa-envelope"></i> Email Backup Now
+            </button>
+        </form>
+        <button class="btn btn-secondary" onclick="openModal('uploadModal')">
+            <i class="fas fa-upload"></i> Upload Backup
+        </button>
+    </div>
+</div>
+
+<!-- DB Stats -->
+<div class="bk-stats-grid">
+    <div class="bk-stat-card">
+        <div class="bk-stat-icon purple"><i class="fas fa-database"></i></div>
+        <div class="bk-stat-info">
+            <h3>{{ db_size }} MB</h3>
+            <p>Database Size</p>
+        </div>
+    </div>
+    <div class="bk-stat-card">
+        <div class="bk-stat-icon blue"><i class="fas fa-users"></i></div>
+        <div class="bk-stat-info">
+            <h3>{{ student_count }}</h3>
+            <p>Students</p>
+        </div>
+    </div>
+    <div class="bk-stat-card">
+        <div class="bk-stat-icon green"><i class="fas fa-book"></i></div>
+        <div class="bk-stat-info">
+            <h3>{{ subject_count }}</h3>
+            <p>Subjects</p>
+        </div>
+    </div>
+    <div class="bk-stat-card">
+        <div class="bk-stat-icon orange"><i class="fas fa-file-upload"></i></div>
+        <div class="bk-stat-info">
+            <h3>{{ submission_count }}</h3>
+            <p>Submissions</p>
+        </div>
+    </div>
+    <div class="bk-stat-card">
+        <div class="bk-stat-icon teal"><i class="fas fa-clipboard-check"></i></div>
+        <div class="bk-stat-info">
+            <h3>{{ quiz_attempt_count }}</h3>
+            <p>Quiz Attempts</p>
+        </div>
+    </div>
+</div>
+
+<!-- Auto-Backup Status -->
+<div class="card" style="margin-bottom: 1.5rem;">
+    <div class="card-header">
+        <h3><i class="fas fa-robot"></i> Auto-Backup Schedule</h3>
+        <span class="badge badge-active"><i class="fas fa-check-circle"></i> Active</span>
+    </div>
+    <div class="card-body" style="padding: 0;">
+        <div class="bk-auto-grid">
+            <!-- Last Backup -->
+            <div class="bk-auto-item">
+                <div class="bk-auto-icon"><i class="fas fa-history"></i></div>
+                <div class="bk-auto-info">
+                    <span class="bk-auto-label">Last Backup</span>
+                    {% if last_backup %}
+                    <span class="bk-auto-val">{{ last_backup.strftime('%b %d, %Y %I:%M %p') }}</span>
+                    <span class="bk-auto-sub">{{ hours_since }} hours ago</span>
+                    {% else %}
+                    <span class="bk-auto-val" style="color: var(--danger-red);">No backups yet</span>
+                    <span class="bk-auto-sub">Create your first backup</span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Countdown -->
+            <div class="bk-auto-item">
+                <div class="bk-auto-icon countdown"><i class="fas fa-clock"></i></div>
+                <div class="bk-auto-info">
+                    <span class="bk-auto-label">Next Auto-Backup In</span>
+                    {% if last_backup and hours_remaining > 0 %}
+                    <span class="bk-auto-val bk-countdown {% if hours_remaining <= reminder_hours %}warning{% endif %}" id="autoCountdown">
+                        {{ "%.0f"|format(hours_remaining // 1) }}h {{ "%.0f"|format((hours_remaining % 1) * 60) }}m
+                    </span>
+                    {% if hours_remaining <= reminder_hours %}
+                    <span class="bk-auto-sub" style="color: var(--warning-orange);"><i class="fas fa-exclamation-triangle"></i> Reminder sent - backup soon</span>
+                    {% else %}
+                    <span class="bk-auto-sub">Auto-backup triggers every {{ auto_interval }}h</span>
+                    {% endif %}
+                    {% else %}
+                    <span class="bk-auto-val" style="color: var(--warning-orange);">Imminent</span>
+                    <span class="bk-auto-sub">Will run on next scheduler check</span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Progress -->
+            <div class="bk-auto-item wide">
+                <div class="bk-auto-info" style="width: 100%;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <span class="bk-auto-label" style="margin: 0;">{{ auto_interval }}-Hour Backup Cycle</span>
+                        <span style="font-size: 0.8rem; color: var(--text-gray); font-weight: 600;">
+                            {{ hours_since if hours_since != 'inf' else 0 }}h / {{ auto_interval }}h
+                        </span>
+                    </div>
+                    {% set progress_pct = ((hours_since / auto_interval) * 100) if last_backup else 100 %}
+                    {% if progress_pct > 100 %}{% set progress_pct = 100 %}{% endif %}
+                    <div class="bk-progress-bar">
+                        <div class="bk-progress-fill {% if progress_pct >= 79 %}danger{% elif progress_pct >= 50 %}warning{% endif %}"
+                             style="width: {{ progress_pct }}%;"></div>
+                        <!-- Reminder marker at 79% (19/24) -->
+                        <div class="bk-progress-marker" style="left: {{ ((auto_interval - reminder_hours) / auto_interval * 100) }}%;"
+                             title="Reminder triggers here ({{ auto_interval - reminder_hours }}h)">
+                            <i class="fas fa-bell"></i>
+                        </div>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-top: 4px;">
+                        <span style="font-size: 0.7rem; color: var(--text-light);">0h</span>
+                        <span style="font-size: 0.7rem; color: var(--warning-orange);">{{ auto_interval - reminder_hours }}h reminder</span>
+                        <span style="font-size: 0.7rem; color: var(--danger-red);">{{ auto_interval }}h auto-backup</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Email Backup Status -->
+<div class="card" style="margin-bottom: 1.5rem;">
+    <div class="card-body" style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
+        <div style="width: 44px; height: 44px; border-radius: 10px; background: {{ '#D1FAE5' if email_configured else '#FEE2E2' }}; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+            <i class="fas fa-envelope" style="color: {{ '#065F46' if email_configured else '#991B1B' }}; font-size: 1.2rem;"></i>
+        </div>
+        <div style="flex: 1;">
+            <div style="font-weight: 600; color: #1E293B;">
+                Email Backup: {% if email_configured %}<span style="color: #10B981;">Configured</span>{% else %}<span style="color: #EF4444;">Not Configured</span>{% endif %}
+            </div>
+            <div style="font-size: 0.8rem; color: #64748B;">
+                {% if email_configured %}
+                Auto-backups will be emailed to <strong>{{ backup_email }}</strong> every {{ auto_interval }} hours.
+                {% else %}
+                Set <code>SMTP_EMAIL</code> and <code>SMTP_PASSWORD</code> environment variables to enable automatic email backups to <strong>{{ backup_email }}</strong>.
+                {% endif %}
+            </div>
+        </div>
+        {% if email_configured %}
+        <span style="background: #D1FAE5; color: #065F46; padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 600;">
+            <i class="fas fa-check-circle"></i> Active
+        </span>
+        {% else %}
+        <span style="background: #FEE2E2; color: #991B1B; padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 600;">
+            <i class="fas fa-times-circle"></i> Inactive
+        </span>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Backup List -->
+<div class="card">
+    <div class="card-header">
+        <h3><i class="fas fa-history"></i> Saved Backups ({{ backups|length }})</h3>
+    </div>
+
+    {% if backups %}
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 50px;">#</th>
+                    <th>Filename</th>
+                    <th>Date Created</th>
+                    <th style="text-align: center;">Size</th>
+                    <th style="text-align: center;">Type</th>
+                    <th style="text-align: right;">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for backup in backups %}
+                <tr>
+                    <td style="text-align: center; color: var(--text-gray);">{{ loop.index }}</td>
+                    <td>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <i class="fas fa-file-archive" style="color: var(--primary-purple); font-size: 1.1rem;"></i>
+                            <div>
+                                <strong style="color: var(--text-dark);">{{ backup.filename }}</strong>
+                            </div>
+                        </div>
+                    </td>
+                    <td>
+                        <span style="color: var(--text-gray); font-size: 0.9rem;">
+                            <i class="fas fa-calendar-alt" style="margin-right: 4px;"></i>{{ backup.created }}
+                        </span>
+                    </td>
+                    <td style="text-align: center;">
+                        <span class="badge badge-active">{{ backup.size }} MB</span>
+                    </td>
+                    <td style="text-align: center;">
+                        {% if 'auto_' in backup.filename %}
+                            <span class="bk-type-badge scheduled"><i class="fas fa-robot"></i> Scheduled</span>
+                        {% elif 'pre_restore' in backup.filename %}
+                            <span class="bk-type-badge safety"><i class="fas fa-shield-alt"></i> Safety</span>
+                        {% elif 'uploaded' in backup.filename %}
+                            <span class="bk-type-badge upload"><i class="fas fa-upload"></i> Uploaded</span>
+                        {% else %}
+                            <span class="bk-type-badge manual"><i class="fas fa-user"></i> Manual</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div style="display: flex; gap: 6px; justify-content: flex-end;">
+                            <a href="{{ url_for('download_backup', filename=backup.filename) }}" class="btn btn-sm btn-primary" title="Download">
+                                <i class="fas fa-download"></i>
+                            </a>
+                            <form action="{{ url_for('restore_backup', filename=backup.filename) }}" method="POST" style="display:inline;"
+                                  onsubmit="return confirm('Are you sure you want to restore this backup?\n\nThis will replace the current database. A pre-restore backup will be created automatically.');">
+                                <button type="submit" class="btn btn-sm btn-warning" title="Restore this backup">
+                                    <i class="fas fa-undo"></i>
+                                </button>
+                            </form>
+                            <form action="{{ url_for('delete_backup', filename=backup.filename) }}" method="POST" style="display:inline;"
+                                  onsubmit="return confirm('Delete this backup permanently?');">
+                                <button type="submit" class="btn btn-sm btn-danger" title="Delete">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="card-body" style="text-align: center; padding: 60px 20px;">
+        <i class="fas fa-box-open" style="font-size: 3rem; color: var(--text-light); margin-bottom: 1rem; display: block;"></i>
+        <h3 style="color: var(--text-dark); margin-bottom: 0.5rem;">No Backups Yet</h3>
+        <p style="color: var(--text-gray);">Create your first backup to protect your data.</p>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Tips Card -->
+<div class="card">
+    <div class="card-header">
+        <h3><i class="fas fa-lightbulb"></i> Backup Tips</h3>
+    </div>
+    <div class="card-body">
+        <div class="bk-tips">
+            <div class="bk-tip">
+                <i class="fas fa-check-circle" style="color: var(--success-green);"></i>
+                <div>
+                    <strong>Create regular backups</strong>
+                    <p>Back up before making major changes like bulk enrollments or grade imports.</p>
+                </div>
+            </div>
+            <div class="bk-tip">
+                <i class="fas fa-shield-alt" style="color: var(--primary-purple);"></i>
+                <div>
+                    <strong>Auto pre-restore backup</strong>
+                    <p>Every restore automatically saves a backup of the current state first.</p>
+                </div>
+            </div>
+            <div class="bk-tip">
+                <i class="fas fa-download" style="color: var(--info-purple);"></i>
+                <div>
+                    <strong>Download backups</strong>
+                    <p>Keep copies on your local machine or cloud storage for extra safety.</p>
+                </div>
+            </div>
+            <div class="bk-tip">
+                <i class="fas fa-upload" style="color: var(--warning-orange);"></i>
+                <div>
+                    <strong>Upload & restore</strong>
+                    <p>Upload a previously downloaded .db file to restore from an external backup.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Upload Modal -->
+<div id="uploadModal" class="modal">
+    <div class="modal-content" style="max-width: 500px;">
+        <div class="modal-header">
+            <h3><i class="fas fa-upload"></i> Upload Backup File</h3>
+            <span class="modal-close" onclick="closeModal('uploadModal')">&times;</span>
+        </div>
+        <form action="{{ url_for('upload_backup') }}" method="POST" enctype="multipart/form-data">
+            <div class="form-group" style="padding: 1.5rem;">
+                <label style="margin-bottom: 0.5rem; display: block; font-weight: 600; color: var(--text-dark);">
+                    <i class="fas fa-file"></i> Select .db File
+                </label>
+                <p style="color: var(--text-gray); font-size: 0.85rem; margin-bottom: 1rem;">
+                    Upload a SQLite database file (.db) that was previously downloaded as a backup.
+                </p>
+                <input type="file" name="backup_file" accept=".db" required
+                       style="width: 100%; padding: 12px; border: 2px dashed var(--border-gray); border-radius: 10px; background: var(--light-gray); cursor: pointer;">
+            </div>
+            <div style="padding: 0 1.5rem 1.5rem;">
+                <button type="submit" class="btn btn-primary" style="width: 100%;">
+                    <i class="fas fa-cloud-upload-alt"></i> Upload Backup
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+/* ===== Backup Page Styles ===== */
+
+.bk-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.bk-stat-card {
+    background: white;
+    border-radius: 12px;
+    padding: 1.1rem;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--border-gray);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.bk-stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.bk-stat-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    flex-shrink: 0;
+}
+
+.bk-stat-icon.purple { background: #EDE9FE; color: #7C3AED; }
+.bk-stat-icon.blue { background: #E0F2FE; color: #0284C7; }
+.bk-stat-icon.green { background: #D1FAE5; color: #059669; }
+.bk-stat-icon.orange { background: #FEF3C7; color: #D97706; }
+.bk-stat-icon.teal { background: #CCFBF1; color: #0D9488; }
+
+.bk-stat-info h3 {
+    margin: 0;
+    font-size: 1.4rem;
+    color: var(--text-dark);
+    font-weight: 700;
+}
+
+.bk-stat-info p {
+    margin: 0;
+    color: var(--text-gray);
+    font-size: 0.8rem;
+}
+
+/* Type Badges */
+.bk-type-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: 8px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.bk-type-badge.manual { background: #EDE9FE; color: #7C3AED; }
+.bk-type-badge.scheduled { background: #E0F2FE; color: #0284C7; }
+.bk-type-badge.safety { background: #D1FAE5; color: #059669; }
+.bk-type-badge.upload { background: #FEF3C7; color: #D97706; }
+
+/* Auto-Backup Status Card */
+.bk-auto-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+}
+
+.bk-auto-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 20px 24px;
+    border-right: 1px solid var(--border-gray);
+    border-bottom: 1px solid var(--border-gray);
+}
+
+.bk-auto-item:nth-child(2) { border-right: none; }
+.bk-auto-item.wide {
+    grid-column: 1 / -1;
+    border-bottom: none;
+    border-right: none;
+    padding: 16px 24px;
+    background: var(--light-gray);
+}
+
+.bk-auto-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    flex-shrink: 0;
+    background: #EDE9FE;
+    color: #7C3AED;
+}
+
+.bk-auto-icon.countdown { background: #E0F2FE; color: #0284C7; }
+
+.bk-auto-label {
+    display: block;
+    font-size: 0.72rem;
+    color: var(--text-gray);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    font-weight: 600;
+    margin-bottom: 2px;
+}
+
+.bk-auto-val {
+    display: block;
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--text-dark);
+}
+
+.bk-auto-val.bk-countdown.warning {
+    color: var(--warning-orange);
+}
+
+.bk-auto-sub {
+    display: block;
+    font-size: 0.78rem;
+    color: var(--text-light);
+    margin-top: 1px;
+}
+
+/* Progress Bar */
+.bk-progress-bar {
+    width: 100%;
+    height: 10px;
+    background: var(--border-gray);
+    border-radius: 5px;
+    overflow: visible;
+    position: relative;
+}
+
+.bk-progress-fill {
+    height: 100%;
+    border-radius: 5px;
+    background: linear-gradient(90deg, var(--primary-purple), var(--primary-purple-light));
+    transition: width 0.5s ease;
+}
+
+.bk-progress-fill.warning {
+    background: linear-gradient(90deg, var(--primary-purple), var(--warning-orange));
+}
+
+.bk-progress-fill.danger {
+    background: linear-gradient(90deg, var(--warning-orange), var(--danger-red));
+}
+
+.bk-progress-marker {
+    position: absolute;
+    top: -8px;
+    transform: translateX(-50%);
+    font-size: 0.65rem;
+    color: var(--warning-orange);
+    cursor: help;
+}
+
+/* Warning button */
+.btn-warning {
+    background: #F59E0B;
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.2s;
+}
+
+.btn-warning:hover { background: #D97706; }
+
+/* Tips */
+.bk-tips {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 16px;
+}
+
+.bk-tip {
+    display: flex;
+    gap: 12px;
+    padding: 14px;
+    background: var(--light-gray);
+    border-radius: 10px;
+    border: 1px solid var(--border-gray);
+}
+
+.bk-tip > i {
+    font-size: 1.1rem;
+    margin-top: 2px;
+    flex-shrink: 0;
+}
+
+.bk-tip strong {
+    display: block;
+    color: var(--text-dark);
+    font-size: 0.9rem;
+    margin-bottom: 2px;
+}
+
+.bk-tip p {
+    margin: 0;
+    color: var(--text-gray);
+    font-size: 0.82rem;
+    line-height: 1.4;
+}
+
+@media (max-width: 768px) {
+    .bk-stats-grid { grid-template-columns: repeat(2, 1fr); }
+    .bk-tips { grid-template-columns: 1fr; }
+    .bk-auto-grid { grid-template-columns: 1fr; }
+    .bk-auto-item { border-right: none; }
+}
+</style>
+{% endblock %}

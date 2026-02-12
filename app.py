@@ -5812,11 +5812,88 @@ def send_message():
 
 # ============== DATABASE BACKUP & RESTORE ==============
 
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.base import MIMEBase
+from email.mime.text import MIMEText
+from email import encoders
+
 BACKUP_FOLDER = 'backups'
 os.makedirs(BACKUP_FOLDER, exist_ok=True)
 
 AUTO_BACKUP_INTERVAL = 24  # hours
 REMINDER_BEFORE_HOURS = 5  # remind 5 hours before auto-backup deadline
+
+# Email backup config
+BACKUP_EMAIL_TO = 'sangrenesflorante@gmail.com'
+BACKUP_EMAIL_FROM = os.environ.get('SMTP_EMAIL', '')
+BACKUP_EMAIL_PASSWORD = os.environ.get('SMTP_PASSWORD', '')
+SMTP_SERVER = 'smtp.gmail.com'
+SMTP_PORT = 587
+
+
+def email_backup(filepath):
+    """Email the database backup file to the configured address."""
+    if not BACKUP_EMAIL_FROM or not BACKUP_EMAIL_PASSWORD:
+        print('[Email-Backup] SMTP_EMAIL or SMTP_PASSWORD not configured. Skipping email.')
+        return False
+
+    try:
+        import sqlite3 as _sqlite3
+        conn = _sqlite3.connect(DATABASE)
+        conn.row_factory = _sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute('SELECT COUNT(*) FROM users WHERE role = "student"')
+        student_count = cursor.fetchone()[0]
+        cursor.execute('SELECT COUNT(*) FROM subjects')
+        subject_count = cursor.fetchone()[0]
+        cursor.execute('SELECT COUNT(*) FROM submissions')
+        submission_count = cursor.fetchone()[0]
+        conn.close()
+
+        db_size = round(os.path.getsize(filepath) / (1024 * 1024), 2)
+        timestamp = datetime.now().strftime('%B %d, %Y at %I:%M %p')
+        filename = os.path.basename(filepath)
+
+        msg = MIMEMultipart()
+        msg['From'] = BACKUP_EMAIL_FROM
+        msg['To'] = BACKUP_EMAIL_TO
+        msg['Subject'] = f'LMS Database Backup - {datetime.now().strftime("%b %d, %Y %I:%M %p")}'
+
+        body = f"""Sangrenes LMS Portal - Automatic Database Backup
+
+Backup File: {filename}
+Database Size: {db_size} MB
+Timestamp: {timestamp}
+
+Records Summary:
+- Students: {student_count}
+- Subjects: {subject_count}
+- Submissions: {submission_count}
+
+This backup was sent automatically by the LMS backup system.
+To restore, upload this .db file via the Backup & Restore page.
+"""
+        msg.attach(MIMEText(body, 'plain'))
+
+        with open(filepath, 'rb') as f:
+            part = MIMEBase('application', 'octet-stream')
+            part.set_payload(f.read())
+            encoders.encode_base64(part)
+            part.add_header('Content-Disposition', f'attachment; filename="{filename}"')
+            msg.attach(part)
+
+        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
+        server.starttls()
+        server.login(BACKUP_EMAIL_FROM, BACKUP_EMAIL_PASSWORD)
+        server.send_message(msg)
+        server.quit()
+
+        print(f'[Email-Backup] Sent backup to {BACKUP_EMAIL_TO}: {filename}')
+        return True
+    except Exception as e:
+        print(f'[Email-Backup] Failed to send: {e}')
+        return False
 
 
 def get_last_backup_time():
@@ -5838,7 +5915,7 @@ def get_hours_since_last_backup():
 
 
 def create_auto_backup():
-    """Create an automatic backup of the database."""
+    """Create an automatic backup of the database and email it."""
     import sqlite3 as _sqlite3
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     backup_name = f'auto_{timestamp}.db'
@@ -5850,6 +5927,8 @@ def create_auto_backup():
         dest.close()
         source.close()
         print(f'[Auto-Backup] Created: {backup_name}')
+        # Email the backup
+        email_backup(backup_path)
         return True
     except Exception as e:
         print(f'[Auto-Backup] Failed: {e}')
@@ -5963,6 +6042,8 @@ def backup_page():
         next_auto = None
         hours_remaining = 0
 
+    email_configured = bool(BACKUP_EMAIL_FROM and BACKUP_EMAIL_PASSWORD)
+
     return render_template('backup.html',
         backups=backup_files,
         db_size=db_size,
@@ -5975,7 +6056,9 @@ def backup_page():
         hours_remaining=round(hours_remaining, 1),
         next_auto=next_auto,
         auto_interval=AUTO_BACKUP_INTERVAL,
-        reminder_hours=REMINDER_BEFORE_HOURS
+        reminder_hours=REMINDER_BEFORE_HOURS,
+        email_configured=email_configured,
+        backup_email=BACKUP_EMAIL_TO
     )
 
 
@@ -6001,6 +6084,30 @@ def create_backup():
         flash(f'Backup created successfully: {backup_name}', 'success')
     except Exception as e:
         flash(f'Backup failed: {str(e)}', 'error')
+
+    return redirect(url_for('backup_page'))
+
+
+@app.route('/admin/backup/email-now', methods=['POST'])
+@login_required
+def email_backup_now():
+    if current_user.role != 'instructor':
+        flash('Access denied.', 'error')
+        return redirect(url_for('student_dashboard'))
+
+    if not BACKUP_EMAIL_FROM or not BACKUP_EMAIL_PASSWORD:
+        flash('Email not configured. Set SMTP_EMAIL and SMTP_PASSWORD environment variables.', 'error')
+        return redirect(url_for('backup_page'))
+
+    if not os.path.exists(DATABASE):
+        flash('Database not found.', 'error')
+        return redirect(url_for('backup_page'))
+
+    success = email_backup(DATABASE)
+    if success:
+        flash(f'Database backup emailed to {BACKUP_EMAIL_TO} successfully!', 'success')
+    else:
+        flash('Failed to send email. Check SMTP settings.', 'error')
 
     return redirect(url_for('backup_page'))
 
