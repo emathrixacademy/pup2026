@@ -187,7 +187,8 @@ class User(UserMixin):
     def __init__(self, id, username, full_name, role, student_id=None, section=None, photo='default.png',
                  profile_completed=1, is_approved=1, email=None, github_account=None, railway_account=None,
                  messenger=None, pup_id_photo=None, cor_photo=None, contact_number=None,
-                 programming_languages=None, databases_known=None, hosting_platforms=None, other_tools=None):
+                 programming_languages=None, databases_known=None, hosting_platforms=None, other_tools=None,
+                 institution_id=None, department_id=None):
         self.id = id
         self.username = username
         self.full_name = full_name
@@ -208,6 +209,8 @@ class User(UserMixin):
         self.databases_known = databases_known
         self.hosting_platforms = hosting_platforms
         self.other_tools = other_tools
+        self.institution_id = institution_id
+        self.department_id = department_id
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -238,7 +241,9 @@ def load_user(user_id):
             user['programming_languages'] if 'programming_languages' in keys else None,
             user['databases_known'] if 'databases_known' in keys else None,
             user['hosting_platforms'] if 'hosting_platforms' in keys else None,
-            user['other_tools'] if 'other_tools' in keys else None
+            user['other_tools'] if 'other_tools' in keys else None,
+            user['institution_id'] if 'institution_id' in keys else None,
+            user['department_id'] if 'department_id' in keys else None
         )
     return None
 
@@ -249,6 +254,16 @@ def profile_required(f):
         if current_user.is_authenticated and not current_user.profile_completed:
             flash('Please complete your profile first.', 'warning')
             return redirect(url_for('complete_profile'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+# Admin role required decorator
+def admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_authenticated or current_user.role != 'admin':
+            flash('Access denied. Admin privileges required.', 'error')
+            return redirect(url_for('login'))
         return f(*args, **kwargs)
     return decorated_function
 
@@ -428,7 +443,9 @@ def login():
             )
             login_user(user_obj)
             flash('Logged in successfully!', 'success')
-            if user['role'] == 'instructor':
+            if user['role'] == 'admin':
+                return redirect(url_for('admin_dashboard'))
+            elif user['role'] == 'instructor':
                 return redirect(url_for('dashboard'))
             return redirect(url_for('student_dashboard'))
         flash('Invalid username or password', 'error')
@@ -5809,6 +5826,799 @@ def send_message():
     conn.commit()
     conn.close()
     return redirect(url_for('messages'))
+
+
+# ============== V2: PLATFORM ADMIN ROUTES ==============
+
+@app.route('/admin/dashboard')
+@login_required
+@admin_required
+def admin_dashboard():
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # Platform-wide stats
+    cursor.execute('SELECT COUNT(*) FROM institutions WHERE is_active = 1')
+    total_institutions = cursor.fetchone()[0]
+    cursor.execute('SELECT COUNT(*) FROM users WHERE role = "instructor"')
+    total_instructors = cursor.fetchone()[0]
+    cursor.execute('SELECT COUNT(*) FROM users WHERE role = "student"')
+    total_students = cursor.fetchone()[0]
+    cursor.execute('SELECT COUNT(*) FROM subjects')
+    total_subjects = cursor.fetchone()[0]
+    cursor.execute('SELECT COUNT(*) FROM submissions')
+    total_submissions = cursor.fetchone()[0]
+    cursor.execute('SELECT COUNT(*) FROM ai_admin_logs')
+    total_ai_actions = cursor.fetchone()[0]
+
+    # Recent AI actions
+    cursor.execute('''
+        SELECT * FROM ai_admin_logs ORDER BY created_at DESC LIMIT 10
+    ''')
+    recent_ai_logs = cursor.fetchall()
+
+    # Active AI rules
+    cursor.execute('SELECT COUNT(*) FROM ai_admin_rules WHERE is_active = 1')
+    active_rules = cursor.fetchone()[0]
+
+    # Institutions list
+    cursor.execute('SELECT * FROM institutions ORDER BY name')
+    institutions = cursor.fetchall()
+
+    # Payroll summary
+    cursor.execute('SELECT COUNT(*) FROM instructor_payroll WHERE status = "draft"')
+    pending_payroll = cursor.fetchone()[0]
+    cursor.execute('SELECT SUM(net_pay) FROM instructor_payroll WHERE status = "paid"')
+    total_paid = cursor.fetchone()[0] or 0
+
+    conn.close()
+
+    return render_template('admin_dashboard.html',
+        total_institutions=total_institutions,
+        total_instructors=total_instructors,
+        total_students=total_students,
+        total_subjects=total_subjects,
+        total_submissions=total_submissions,
+        total_ai_actions=total_ai_actions,
+        recent_ai_logs=recent_ai_logs,
+        active_rules=active_rules,
+        institutions=institutions,
+        pending_payroll=pending_payroll,
+        total_paid=total_paid
+    )
+
+
+@app.route('/admin/institutions')
+@login_required
+@admin_required
+def admin_institutions():
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT i.*,
+               (SELECT COUNT(*) FROM users WHERE institution_id = i.id AND role = 'instructor') as instructor_count,
+               (SELECT COUNT(*) FROM users WHERE institution_id = i.id AND role = 'student') as student_count,
+               (SELECT COUNT(*) FROM subjects WHERE institution_id = i.id) as subject_count
+        FROM institutions i ORDER BY i.name
+    ''')
+    institutions = cursor.fetchall()
+    cursor.execute('SELECT * FROM subscription_plans WHERE is_active = 1 ORDER BY price_monthly')
+    plans = cursor.fetchall()
+    conn.close()
+    return render_template('admin_institutions.html', institutions=institutions, plans=plans)
+
+
+@app.route('/api/admin/institutions', methods=['POST'])
+@login_required
+@admin_required
+def create_institution():
+    data = request.get_json()
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute('''
+            INSERT INTO institutions (name, short_name, domain, address, contact_email, contact_phone, plan, max_students, max_instructors)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (data.get('name'), data.get('short_name'), data.get('domain'), data.get('address'),
+              data.get('contact_email'), data.get('contact_phone'), data.get('plan', 'free'),
+              data.get('max_students', 100), data.get('max_instructors', 5)))
+        conn.commit()
+
+        # Log AI action
+        cursor.execute('''
+            INSERT INTO ai_admin_logs (action_type, target_type, target_name, decision, reasoning, severity)
+            VALUES ('institution_created', 'institution', ?, 'New institution registered', 'Admin created new institution', 'info')
+        ''', (data.get('name'),))
+        conn.commit()
+        conn.close()
+        return jsonify({'success': True, 'message': 'Institution created'})
+    except Exception as e:
+        conn.close()
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/admin/institutions/<int:inst_id>', methods=['PUT'])
+@login_required
+@admin_required
+def update_institution(inst_id):
+    data = request.get_json()
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('''
+        UPDATE institutions SET name=?, short_name=?, domain=?, address=?, contact_email=?, contact_phone=?,
+               plan=?, max_students=?, max_instructors=?, is_active=?
+        WHERE id=?
+    ''', (data.get('name'), data.get('short_name'), data.get('domain'), data.get('address'),
+          data.get('contact_email'), data.get('contact_phone'), data.get('plan'),
+          data.get('max_students'), data.get('max_instructors'), data.get('is_active', 1), inst_id))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+
+
+@app.route('/admin/instructors')
+@login_required
+@admin_required
+def admin_instructors():
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT u.*, i.name as institution_name, ip.employee_id, ip.hire_date, ip.contract_type,
+               ip.salary_rate, ip.salary_frequency
+        FROM users u
+        LEFT JOIN institutions i ON u.institution_id = i.id
+        LEFT JOIN instructor_profiles ip ON u.id = ip.user_id
+        WHERE u.role = 'instructor'
+        ORDER BY u.full_name
+    ''')
+    instructors = cursor.fetchall()
+    cursor.execute('SELECT id, name, short_name FROM institutions WHERE is_active = 1 ORDER BY name')
+    institutions = cursor.fetchall()
+    conn.close()
+    return render_template('admin_instructors.html', instructors=instructors, institutions=institutions)
+
+
+@app.route('/api/admin/instructor-profile/<int:user_id>', methods=['POST'])
+@login_required
+@admin_required
+def update_instructor_profile(user_id):
+    data = request.get_json()
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # Update institution assignment
+    cursor.execute('UPDATE users SET institution_id = ? WHERE id = ?', (data.get('institution_id'), user_id))
+
+    # Upsert instructor profile
+    cursor.execute('SELECT id FROM instructor_profiles WHERE user_id = ?', (user_id,))
+    if cursor.fetchone():
+        cursor.execute('''
+            UPDATE instructor_profiles SET institution_id=?, employee_id=?, hire_date=?, contract_type=?,
+                   salary_rate=?, salary_frequency=?
+            WHERE user_id=?
+        ''', (data.get('institution_id'), data.get('employee_id'), data.get('hire_date'),
+              data.get('contract_type', 'full-time'), data.get('salary_rate', 0),
+              data.get('salary_frequency', 'monthly'), user_id))
+    else:
+        cursor.execute('''
+            INSERT INTO instructor_profiles (user_id, institution_id, employee_id, hire_date, contract_type, salary_rate, salary_frequency)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (user_id, data.get('institution_id'), data.get('employee_id'), data.get('hire_date'),
+              data.get('contract_type', 'full-time'), data.get('salary_rate', 0),
+              data.get('salary_frequency', 'monthly')))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+
+
+# ============== ADMIN PAYROLL ==============
+
+@app.route('/admin/payroll')
+@login_required
+@admin_required
+def admin_payroll():
+    conn = get_db()
+    cursor = conn.cursor()
+
+    cursor.execute('''
+        SELECT p.*, u.full_name, i.short_name as institution_name
+        FROM instructor_payroll p
+        JOIN users u ON p.instructor_id = u.id
+        LEFT JOIN institutions i ON p.institution_id = i.id
+        ORDER BY p.created_at DESC
+    ''')
+    payrolls = cursor.fetchall()
+
+    cursor.execute('''
+        SELECT u.id, u.full_name, ip.salary_rate, ip.salary_frequency, ip.contract_type, i.short_name as institution_name
+        FROM users u
+        JOIN instructor_profiles ip ON u.id = ip.user_id
+        LEFT JOIN institutions i ON ip.institution_id = i.id
+        WHERE u.role = 'instructor'
+        ORDER BY u.full_name
+    ''')
+    instructors = cursor.fetchall()
+
+    conn.close()
+    return render_template('admin_payroll.html', payrolls=payrolls, instructors=instructors)
+
+
+@app.route('/api/admin/payroll/generate', methods=['POST'])
+@login_required
+@admin_required
+def generate_payroll():
+    data = request.get_json()
+    period_start = data.get('period_start')
+    period_end = data.get('period_end')
+
+    if not period_start or not period_end:
+        return jsonify({'success': False, 'error': 'Period dates required'})
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # Get all instructors with profiles
+    cursor.execute('''
+        SELECT u.id, u.full_name, ip.institution_id, ip.salary_rate, ip.salary_frequency, ip.contract_type
+        FROM users u
+        JOIN instructor_profiles ip ON u.id = ip.user_id
+        WHERE u.role = 'instructor' AND ip.salary_rate > 0
+    ''')
+    instructors = cursor.fetchall()
+
+    generated = 0
+    for inst in instructors:
+        # Calculate attendance for the period
+        cursor.execute('''
+            SELECT COUNT(*) as total_days,
+                   SUM(CASE WHEN status = 'present' THEN 1 ELSE 0 END) as present,
+                   SUM(CASE WHEN status = 'absent' THEN 1 ELSE 0 END) as absent,
+                   SUM(CASE WHEN status = 'late' THEN 1 ELSE 0 END) as late,
+                   SUM(hours_worked) as total_hours
+            FROM instructor_attendance
+            WHERE instructor_id = ? AND date BETWEEN ? AND ?
+        ''', (inst['id'], period_start, period_end))
+        att = cursor.fetchone()
+
+        days_present = (att['present'] or 0) + (att['late'] or 0)
+        days_absent = att['absent'] or 0
+        days_late = att['late'] or 0
+        total_hours = att['total_hours'] or 0
+
+        base_salary = inst['salary_rate']
+        if inst['salary_frequency'] == 'hourly':
+            gross_pay = base_salary * total_hours
+        else:
+            gross_pay = base_salary
+
+        # Simple deductions: absent days proportional deduction
+        daily_rate = gross_pay / 22 if gross_pay > 0 else 0  # ~22 working days/month
+        absent_deduction = daily_rate * days_absent
+        late_deduction = (daily_rate * 0.1) * days_late  # 10% of daily rate per late day
+        total_deductions = absent_deduction + late_deduction
+        deduction_details = json.dumps({
+            'absent_days': days_absent, 'absent_deduction': round(absent_deduction, 2),
+            'late_days': days_late, 'late_deduction': round(late_deduction, 2)
+        })
+
+        net_pay = max(0, gross_pay - total_deductions)
+
+        # Check if payroll already exists for this period
+        cursor.execute('''
+            SELECT id FROM instructor_payroll WHERE instructor_id = ? AND period_start = ? AND period_end = ?
+        ''', (inst['id'], period_start, period_end))
+        if not cursor.fetchone():
+            cursor.execute('''
+                INSERT INTO instructor_payroll (instructor_id, institution_id, period_start, period_end,
+                    base_salary, days_present, days_absent, days_late, total_hours,
+                    deductions, deduction_details, gross_pay, net_pay, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft')
+            ''', (inst['id'], inst['institution_id'], period_start, period_end,
+                  base_salary, days_present, days_absent, days_late, round(total_hours, 1),
+                  round(total_deductions, 2), deduction_details, round(gross_pay, 2), round(net_pay, 2)))
+            generated += 1
+
+    conn.commit()
+
+    # AI log
+    cursor.execute('''
+        INSERT INTO ai_admin_logs (action_type, target_type, decision, reasoning, severity)
+        VALUES ('payroll_generated', 'payroll', ?, ?, 'info')
+    ''', (f'Generated {generated} payroll records for {period_start} to {period_end}',
+          'Auto-calculated based on attendance records and salary rates'))
+    conn.commit()
+    conn.close()
+
+    return jsonify({'success': True, 'generated': generated})
+
+
+@app.route('/api/admin/payroll/<int:payroll_id>/approve', methods=['POST'])
+@login_required
+@admin_required
+def approve_payroll(payroll_id):
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('''
+        UPDATE instructor_payroll SET status = 'approved', approved_by = ?, approved_at = datetime('now')
+        WHERE id = ?
+    ''', (current_user.id, payroll_id))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+
+
+@app.route('/api/admin/payroll/<int:payroll_id>/pay', methods=['POST'])
+@login_required
+@admin_required
+def mark_payroll_paid(payroll_id):
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('''
+        UPDATE instructor_payroll SET status = 'paid', paid_at = datetime('now')
+        WHERE id = ? AND status = 'approved'
+    ''', (payroll_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+
+
+# ============== ADMIN AI LOGS & RULES ==============
+
+@app.route('/admin/ai-logs')
+@login_required
+@admin_required
+def admin_ai_logs():
+    conn = get_db()
+    cursor = conn.cursor()
+    page = request.args.get('page', 1, type=int)
+    per_page = 50
+    offset = (page - 1) * per_page
+
+    filter_type = request.args.get('type', '')
+    filter_severity = request.args.get('severity', '')
+
+    query = 'SELECT * FROM ai_admin_logs WHERE 1=1'
+    params = []
+    if filter_type:
+        query += ' AND action_type = ?'
+        params.append(filter_type)
+    if filter_severity:
+        query += ' AND severity = ?'
+        params.append(filter_severity)
+    query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?'
+    params.extend([per_page, offset])
+
+    cursor.execute(query, params)
+    logs = cursor.fetchall()
+
+    cursor.execute('SELECT COUNT(*) FROM ai_admin_logs')
+    total = cursor.fetchone()[0]
+
+    # Get distinct types for filter
+    cursor.execute('SELECT DISTINCT action_type FROM ai_admin_logs ORDER BY action_type')
+    action_types = [r['action_type'] for r in cursor.fetchall()]
+
+    conn.close()
+    return render_template('admin_ai_logs.html', logs=logs, action_types=action_types,
+                          filter_type=filter_type, filter_severity=filter_severity,
+                          page=page, total=total, per_page=per_page)
+
+
+@app.route('/admin/ai-rules')
+@login_required
+@admin_required
+def admin_ai_rules():
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM ai_admin_rules ORDER BY priority DESC, rule_name')
+    rules = cursor.fetchall()
+    conn.close()
+    return render_template('admin_ai_rules.html', rules=rules)
+
+
+@app.route('/api/admin/ai-rules/<int:rule_id>/toggle', methods=['POST'])
+@login_required
+@admin_required
+def toggle_ai_rule(rule_id):
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('SELECT is_active FROM ai_admin_rules WHERE id = ?', (rule_id,))
+    rule = cursor.fetchone()
+    if rule:
+        new_state = 0 if rule['is_active'] else 1
+        cursor.execute('UPDATE ai_admin_rules SET is_active = ? WHERE id = ?', (new_state, rule_id))
+        conn.commit()
+    conn.close()
+    return jsonify({'success': True, 'is_active': new_state})
+
+
+@app.route('/api/admin/ai-rules', methods=['POST'])
+@login_required
+@admin_required
+def create_ai_rule():
+    data = request.get_json()
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT INTO ai_admin_rules (rule_name, rule_type, condition_field, condition_operator, condition_value, action_type, action_params, priority)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (data.get('rule_name'), data.get('rule_type'), data.get('condition_field'),
+          data.get('condition_operator'), data.get('condition_value'),
+          data.get('action_type'), data.get('action_params', '{}'), data.get('priority', 0)))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+
+
+# ============== INSTRUCTOR ATTENDANCE ==============
+
+@app.route('/instructor/attendance')
+@login_required
+def instructor_attendance():
+    if current_user.role not in ('instructor', 'admin'):
+        flash('Access denied.', 'error')
+        return redirect(url_for('student_dashboard'))
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # Get current month attendance
+    today = datetime.now().strftime('%Y-%m-%d')
+    month_start = datetime.now().strftime('%Y-%m-01')
+
+    cursor.execute('''
+        SELECT * FROM instructor_attendance
+        WHERE instructor_id = ? AND date BETWEEN ? AND ?
+        ORDER BY date DESC
+    ''', (current_user.id, month_start, today))
+    attendance_records = cursor.fetchall()
+
+    # Check if clocked in today
+    cursor.execute('''
+        SELECT * FROM instructor_attendance WHERE instructor_id = ? AND date = ?
+    ''', (current_user.id, today))
+    today_record = cursor.fetchone()
+
+    # Monthly summary
+    cursor.execute('''
+        SELECT COUNT(*) as total_days,
+               SUM(CASE WHEN status = 'present' THEN 1 ELSE 0 END) as present,
+               SUM(CASE WHEN status = 'absent' THEN 1 ELSE 0 END) as absent,
+               SUM(CASE WHEN status = 'late' THEN 1 ELSE 0 END) as late,
+               SUM(hours_worked) as total_hours
+        FROM instructor_attendance
+        WHERE instructor_id = ? AND date BETWEEN ? AND ?
+    ''', (current_user.id, month_start, today))
+    summary = cursor.fetchone()
+
+    conn.close()
+    return render_template('instructor_attendance.html',
+        attendance=attendance_records, today_record=today_record,
+        summary=summary, today=today)
+
+
+@app.route('/api/attendance/clock-in', methods=['POST'])
+@login_required
+def clock_in():
+    if current_user.role != 'instructor':
+        return jsonify({'success': False, 'error': 'Instructors only'})
+
+    conn = get_db()
+    cursor = conn.cursor()
+    today = datetime.now().strftime('%Y-%m-%d')
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+    cursor.execute('SELECT id FROM instructor_attendance WHERE instructor_id = ? AND date = ?',
+                   (current_user.id, today))
+    if cursor.fetchone():
+        conn.close()
+        return jsonify({'success': False, 'error': 'Already clocked in today'})
+
+    ip_address = request.remote_addr
+    cursor.execute('''
+        INSERT INTO instructor_attendance (instructor_id, date, time_in, status, ip_address)
+        VALUES (?, ?, ?, 'present', ?)
+    ''', (current_user.id, today, now, ip_address))
+    conn.commit()
+
+    # AI log
+    cursor.execute('''
+        INSERT INTO ai_admin_logs (action_type, target_type, target_id, target_name, decision, severity)
+        VALUES ('clock_in', 'instructor', ?, ?, ?, 'info')
+    ''', (current_user.id, current_user.full_name, f'Clocked in at {now}'))
+    conn.commit()
+    conn.close()
+
+    return jsonify({'success': True, 'time_in': now})
+
+
+@app.route('/api/attendance/clock-out', methods=['POST'])
+@login_required
+def clock_out():
+    if current_user.role != 'instructor':
+        return jsonify({'success': False, 'error': 'Instructors only'})
+
+    conn = get_db()
+    cursor = conn.cursor()
+    today = datetime.now().strftime('%Y-%m-%d')
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+    cursor.execute('SELECT * FROM instructor_attendance WHERE instructor_id = ? AND date = ?',
+                   (current_user.id, today))
+    record = cursor.fetchone()
+    if not record:
+        conn.close()
+        return jsonify({'success': False, 'error': 'No clock-in record for today'})
+
+    if record['time_out']:
+        conn.close()
+        return jsonify({'success': False, 'error': 'Already clocked out today'})
+
+    # Calculate hours worked
+    time_in = datetime.strptime(record['time_in'], '%Y-%m-%d %H:%M:%S')
+    time_out = datetime.strptime(now, '%Y-%m-%d %H:%M:%S')
+    hours_worked = round((time_out - time_in).total_seconds() / 3600, 2)
+
+    cursor.execute('''
+        UPDATE instructor_attendance SET time_out = ?, hours_worked = ? WHERE id = ?
+    ''', (now, hours_worked, record['id']))
+    conn.commit()
+    conn.close()
+
+    return jsonify({'success': True, 'time_out': now, 'hours_worked': hours_worked})
+
+
+# ============== INSTRUCTOR PAYROLL VIEW ==============
+
+@app.route('/instructor/payroll')
+@login_required
+def instructor_payroll_view():
+    if current_user.role not in ('instructor', 'admin'):
+        flash('Access denied.', 'error')
+        return redirect(url_for('student_dashboard'))
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    cursor.execute('''
+        SELECT * FROM instructor_payroll
+        WHERE instructor_id = ?
+        ORDER BY period_end DESC
+    ''', (current_user.id,))
+    payrolls = cursor.fetchall()
+
+    # Get profile info
+    cursor.execute('SELECT * FROM instructor_profiles WHERE user_id = ?', (current_user.id,))
+    profile = cursor.fetchone()
+
+    # Current month attendance summary
+    month_start = datetime.now().strftime('%Y-%m-01')
+    today = datetime.now().strftime('%Y-%m-%d')
+    cursor.execute('''
+        SELECT COUNT(*) as total_days,
+               SUM(CASE WHEN status = 'present' THEN 1 ELSE 0 END) as present,
+               SUM(CASE WHEN status = 'late' THEN 1 ELSE 0 END) as late,
+               SUM(CASE WHEN status = 'absent' THEN 1 ELSE 0 END) as absent,
+               SUM(hours_worked) as total_hours
+        FROM instructor_attendance
+        WHERE instructor_id = ? AND date BETWEEN ? AND ?
+    ''', (current_user.id, month_start, today))
+    attendance_summary = cursor.fetchone()
+
+    conn.close()
+    return render_template('instructor_payroll.html',
+        payrolls=payrolls, profile=profile, attendance_summary=attendance_summary)
+
+
+# ============== AI ADMIN AGENT ==============
+
+def ai_admin_agent():
+    """Background AI admin agent that monitors and triggers actions based on rules."""
+    import time
+    import sqlite3 as _sqlite3
+
+    time.sleep(120)  # Wait 2 minutes on startup
+
+    while True:
+        try:
+            conn = _sqlite3.connect(DATABASE)
+            conn.row_factory = _sqlite3.Row
+            cursor = conn.cursor()
+
+            # Check if AI admin is enabled
+            cursor.execute("SELECT setting_value FROM platform_settings WHERE setting_key = 'ai_admin_enabled'")
+            setting = cursor.fetchone()
+            if not setting or setting['setting_value'] != 'true':
+                conn.close()
+                time.sleep(1800)
+                continue
+
+            # Get active rules
+            cursor.execute('SELECT * FROM ai_admin_rules WHERE is_active = 1 ORDER BY priority DESC')
+            rules = cursor.fetchall()
+
+            for rule in rules:
+                try:
+                    if rule['rule_type'] == 'grade_monitor':
+                        _ai_check_grades(cursor, conn, rule)
+                    elif rule['rule_type'] == 'deadline_monitor':
+                        _ai_check_deadlines(cursor, conn, rule)
+                    elif rule['rule_type'] == 'progress_monitor':
+                        _ai_check_progress(cursor, conn, rule)
+                    elif rule['rule_type'] == 'attendance_monitor':
+                        _ai_check_attendance(cursor, conn, rule)
+                except Exception as e:
+                    print(f'[AI-Admin] Rule "{rule["rule_name"]}" error: {e}')
+
+            conn.close()
+        except Exception as e:
+            print(f'[AI-Admin] Agent error: {e}')
+
+        # Get interval from settings or default 30 min
+        time.sleep(1800)
+
+
+def _ai_check_grades(cursor, conn, rule):
+    """Check student grades against threshold and send alerts."""
+    threshold = float(rule['condition_value'])
+    params = json.loads(rule['action_params']) if rule['action_params'] else {}
+
+    cursor.execute('''
+        SELECT DISTINCT e.subject_id, e.student_id FROM enrollments e
+        JOIN users u ON e.student_id = u.id AND u.is_approved = 1
+    ''')
+    enrollments = cursor.fetchall()
+
+    for enr in enrollments:
+        try:
+            grade = compute_weighted_grade(cursor, enr['subject_id'], enr['student_id'])
+            if grade and grade > 0 and grade < threshold:
+                # Check if we already alerted recently
+                cursor.execute('''
+                    SELECT id FROM ai_admin_logs
+                    WHERE action_type = 'grade_alert' AND target_id = ? AND target_type = ?
+                    AND created_at > datetime('now', '-7 days')
+                ''', (enr['student_id'], f"subject_{enr['subject_id']}"))
+                if not cursor.fetchone():
+                    cursor.execute('SELECT full_name FROM users WHERE id = ?', (enr['student_id'],))
+                    student = cursor.fetchone()
+                    cursor.execute('SELECT code FROM subjects WHERE id = ?', (enr['subject_id'],))
+                    subject = cursor.fetchone()
+
+                    if student and subject:
+                        msg = params.get('message_template', 'Your grade needs improvement in {subject}.')
+                        msg = msg.replace('{grade}', f'{grade:.1f}').replace('{subject}', subject['code'])
+
+                        cursor.execute('''
+                            INSERT INTO notifications (user_id, type, icon, message, link)
+                            VALUES (?, 'warning', 'exclamation-triangle', ?, '/my-grades')
+                        ''', (enr['student_id'], msg))
+
+                        cursor.execute('''
+                            INSERT INTO ai_admin_logs (action_type, target_type, target_id, target_name, decision, reasoning, severity)
+                            VALUES ('grade_alert', ?, ?, ?, ?, ?, ?)
+                        ''', (f"subject_{enr['subject_id']}", enr['student_id'], student['full_name'],
+                              f'Sent grade alert: {grade:.1f}% in {subject["code"]}',
+                              f'Grade below {threshold}% threshold', params.get('severity', 'warning')))
+                        conn.commit()
+        except Exception:
+            pass
+
+
+def _ai_check_deadlines(cursor, conn, rule):
+    """Check for missed activity deadlines."""
+    today = datetime.now().strftime('%Y-%m-%d')
+
+    cursor.execute('''
+        SELECT a.id, a.title, a.due_date, s.code as subject_code, s.id as subject_id,
+               e.student_id
+        FROM activities a
+        JOIN sessions ses ON a.session_id = ses.id
+        JOIN subjects s ON ses.subject_id = s.id
+        JOIN enrollments e ON e.subject_id = s.id
+        JOIN users u ON e.student_id = u.id AND u.is_approved = 1
+        LEFT JOIN submissions sub ON sub.activity_id = a.id AND sub.student_id = e.student_id
+        WHERE a.due_date IS NOT NULL AND a.due_date < ? AND sub.id IS NULL
+    ''', (today,))
+    missed = cursor.fetchall()
+
+    for m in missed:
+        cursor.execute('''
+            SELECT id FROM ai_admin_logs
+            WHERE action_type = 'deadline_alert' AND target_id = ?
+            AND data LIKE ? AND created_at > datetime('now', '-3 days')
+        ''', (m['student_id'], f'%activity_{m["id"]}%'))
+        if not cursor.fetchone():
+            cursor.execute('''
+                INSERT INTO notifications (user_id, type, icon, message, link)
+                VALUES (?, 'warning', 'clock', ?, ?)
+            ''', (m['student_id'],
+                  f'Missed deadline: "{m["title"]}" in {m["subject_code"]} was due {m["due_date"]}.',
+                  f'/student/subject/{m["subject_id"]}'))
+
+            cursor.execute('''
+                INSERT INTO ai_admin_logs (action_type, target_type, target_id, decision, data, severity)
+                VALUES ('deadline_alert', 'student', ?, ?, ?, 'warning')
+            ''', (m['student_id'], f'Missed deadline alert for {m["title"]}',
+                  json.dumps({'activity_id': m['id'], 'key': f'activity_{m["id"]}'})))
+            conn.commit()
+
+
+def _ai_check_progress(cursor, conn, rule):
+    """Check for students behind on sessions."""
+    threshold = int(rule['condition_value'])
+
+    cursor.execute('''
+        SELECT e.student_id, e.subject_id, s.code as subject_code,
+               (SELECT COUNT(*) FROM sessions WHERE subject_id = e.subject_id AND is_visible = 1) as total_sessions,
+               (SELECT COUNT(*) FROM session_progress sp
+                JOIN sessions ses ON sp.session_id = ses.id
+                WHERE ses.subject_id = e.subject_id AND sp.student_id = e.student_id AND sp.completed_at IS NOT NULL) as completed_sessions
+        FROM enrollments e
+        JOIN subjects s ON e.subject_id = s.id
+        JOIN users u ON e.student_id = u.id AND u.is_approved = 1
+    ''')
+    for enr in cursor.fetchall():
+        behind = enr['total_sessions'] - enr['completed_sessions']
+        if behind > threshold:
+            cursor.execute('''
+                SELECT id FROM ai_admin_logs
+                WHERE action_type = 'progress_alert' AND target_id = ?
+                AND data LIKE ? AND created_at > datetime('now', '-7 days')
+            ''', (enr['student_id'], f'%subject_{enr["subject_id"]}%'))
+            if not cursor.fetchone():
+                cursor.execute('''
+                    INSERT INTO notifications (user_id, type, icon, message, link)
+                    VALUES (?, 'warning', 'tasks', ?, ?)
+                ''', (enr['student_id'],
+                      f'You are {behind} sessions behind in {enr["subject_code"]}. Catch up!',
+                      f'/student/subject/{enr["subject_id"]}'))
+                cursor.execute('''
+                    INSERT INTO ai_admin_logs (action_type, target_type, target_id, decision, data, severity)
+                    VALUES ('progress_alert', 'student', ?, ?, ?, 'warning')
+                ''', (enr['student_id'], f'{behind} sessions behind in {enr["subject_code"]}',
+                      json.dumps({'subject_id': enr['subject_id'], 'key': f'subject_{enr["subject_id"]}'})))
+                conn.commit()
+
+
+def _ai_check_attendance(cursor, conn, rule):
+    """Check if instructors have clocked in today."""
+    today = datetime.now().strftime('%Y-%m-%d')
+    day_of_week = datetime.now().strftime('%A')
+
+    # Only check on weekdays
+    if day_of_week in ('Saturday', 'Sunday'):
+        return
+
+    cursor.execute('''
+        SELECT u.id, u.full_name FROM users u
+        WHERE u.role = 'instructor'
+        AND u.id NOT IN (SELECT instructor_id FROM instructor_attendance WHERE date = ?)
+    ''', (today,))
+    missing = cursor.fetchall()
+
+    for inst in missing:
+        cursor.execute('''
+            SELECT id FROM ai_admin_logs
+            WHERE action_type = 'attendance_reminder' AND target_id = ? AND created_at > datetime('now', '-12 hours')
+        ''', (inst['id'],))
+        if not cursor.fetchone():
+            cursor.execute('''
+                INSERT INTO notifications (user_id, type, icon, message, link)
+                VALUES (?, 'info', 'clock', 'Reminder: Please clock in for today.', '/instructor/attendance')
+            ''', (inst['id'],))
+            cursor.execute('''
+                INSERT INTO ai_admin_logs (action_type, target_type, target_id, target_name, decision, severity)
+                VALUES ('attendance_reminder', 'instructor', ?, ?, 'Sent clock-in reminder', 'info')
+            ''', (inst['id'], inst['full_name']))
+            conn.commit()
+
+
+# Start AI Admin agent in background thread
+import threading as _threading
+_ai_thread = _threading.Thread(target=ai_admin_agent, daemon=True)
+_ai_thread.start()
+
 
 # ============== DATABASE BACKUP & RESTORE ==============
 

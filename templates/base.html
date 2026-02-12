@@ -18,7 +18,26 @@
             </a>
         </div>
         <div class="nav-links">
-            {% if current_user.role == 'instructor' %}
+            {% if current_user.role == 'admin' %}
+                <a href="{{ url_for('admin_dashboard') }}" class="{% if request.endpoint == 'admin_dashboard' %}active{% endif %}">
+                    <i class="fas fa-tachometer-alt"></i> Dashboard
+                </a>
+                <a href="{{ url_for('admin_institutions') }}" class="{% if 'institution' in request.endpoint %}active{% endif %}">
+                    <i class="fas fa-university"></i> Institutions
+                </a>
+                <a href="{{ url_for('admin_instructors') }}" class="{% if request.endpoint == 'admin_instructors' %}active{% endif %}">
+                    <i class="fas fa-chalkboard-teacher"></i> Instructors
+                </a>
+                <a href="{{ url_for('admin_payroll') }}" class="{% if 'payroll' in request.endpoint %}active{% endif %}">
+                    <i class="fas fa-money-check-alt"></i> Payroll
+                </a>
+                <a href="{{ url_for('admin_ai_logs') }}" class="{% if 'ai_log' in request.endpoint %}active{% endif %}">
+                    <i class="fas fa-robot"></i> AI Logs
+                </a>
+                <a href="{{ url_for('admin_ai_rules') }}" class="{% if 'ai_rule' in request.endpoint %}active{% endif %}">
+                    <i class="fas fa-cogs"></i> AI Rules
+                </a>
+            {% elif current_user.role == 'instructor' %}
                 <a href="{{ url_for('dashboard') }}" class="{% if request.endpoint == 'dashboard' %}active{% endif %}">
                     <i class="fas fa-home"></i> Dashboard
                 </a>
@@ -40,6 +59,12 @@
                 <a href="{{ url_for('instructor_monitoring') }}" class="{% if request.endpoint == 'instructor_monitoring' %}active{% endif %}">
                     <i class="fas fa-heartbeat"></i> Monitoring
                 </a>
+                <a href="{{ url_for('instructor_attendance') }}" class="{% if 'attendance' in request.endpoint %}active{% endif %}">
+                    <i class="fas fa-clock"></i> Attendance
+                </a>
+                <a href="{{ url_for('instructor_payroll_view') }}" class="{% if request.endpoint == 'instructor_payroll_view' %}active{% endif %}">
+                    <i class="fas fa-wallet"></i> Payroll
+                </a>
             {% else %}
                 <a href="{{ url_for('student_dashboard') }}" class="{% if request.endpoint == 'student_dashboard' %}active{% endif %}">
                     <i class="fas fa-home"></i> Dashboard
@@ -51,9 +76,11 @@
                     <i class="fas fa-chart-bar"></i> My Grades
                 </a>
             {% endif %}
+            {% if current_user.role != 'admin' %}
             <a href="{{ url_for('games_hub') }}" class="nav-game-btn {% if request.endpoint in ['games_hub', 'typing_game', 'quiz_journey', 'quiz_journey_subject', 'quiz_journey_session', 'start_quiz_journey_game', 'student_performance'] %}active{% endif %}">
                 <i class="fas fa-gamepad"></i> Games & Quizzes
             </a>
+            {% endif %}
         </div>
 
         <div class="nav-right">

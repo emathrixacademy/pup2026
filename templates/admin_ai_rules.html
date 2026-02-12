@@ -1,0 +1,124 @@
+{% extends 'base.html' %}
+
+{% block title %}AI Admin Rules - Sangrenes LMS Portal{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1><i class="fas fa-cogs"></i> AI Admin Rules</h1>
+        <p>Configure automated AI behavior and monitoring triggers</p>
+    </div>
+    <button class="btn btn-primary" onclick="openModal('addRuleModal')"><i class="fas fa-plus"></i> Add Rule</button>
+</div>
+
+<!-- Rules Grid -->
+<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 16px;">
+    {% for rule in rules %}
+    <div style="background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); overflow: hidden; border-left: 4px solid {{ '#10B981' if rule.is_active else '#CBD5E1' }};">
+        <div style="padding: 16px 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <h4 style="margin: 0; font-size: 0.95rem; color: #1E293B;">{{ rule.rule_name }}</h4>
+                <label style="position: relative; display: inline-block; width: 44px; height: 24px; cursor: pointer;">
+                    <input type="checkbox" {% if rule.is_active %}checked{% endif %} onchange="toggleRule({{ rule.id }})"
+                           style="opacity: 0; width: 0; height: 0;">
+                    <span style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: {{ '#10B981' if rule.is_active else '#CBD5E1' }}; border-radius: 24px; transition: 0.3s;">
+                        <span style="position: absolute; left: {{ '22px' if rule.is_active else '2px' }}; top: 2px; width: 20px; height: 20px; background: white; border-radius: 50%; transition: 0.3s;"></span>
+                    </span>
+                </label>
+            </div>
+            <div style="margin-bottom: 10px;">
+                <span style="background: #EDE9FE; color: #7C3AED; padding: 2px 8px; border-radius: 12px; font-size: 0.7rem; font-weight: 600;">{{ rule.rule_type }}</span>
+                <span style="background: #DBEAFE; color: #1E40AF; padding: 2px 8px; border-radius: 12px; font-size: 0.7rem; font-weight: 600; margin-left: 4px;">{{ rule.action_type }}</span>
+            </div>
+            <div style="background: #F8FAFC; border-radius: 8px; padding: 10px; margin-bottom: 10px; font-size: 0.8rem;">
+                <span style="color: #64748B;">When</span>
+                <span style="color: #334155; font-weight: 600;">{{ rule.condition_field }}</span>
+                <span style="color: #8B5CF6; font-weight: 600;">{{ rule.condition_operator }}</span>
+                <span style="color: #DC2626; font-weight: 600;">{{ rule.condition_value }}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: #94A3B8;">
+                <span><i class="fas fa-bolt"></i> Triggered {{ rule.trigger_count }} times</span>
+                <span>Priority: {{ rule.priority }}</span>
+            </div>
+            {% if rule.last_triggered_at %}
+            <div style="font-size: 0.7rem; color: #94A3B8; margin-top: 4px;">Last: {{ rule.last_triggered_at[:16] }}</div>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{% if not rules %}
+<div style="background: white; border-radius: 12px; padding: 60px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
+    <i class="fas fa-cogs" style="font-size: 3rem; color: #CBD5E1; margin-bottom: 16px;"></i>
+    <h3 style="color: #64748B;">No AI rules configured</h3>
+    <p style="color: #94A3B8;">Add rules to automate monitoring and actions.</p>
+</div>
+{% endif %}
+
+<!-- Add Rule Modal -->
+<div id="addRuleModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000;">
+    <div style="background:white; border-radius:16px; padding:30px; max-width:500px; width:90%; max-height:80vh; overflow-y:auto; margin:auto; position:relative; top:50%; transform:translateY(-50%);">
+        <h3 style="margin:0 0 20px;"><i class="fas fa-plus-circle" style="color:#8B5CF6;"></i> Add AI Rule</h3>
+        <div style="display:flex; flex-direction:column; gap:12px;">
+            <input type="text" id="ruleName" placeholder="Rule Name *" style="padding:10px; border:1px solid #E2E8F0; border-radius:8px;">
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                <select id="ruleType" style="padding:10px; border:1px solid #E2E8F0; border-radius:8px;">
+                    <option value="grade_monitor">Grade Monitor</option>
+                    <option value="deadline_monitor">Deadline Monitor</option>
+                    <option value="progress_monitor">Progress Monitor</option>
+                    <option value="attendance_monitor">Attendance Monitor</option>
+                    <option value="report_generator">Report Generator</option>
+                    <option value="payroll_processor">Payroll Processor</option>
+                    <option value="activity_monitor">Activity Monitor</option>
+                </select>
+                <select id="actionType" style="padding:10px; border:1px solid #E2E8F0; border-radius:8px;">
+                    <option value="send_notification">Send Notification</option>
+                    <option value="generate_report">Generate Report</option>
+                    <option value="calculate_payroll">Calculate Payroll</option>
+                </select>
+            </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px;">
+                <input type="text" id="condField" placeholder="Field" style="padding:10px; border:1px solid #E2E8F0; border-radius:8px;">
+                <select id="condOp" style="padding:10px; border:1px solid #E2E8F0; border-radius:8px;">
+                    <option value="less_than">Less Than</option>
+                    <option value="greater_than">Greater Than</option>
+                    <option value="equals">Equals</option>
+                </select>
+                <input type="text" id="condValue" placeholder="Value" style="padding:10px; border:1px solid #E2E8F0; border-radius:8px;">
+            </div>
+            <textarea id="actionParams" placeholder='Action Params (JSON): {"severity": "warning", "message_template": "..."}' rows="3" style="padding:10px; border:1px solid #E2E8F0; border-radius:8px; font-size:0.85rem;"></textarea>
+            <input type="number" id="rulePriority" placeholder="Priority (0=low)" value="0" style="padding:10px; border:1px solid #E2E8F0; border-radius:8px;">
+        </div>
+        <div style="display:flex; gap:10px; margin-top:20px; justify-content:flex-end;">
+            <button onclick="closeModal('addRuleModal')" style="padding:8px 20px; border:1px solid #E2E8F0; border-radius:8px; background:white; cursor:pointer;">Cancel</button>
+            <button onclick="createRule()" style="padding:8px 20px; border:none; border-radius:8px; background:#8B5CF6; color:white; cursor:pointer; font-weight:600;">Create Rule</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function toggleRule(id) {
+    fetch(`/api/admin/ai-rules/${id}/toggle`, { method: 'POST' })
+        .then(r => r.json()).then(d => { if(d.success) location.reload(); });
+}
+
+function createRule() {
+    const data = {
+        rule_name: document.getElementById('ruleName').value,
+        rule_type: document.getElementById('ruleType').value,
+        condition_field: document.getElementById('condField').value,
+        condition_operator: document.getElementById('condOp').value,
+        condition_value: document.getElementById('condValue').value,
+        action_type: document.getElementById('actionType').value,
+        action_params: document.getElementById('actionParams').value || '{}',
+        priority: parseInt(document.getElementById('rulePriority').value) || 0
+    };
+    fetch('/api/admin/ai-rules', {
+        method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data)
+    }).then(r => r.json()).then(d => { if(d.success) location.reload(); else alert('Failed'); });
+}
+</script>
+{% endblock %}

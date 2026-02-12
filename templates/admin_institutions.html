@@ -1,0 +1,150 @@
+{% extends 'base.html' %}
+
+{% block title %}Manage Institutions - Sangrenes LMS Portal{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1><i class="fas fa-university"></i> Manage Institutions</h1>
+        <p>Register and manage schools using the platform</p>
+    </div>
+    <button class="btn btn-primary" onclick="openModal('addModal')"><i class="fas fa-plus"></i> Add Institution</button>
+</div>
+
+{% if institutions %}
+<div style="background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); overflow: hidden;">
+    <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+            <tr style="background: #F8FAFC;">
+                <th style="padding: 12px 16px; text-align: left; font-size: 0.8rem; color: #64748B;">Institution</th>
+                <th style="padding: 12px 16px; text-align: center; font-size: 0.8rem; color: #64748B;">Domain</th>
+                <th style="padding: 12px 16px; text-align: center; font-size: 0.8rem; color: #64748B;">Plan</th>
+                <th style="padding: 12px 16px; text-align: center; font-size: 0.8rem; color: #64748B;">Instructors</th>
+                <th style="padding: 12px 16px; text-align: center; font-size: 0.8rem; color: #64748B;">Students</th>
+                <th style="padding: 12px 16px; text-align: center; font-size: 0.8rem; color: #64748B;">Subjects</th>
+                <th style="padding: 12px 16px; text-align: center; font-size: 0.8rem; color: #64748B;">Status</th>
+                <th style="padding: 12px 16px; text-align: right; font-size: 0.8rem; color: #64748B;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for inst in institutions %}
+            <tr style="border-bottom: 1px solid #F1F5F9;">
+                <td style="padding: 12px 16px;">
+                    <div style="font-weight: 600;">{{ inst.name }}</div>
+                    <div style="font-size: 0.8rem; color: #64748B;">{{ inst.short_name or '' }}</div>
+                </td>
+                <td style="padding: 12px 16px; text-align: center; font-size: 0.85rem; color: #64748B;">{{ inst.domain or '-' }}</td>
+                <td style="padding: 12px 16px; text-align: center;">
+                    <span style="background: #EDE9FE; color: #7C3AED; padding: 2px 10px; border-radius: 12px; font-size: 0.75rem; font-weight: 600;">{{ inst.plan }}</span>
+                </td>
+                <td style="padding: 12px 16px; text-align: center; font-weight: 600; color: #3B82F6;">{{ inst.instructor_count }}</td>
+                <td style="padding: 12px 16px; text-align: center; font-weight: 600; color: #10B981;">{{ inst.student_count }}</td>
+                <td style="padding: 12px 16px; text-align: center; font-weight: 600; color: #F59E0B;">{{ inst.subject_count }}</td>
+                <td style="padding: 12px 16px; text-align: center;">
+                    {% if inst.is_active %}
+                    <span style="background: #D1FAE5; color: #065F46; padding: 2px 10px; border-radius: 12px; font-size: 0.75rem;">Active</span>
+                    {% else %}
+                    <span style="background: #FEE2E2; color: #991B1B; padding: 2px 10px; border-radius: 12px; font-size: 0.75rem;">Inactive</span>
+                    {% endif %}
+                </td>
+                <td style="padding: 12px 16px; text-align: right;">
+                    <button class="btn btn-sm" style="padding: 4px 12px; font-size: 0.8rem; background: #EFF6FF; color: #3B82F6; border: none; border-radius: 6px; cursor: pointer;"
+                            onclick="editInstitution({{ inst.id }}, '{{ inst.name }}', '{{ inst.short_name or '' }}', '{{ inst.domain or '' }}', '{{ inst.address or '' }}', '{{ inst.contact_email or '' }}', '{{ inst.contact_phone or '' }}', '{{ inst.plan }}', {{ inst.max_students }}, {{ inst.max_instructors }}, {{ inst.is_active }})">
+                        <i class="fas fa-edit"></i> Edit
+                    </button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div style="background: white; border-radius: 12px; padding: 60px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
+    <i class="fas fa-university" style="font-size: 3rem; color: #CBD5E1; margin-bottom: 16px;"></i>
+    <h3 style="color: #64748B;">No institutions yet</h3>
+    <p style="color: #94A3B8;">Click "Add Institution" to register the first school.</p>
+</div>
+{% endif %}
+
+<!-- Add/Edit Modal -->
+<div id="addModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; align-items:center; justify-content:center;">
+    <div style="background:white; border-radius:16px; padding:30px; max-width:500px; width:90%; max-height:80vh; overflow-y:auto; margin:auto; position:relative; top:50%; transform:translateY(-50%);">
+        <h3 id="modalTitle" style="margin:0 0 20px;"><i class="fas fa-university" style="color:#8B5CF6;"></i> Add Institution</h3>
+        <input type="hidden" id="editId" value="">
+        <div style="display:flex; flex-direction:column; gap:12px;">
+            <input type="text" id="instName" placeholder="Institution Name *" style="padding:10px; border:1px solid #E2E8F0; border-radius:8px; font-size:0.9rem;">
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                <input type="text" id="instShort" placeholder="Short Name (e.g. PUP)" style="padding:10px; border:1px solid #E2E8F0; border-radius:8px; font-size:0.9rem;">
+                <input type="text" id="instDomain" placeholder="Domain (e.g. pup.edu.ph)" style="padding:10px; border:1px solid #E2E8F0; border-radius:8px; font-size:0.9rem;">
+            </div>
+            <input type="text" id="instAddress" placeholder="Address" style="padding:10px; border:1px solid #E2E8F0; border-radius:8px; font-size:0.9rem;">
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                <input type="email" id="instEmail" placeholder="Contact Email" style="padding:10px; border:1px solid #E2E8F0; border-radius:8px; font-size:0.9rem;">
+                <input type="text" id="instPhone" placeholder="Contact Phone" style="padding:10px; border:1px solid #E2E8F0; border-radius:8px; font-size:0.9rem;">
+            </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px;">
+                <select id="instPlan" style="padding:10px; border:1px solid #E2E8F0; border-radius:8px; font-size:0.9rem;">
+                    {% for p in plans %}
+                    <option value="{{ p.name|lower }}">{{ p.name }} - &#8369;{{ p.price_monthly }}/mo</option>
+                    {% endfor %}
+                </select>
+                <input type="number" id="instMaxStudents" placeholder="Max Students" value="100" style="padding:10px; border:1px solid #E2E8F0; border-radius:8px; font-size:0.9rem;">
+                <input type="number" id="instMaxInstructors" placeholder="Max Instructors" value="5" style="padding:10px; border:1px solid #E2E8F0; border-radius:8px; font-size:0.9rem;">
+            </div>
+            <div id="activeField" style="display:none;">
+                <label style="display:flex; align-items:center; gap:8px; font-size:0.9rem;">
+                    <input type="checkbox" id="instActive" checked> Active
+                </label>
+            </div>
+        </div>
+        <div style="display:flex; gap:10px; margin-top:20px; justify-content:flex-end;">
+            <button onclick="closeModal('addModal')" style="padding:8px 20px; border:1px solid #E2E8F0; border-radius:8px; background:white; cursor:pointer;">Cancel</button>
+            <button onclick="saveInstitution()" style="padding:8px 20px; border:none; border-radius:8px; background:#8B5CF6; color:white; cursor:pointer; font-weight:600;">Save</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function editInstitution(id, name, short, domain, address, email, phone, plan, maxS, maxI, active) {
+    document.getElementById('editId').value = id;
+    document.getElementById('instName').value = name;
+    document.getElementById('instShort').value = short;
+    document.getElementById('instDomain').value = domain;
+    document.getElementById('instAddress').value = address;
+    document.getElementById('instEmail').value = email;
+    document.getElementById('instPhone').value = phone;
+    document.getElementById('instPlan').value = plan;
+    document.getElementById('instMaxStudents').value = maxS;
+    document.getElementById('instMaxInstructors').value = maxI;
+    document.getElementById('instActive').checked = active;
+    document.getElementById('activeField').style.display = 'block';
+    document.getElementById('modalTitle').innerHTML = '<i class="fas fa-edit" style="color:#8B5CF6;"></i> Edit Institution';
+    openModal('addModal');
+}
+
+function saveInstitution() {
+    const id = document.getElementById('editId').value;
+    const data = {
+        name: document.getElementById('instName').value,
+        short_name: document.getElementById('instShort').value,
+        domain: document.getElementById('instDomain').value,
+        address: document.getElementById('instAddress').value,
+        contact_email: document.getElementById('instEmail').value,
+        contact_phone: document.getElementById('instPhone').value,
+        plan: document.getElementById('instPlan').value,
+        max_students: parseInt(document.getElementById('instMaxStudents').value),
+        max_instructors: parseInt(document.getElementById('instMaxInstructors').value),
+        is_active: document.getElementById('instActive').checked ? 1 : 0
+    };
+
+    const url = id ? `/api/admin/institutions/${id}` : '/api/admin/institutions';
+    const method = id ? 'PUT' : 'POST';
+
+    fetch(url, { method, headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) })
+        .then(r => r.json())
+        .then(d => { if(d.success) location.reload(); else alert(d.error || 'Failed'); });
+}
+</script>
+{% endblock %}

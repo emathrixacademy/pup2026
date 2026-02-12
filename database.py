@@ -419,6 +419,195 @@ def init_db():
         )
     ''')
 
+    # ============== V2 SaaS TABLES ==============
+
+    # Institutions (schools/universities)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS institutions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            short_name TEXT,
+            logo TEXT,
+            domain TEXT UNIQUE,
+            address TEXT,
+            contact_email TEXT,
+            contact_phone TEXT,
+            plan TEXT DEFAULT 'free',
+            max_students INTEGER DEFAULT 100,
+            max_instructors INTEGER DEFAULT 5,
+            subscription_start DATE,
+            subscription_end DATE,
+            is_active INTEGER DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
+    # Departments per institution
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS departments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            institution_id INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            code TEXT,
+            head_instructor_id INTEGER,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (institution_id) REFERENCES institutions (id),
+            FOREIGN KEY (head_instructor_id) REFERENCES users (id)
+        )
+    ''')
+
+    # Instructor profiles (extended data for payroll & attendance)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS instructor_profiles (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL UNIQUE,
+            institution_id INTEGER,
+            department_id INTEGER,
+            employee_id TEXT,
+            hire_date DATE,
+            contract_type TEXT DEFAULT 'full-time',
+            salary_rate REAL DEFAULT 0,
+            salary_frequency TEXT DEFAULT 'monthly',
+            tax_id TEXT,
+            bank_account TEXT,
+            emergency_contact TEXT,
+            emergency_phone TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (id),
+            FOREIGN KEY (institution_id) REFERENCES institutions (id),
+            FOREIGN KEY (department_id) REFERENCES departments (id)
+        )
+    ''')
+
+    # Instructor attendance (daily clock in/out)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS instructor_attendance (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            instructor_id INTEGER NOT NULL,
+            date DATE NOT NULL,
+            time_in TIMESTAMP,
+            time_out TIMESTAMP,
+            status TEXT DEFAULT 'present',
+            hours_worked REAL DEFAULT 0,
+            notes TEXT,
+            ip_address TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (instructor_id) REFERENCES users (id),
+            UNIQUE(instructor_id, date)
+        )
+    ''')
+
+    # Instructor payroll
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS instructor_payroll (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            instructor_id INTEGER NOT NULL,
+            institution_id INTEGER,
+            period_start DATE NOT NULL,
+            period_end DATE NOT NULL,
+            base_salary REAL DEFAULT 0,
+            days_present INTEGER DEFAULT 0,
+            days_absent INTEGER DEFAULT 0,
+            days_late INTEGER DEFAULT 0,
+            total_hours REAL DEFAULT 0,
+            overtime_hours REAL DEFAULT 0,
+            overtime_pay REAL DEFAULT 0,
+            deductions REAL DEFAULT 0,
+            deduction_details TEXT,
+            bonuses REAL DEFAULT 0,
+            bonus_details TEXT,
+            gross_pay REAL DEFAULT 0,
+            net_pay REAL DEFAULT 0,
+            status TEXT DEFAULT 'draft',
+            approved_by INTEGER,
+            approved_at TIMESTAMP,
+            paid_at TIMESTAMP,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (instructor_id) REFERENCES users (id),
+            FOREIGN KEY (institution_id) REFERENCES institutions (id),
+            FOREIGN KEY (approved_by) REFERENCES users (id)
+        )
+    ''')
+
+    # Academic periods (semesters/terms)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS academic_periods (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            institution_id INTEGER,
+            name TEXT NOT NULL,
+            period_type TEXT DEFAULT 'semester',
+            start_date DATE NOT NULL,
+            end_date DATE NOT NULL,
+            is_active INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (institution_id) REFERENCES institutions (id)
+        )
+    ''')
+
+    # AI Admin action logs (transparency & audit trail)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS ai_admin_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            action_type TEXT NOT NULL,
+            target_type TEXT,
+            target_id INTEGER,
+            target_name TEXT,
+            decision TEXT NOT NULL,
+            reasoning TEXT,
+            data TEXT,
+            severity TEXT DEFAULT 'info',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
+    # AI Admin rules (configurable behavior)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS ai_admin_rules (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            rule_name TEXT NOT NULL,
+            rule_type TEXT NOT NULL,
+            condition_field TEXT,
+            condition_operator TEXT,
+            condition_value TEXT,
+            action_type TEXT NOT NULL,
+            action_params TEXT,
+            is_active INTEGER DEFAULT 1,
+            priority INTEGER DEFAULT 0,
+            last_triggered_at TIMESTAMP,
+            trigger_count INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
+    # Platform settings (global + per-institution)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS platform_settings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            institution_id INTEGER,
+            setting_key TEXT NOT NULL,
+            setting_value TEXT,
+            setting_type TEXT DEFAULT 'string',
+            description TEXT,
+            FOREIGN KEY (institution_id) REFERENCES institutions (id)
+        )
+    ''')
+
+    # Subscription plans
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS subscription_plans (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE,
+            price_monthly REAL DEFAULT 0,
+            price_yearly REAL DEFAULT 0,
+            max_students INTEGER DEFAULT 100,
+            max_instructors INTEGER DEFAULT 5,
+            max_subjects INTEGER DEFAULT 20,
+            features TEXT,
+            is_active INTEGER DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
     conn.commit()
 
     # Migration: Add new columns to existing tables if they don't exist
@@ -494,6 +683,12 @@ def init_db():
         ("quiz_attempts", "time_spent", "INTEGER DEFAULT 0"),
         ("quiz_attempts", "missed_questions", "TEXT"),
         ("quiz_attempts", "total_questions", "INTEGER DEFAULT 0"),
+        # V2 SaaS migrations
+        ("users", "institution_id", "INTEGER"),
+        ("users", "department_id", "INTEGER"),
+        ("subjects", "institution_id", "INTEGER"),
+        ("subjects", "academic_period_id", "INTEGER"),
+        ("subjects", "department_id", "INTEGER"),
     ]
 
     for table, column, col_type in migrations:
@@ -587,6 +782,103 @@ def init_db():
             conn.commit()
     except sqlite3.IntegrityError:
         pass  # Already enrolled
+
+    # ============== V2 SaaS SEEDS ==============
+
+    # Seed platform admin account
+    try:
+        cursor.execute('''
+            INSERT INTO users (username, password_hash, full_name, role, is_approved, profile_completed)
+            VALUES (?, ?, ?, ?, 1, 1)
+        ''', ('admin', generate_password_hash('admin123'), 'Platform Admin', 'admin'))
+        conn.commit()
+    except sqlite3.IntegrityError:
+        pass
+
+    # Ensure admin is approved
+    cursor.execute('UPDATE users SET is_approved = 1, profile_completed = 1 WHERE role = "admin"')
+    conn.commit()
+
+    # Seed default institution (PUP)
+    cursor.execute('SELECT id FROM institutions WHERE short_name = ?', ('PUP',))
+    if not cursor.fetchone():
+        cursor.execute('''
+            INSERT INTO institutions (name, short_name, domain, address, contact_email, plan, max_students, max_instructors, is_active)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
+        ''', ('Polytechnic University of the Philippines', 'PUP', 'pup.edu.ph',
+              'Sta. Mesa, Manila', 'info@pup.edu.ph', 'enterprise', 10000, 100))
+        conn.commit()
+
+        # Link existing users and subjects to this institution
+        cursor.execute('SELECT id FROM institutions WHERE short_name = ?', ('PUP',))
+        inst = cursor.fetchone()
+        if inst:
+            cursor.execute('UPDATE users SET institution_id = ? WHERE institution_id IS NULL', (inst['id'],))
+            cursor.execute('UPDATE subjects SET institution_id = ? WHERE institution_id IS NULL', (inst['id'],))
+            conn.commit()
+
+    # Seed subscription plans
+    plans = [
+        ('Free', 0, 0, 50, 2, 5, 'Basic LMS features, 50 students, 2 instructors'),
+        ('Basic', 499, 4990, 200, 10, 20, 'Full LMS + monitoring, 200 students, 10 instructors'),
+        ('Premium', 1499, 14990, 1000, 50, 100, 'Full LMS + AI admin + payroll, 1000 students, 50 instructors'),
+        ('Enterprise', 4999, 49990, 10000, 100, 500, 'Unlimited features, custom branding, priority support'),
+    ]
+    for name, monthly, yearly, students, instructors, subjects_limit, features in plans:
+        cursor.execute('SELECT id FROM subscription_plans WHERE name = ?', (name,))
+        if not cursor.fetchone():
+            cursor.execute('''
+                INSERT INTO subscription_plans (name, price_monthly, price_yearly, max_students, max_instructors, max_subjects, features)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (name, monthly, yearly, students, instructors, subjects_limit, features))
+    conn.commit()
+
+    # Seed default AI admin rules
+    default_rules = [
+        ('Low Grade Alert', 'grade_monitor', 'weighted_grade', 'less_than', '75',
+         'send_notification', '{"severity": "critical", "message_template": "Academic alert: {grade}% in {subject}. You need 75% to pass."}'),
+        ('Grade Warning', 'grade_monitor', 'weighted_grade', 'less_than', '82',
+         'send_notification', '{"severity": "warning", "message_template": "Your grade in {subject} is {grade}%. Keep pushing to improve!"}'),
+        ('Missed Deadline', 'deadline_monitor', 'days_overdue', 'greater_than', '0',
+         'send_notification', '{"severity": "warning", "message_template": "You missed the deadline for {activity} in {subject}. Submit ASAP."}'),
+        ('Behind on Lessons', 'progress_monitor', 'sessions_behind', 'greater_than', '2',
+         'send_notification', '{"severity": "critical", "message_template": "You are {count} sessions behind in {subject}. Catch up now!"}'),
+        ('Weekly Performance Report', 'report_generator', 'day_of_week', 'equals', 'Sunday',
+         'generate_report', '{"report_type": "weekly_performance", "send_to": "instructors"}'),
+        ('Auto Payroll Calculation', 'payroll_processor', 'period_end', 'equals', 'today',
+         'calculate_payroll', '{"auto_approve": false}'),
+        ('Attendance Reminder', 'attendance_monitor', 'clock_in_missing', 'equals', 'true',
+         'send_notification', '{"severity": "info", "message_template": "Reminder: Please clock in for today."}'),
+        ('Inactivity Alert', 'activity_monitor', 'days_inactive', 'greater_than', '7',
+         'send_notification', '{"severity": "warning", "message_template": "Student {name} has been inactive for {days} days in {subject}."}'),
+    ]
+    for rule_name, rule_type, cond_field, cond_op, cond_val, action_type, action_params in default_rules:
+        cursor.execute('SELECT id FROM ai_admin_rules WHERE rule_name = ?', (rule_name,))
+        if not cursor.fetchone():
+            cursor.execute('''
+                INSERT INTO ai_admin_rules (rule_name, rule_type, condition_field, condition_operator, condition_value, action_type, action_params)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (rule_name, rule_type, cond_field, cond_op, cond_val, action_type, action_params))
+    conn.commit()
+
+    # Seed default platform settings
+    default_settings = [
+        (None, 'platform_name', 'Sangrenes LMS Portal', 'string', 'Platform display name'),
+        (None, 'ai_admin_enabled', 'true', 'boolean', 'Enable AI Admin agent'),
+        (None, 'ai_admin_interval_minutes', '30', 'integer', 'AI Admin check interval in minutes'),
+        (None, 'auto_payroll_enabled', 'true', 'boolean', 'Enable automatic payroll calculation'),
+        (None, 'default_working_hours', '8', 'integer', 'Default working hours per day'),
+        (None, 'late_threshold_minutes', '15', 'integer', 'Minutes after schedule to count as late'),
+        (None, 'email_notifications_enabled', 'false', 'boolean', 'Send email notifications'),
+    ]
+    for inst_id, key, value, stype, desc in default_settings:
+        cursor.execute('SELECT id FROM platform_settings WHERE setting_key = ? AND institution_id IS ?', (key, inst_id))
+        if not cursor.fetchone():
+            cursor.execute('''
+                INSERT INTO platform_settings (institution_id, setting_key, setting_value, setting_type, description)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (inst_id, key, value, stype, desc))
+    conn.commit()
 
     conn.close()
 

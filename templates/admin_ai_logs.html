@@ -1,0 +1,94 @@
+{% extends 'base.html' %}
+
+{% block title %}AI Admin Logs - Sangrenes LMS Portal{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1><i class="fas fa-robot"></i> AI Admin Activity Logs</h1>
+        <p>Transparency & audit trail for all AI decisions ({{ total }} total)</p>
+    </div>
+</div>
+
+<!-- Filters -->
+<div style="background: white; border-radius: 12px; padding: 16px 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); margin-bottom: 20px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+    <form method="GET" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+        <select name="type" style="padding: 8px 12px; border: 1px solid #E2E8F0; border-radius: 8px; font-size: 0.85rem;">
+            <option value="">All Types</option>
+            {% for t in action_types %}
+            <option value="{{ t }}" {% if filter_type == t %}selected{% endif %}>{{ t }}</option>
+            {% endfor %}
+        </select>
+        <select name="severity" style="padding: 8px 12px; border: 1px solid #E2E8F0; border-radius: 8px; font-size: 0.85rem;">
+            <option value="">All Severities</option>
+            <option value="info" {% if filter_severity == 'info' %}selected{% endif %}>Info</option>
+            <option value="warning" {% if filter_severity == 'warning' %}selected{% endif %}>Warning</option>
+            <option value="critical" {% if filter_severity == 'critical' %}selected{% endif %}>Critical</option>
+        </select>
+        <button type="submit" style="padding: 8px 16px; background: #3B82F6; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 0.85rem;">
+            <i class="fas fa-filter"></i> Apply
+        </button>
+        {% if filter_type or filter_severity %}
+        <a href="{{ url_for('admin_ai_logs') }}" style="font-size: 0.8rem; color: #EF4444;">Clear filters</a>
+        {% endif %}
+    </form>
+</div>
+
+<!-- Logs Table -->
+<div style="background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); overflow: hidden;">
+    {% if logs %}
+    <div style="overflow-x: auto;">
+        <table style="width: 100%; border-collapse: collapse; min-width: 800px;">
+            <thead>
+                <tr style="background: #F8FAFC;">
+                    <th style="padding: 10px 14px; text-align: left; font-size: 0.8rem; color: #64748B;">Timestamp</th>
+                    <th style="padding: 10px 14px; text-align: left; font-size: 0.8rem; color: #64748B;">Action</th>
+                    <th style="padding: 10px 14px; text-align: left; font-size: 0.8rem; color: #64748B;">Target</th>
+                    <th style="padding: 10px 14px; text-align: left; font-size: 0.8rem; color: #64748B;">Decision</th>
+                    <th style="padding: 10px 14px; text-align: left; font-size: 0.8rem; color: #64748B;">Reasoning</th>
+                    <th style="padding: 10px 14px; text-align: center; font-size: 0.8rem; color: #64748B;">Severity</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in logs %}
+                <tr style="border-bottom: 1px solid #F1F5F9;">
+                    <td style="padding: 10px 14px; font-size: 0.8rem; color: #64748B; white-space: nowrap;">{{ log.created_at[:19] }}</td>
+                    <td style="padding: 10px 14px;">
+                        <span style="background: #EDE9FE; color: #7C3AED; padding: 2px 8px; border-radius: 12px; font-size: 0.7rem; white-space: nowrap;">{{ log.action_type }}</span>
+                    </td>
+                    <td style="padding: 10px 14px; font-size: 0.8rem;">{{ log.target_name or log.target_type or '-' }}</td>
+                    <td style="padding: 10px 14px; font-size: 0.8rem; color: #334155; max-width: 280px;">{{ log.decision }}</td>
+                    <td style="padding: 10px 14px; font-size: 0.8rem; color: #94A3B8; max-width: 200px;">{{ log.reasoning or '-' }}</td>
+                    <td style="padding: 10px 14px; text-align: center;">
+                        {% if log.severity == 'critical' %}
+                        <span style="background: #FEE2E2; color: #DC2626; padding: 2px 8px; border-radius: 12px; font-size: 0.7rem;">critical</span>
+                        {% elif log.severity == 'warning' %}
+                        <span style="background: #FEF3C7; color: #D97706; padding: 2px 8px; border-radius: 12px; font-size: 0.7rem;">warning</span>
+                        {% else %}
+                        <span style="background: #DBEAFE; color: #2563EB; padding: 2px 8px; border-radius: 12px; font-size: 0.7rem;">info</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <!-- Pagination -->
+    <div style="padding: 12px 16px; display: flex; justify-content: center; gap: 8px; border-top: 1px solid #F1F5F9;">
+        {% if page > 1 %}
+        <a href="?page={{ page-1 }}&type={{ filter_type }}&severity={{ filter_severity }}" style="padding: 6px 14px; border: 1px solid #E2E8F0; border-radius: 6px; text-decoration: none; color: #334155; font-size: 0.85rem;">Previous</a>
+        {% endif %}
+        <span style="padding: 6px 14px; font-size: 0.85rem; color: #64748B;">Page {{ page }}</span>
+        {% if logs|length == per_page %}
+        <a href="?page={{ page+1 }}&type={{ filter_type }}&severity={{ filter_severity }}" style="padding: 6px 14px; border: 1px solid #E2E8F0; border-radius: 6px; text-decoration: none; color: #334155; font-size: 0.85rem;">Next</a>
+        {% endif %}
+    </div>
+    {% else %}
+    <div style="padding: 60px; text-align: center; color: #94A3B8;">
+        <i class="fas fa-robot" style="font-size: 3rem; margin-bottom: 16px;"></i>
+        <h3 style="color: #64748B;">No AI logs yet</h3>
+        <p>The AI Admin agent logs all actions here for transparency.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

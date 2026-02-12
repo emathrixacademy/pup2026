@@ -1,0 +1,120 @@
+{% extends 'base.html' %}
+
+{% block title %}Payroll Management - Sangrenes LMS Portal{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1><i class="fas fa-money-check-alt"></i> Payroll Management</h1>
+        <p>Generate, approve, and track instructor payments</p>
+    </div>
+    <button class="btn btn-primary" onclick="openModal('generateModal')"><i class="fas fa-calculator"></i> Generate Payroll</button>
+</div>
+
+<!-- Payroll Table -->
+<div style="background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); overflow: hidden;">
+    {% if payrolls %}
+    <div style="overflow-x: auto;">
+        <table style="width: 100%; border-collapse: collapse; min-width: 900px;">
+            <thead>
+                <tr style="background: #F8FAFC;">
+                    <th style="padding: 12px 14px; text-align: left; font-size: 0.8rem; color: #64748B;">Instructor</th>
+                    <th style="padding: 12px 14px; text-align: center; font-size: 0.8rem; color: #64748B;">Period</th>
+                    <th style="padding: 12px 14px; text-align: center; font-size: 0.8rem; color: #64748B;">Present</th>
+                    <th style="padding: 12px 14px; text-align: center; font-size: 0.8rem; color: #64748B;">Absent</th>
+                    <th style="padding: 12px 14px; text-align: center; font-size: 0.8rem; color: #64748B;">Late</th>
+                    <th style="padding: 12px 14px; text-align: right; font-size: 0.8rem; color: #64748B;">Base</th>
+                    <th style="padding: 12px 14px; text-align: right; font-size: 0.8rem; color: #64748B;">Deductions</th>
+                    <th style="padding: 12px 14px; text-align: right; font-size: 0.8rem; color: #64748B;">Net Pay</th>
+                    <th style="padding: 12px 14px; text-align: center; font-size: 0.8rem; color: #64748B;">Status</th>
+                    <th style="padding: 12px 14px; text-align: right; font-size: 0.8rem; color: #64748B;">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in payrolls %}
+                <tr style="border-bottom: 1px solid #F1F5F9;">
+                    <td style="padding: 12px 14px; font-weight: 600;">{{ p.full_name }}</td>
+                    <td style="padding: 12px 14px; text-align: center; font-size: 0.8rem; color: #64748B;">{{ p.period_start }} - {{ p.period_end }}</td>
+                    <td style="padding: 12px 14px; text-align: center; color: #10B981; font-weight: 600;">{{ p.days_present }}</td>
+                    <td style="padding: 12px 14px; text-align: center; color: #EF4444; font-weight: 600;">{{ p.days_absent }}</td>
+                    <td style="padding: 12px 14px; text-align: center; color: #F59E0B; font-weight: 600;">{{ p.days_late }}</td>
+                    <td style="padding: 12px 14px; text-align: right; font-size: 0.85rem;">&#8369;{{ "{:,.2f}".format(p.base_salary) }}</td>
+                    <td style="padding: 12px 14px; text-align: right; font-size: 0.85rem; color: #EF4444;">-&#8369;{{ "{:,.2f}".format(p.deductions) }}</td>
+                    <td style="padding: 12px 14px; text-align: right; font-weight: 700; color: #10B981;">&#8369;{{ "{:,.2f}".format(p.net_pay) }}</td>
+                    <td style="padding: 12px 14px; text-align: center;">
+                        {% if p.status == 'paid' %}
+                        <span style="background: #D1FAE5; color: #065F46; padding: 2px 10px; border-radius: 12px; font-size: 0.75rem;">Paid</span>
+                        {% elif p.status == 'approved' %}
+                        <span style="background: #DBEAFE; color: #1E40AF; padding: 2px 10px; border-radius: 12px; font-size: 0.75rem;">Approved</span>
+                        {% else %}
+                        <span style="background: #F1F5F9; color: #64748B; padding: 2px 10px; border-radius: 12px; font-size: 0.75rem;">Draft</span>
+                        {% endif %}
+                    </td>
+                    <td style="padding: 12px 14px; text-align: right;">
+                        {% if p.status == 'draft' %}
+                        <button onclick="approvePayroll({{ p.id }})" style="padding: 4px 10px; font-size: 0.75rem; background: #DBEAFE; color: #1E40AF; border: none; border-radius: 6px; cursor: pointer;">Approve</button>
+                        {% elif p.status == 'approved' %}
+                        <button onclick="markPaid({{ p.id }})" style="padding: 4px 10px; font-size: 0.75rem; background: #D1FAE5; color: #065F46; border: none; border-radius: 6px; cursor: pointer;">Mark Paid</button>
+                        {% else %}
+                        <span style="font-size: 0.75rem; color: #94A3B8;">{{ p.paid_at[:10] if p.paid_at else '' }}</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div style="padding: 60px; text-align: center; color: #94A3B8;">
+        <i class="fas fa-money-check-alt" style="font-size: 3rem; margin-bottom: 16px;"></i>
+        <h3 style="color: #64748B;">No payroll records</h3>
+        <p>Click "Generate Payroll" to calculate pay for a period.</p>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Generate Modal -->
+<div id="generateModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000;">
+    <div style="background:white; border-radius:16px; padding:30px; max-width:400px; width:90%; margin:auto; position:relative; top:50%; transform:translateY(-50%);">
+        <h3 style="margin:0 0 20px;"><i class="fas fa-calculator" style="color:#10B981;"></i> Generate Payroll</h3>
+        <p style="font-size:0.85rem; color:#64748B; margin-bottom:16px;">This calculates payroll for all instructors based on their attendance records and salary rate.</p>
+        <div style="display:flex; flex-direction:column; gap:12px;">
+            <label style="font-size:0.8rem; color:#64748B;">Period Start</label>
+            <input type="date" id="periodStart" style="padding:10px; border:1px solid #E2E8F0; border-radius:8px;">
+            <label style="font-size:0.8rem; color:#64748B;">Period End</label>
+            <input type="date" id="periodEnd" style="padding:10px; border:1px solid #E2E8F0; border-radius:8px;">
+        </div>
+        <div style="display:flex; gap:10px; margin-top:20px; justify-content:flex-end;">
+            <button onclick="closeModal('generateModal')" style="padding:8px 20px; border:1px solid #E2E8F0; border-radius:8px; background:white; cursor:pointer;">Cancel</button>
+            <button onclick="generatePayroll()" style="padding:8px 20px; border:none; border-radius:8px; background:#10B981; color:white; cursor:pointer; font-weight:600;">Generate</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function generatePayroll() {
+    const start = document.getElementById('periodStart').value;
+    const end = document.getElementById('periodEnd').value;
+    if (!start || !end) { alert('Select both dates'); return; }
+    fetch('/api/admin/payroll/generate', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ period_start: start, period_end: end })
+    }).then(r => r.json()).then(d => {
+        if (d.success) { alert(`Generated ${d.generated} payroll records`); location.reload(); }
+        else alert(d.error || 'Failed');
+    });
+}
+function approvePayroll(id) {
+    if (!confirm('Approve this payroll?')) return;
+    fetch(`/api/admin/payroll/${id}/approve`, { method: 'POST' })
+        .then(r => r.json()).then(d => { if(d.success) location.reload(); });
+}
+function markPaid(id) {
+    if (!confirm('Mark as paid?')) return;
+    fetch(`/api/admin/payroll/${id}/pay`, { method: 'POST' })
+        .then(r => r.json()).then(d => { if(d.success) location.reload(); });
+}
+</script>
+{% endblock %}

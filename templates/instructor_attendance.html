@@ -1,0 +1,132 @@
+{% extends 'base.html' %}
+
+{% block title %}My Attendance - Sangrenes LMS Portal{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1><i class="fas fa-clock"></i> My Attendance</h1>
+        <p>Track your daily clock-in and clock-out</p>
+    </div>
+</div>
+
+<!-- Clock In/Out Card -->
+<div style="background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); padding: 30px; margin-bottom: 24px; text-align: center;">
+    <div style="font-size: 0.9rem; color: #64748B; margin-bottom: 8px;">{{ today }}</div>
+    {% if not today_record %}
+    <div style="margin: 20px 0;">
+        <i class="fas fa-door-open" style="font-size: 3rem; color: #CBD5E1; margin-bottom: 12px;"></i>
+        <p style="color: #94A3B8; margin-bottom: 20px;">You haven't clocked in today</p>
+        <button onclick="clockIn()" style="padding: 14px 40px; background: linear-gradient(135deg, #10B981, #059669); color: white; border: none; border-radius: 12px; font-size: 1.1rem; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px rgba(16,185,129,0.3);">
+            <i class="fas fa-sign-in-alt"></i> Clock In
+        </button>
+    </div>
+    {% elif not today_record.time_out %}
+    <div style="margin: 20px 0;">
+        <div style="display: inline-block; background: #D1FAE5; color: #065F46; padding: 8px 20px; border-radius: 20px; font-size: 0.9rem; font-weight: 600; margin-bottom: 16px;">
+            <i class="fas fa-check-circle"></i> Clocked in at {{ today_record.time_in[11:16] if today_record.time_in else '' }}
+        </div>
+        <br>
+        <button onclick="clockOut()" style="padding: 14px 40px; background: linear-gradient(135deg, #EF4444, #DC2626); color: white; border: none; border-radius: 12px; font-size: 1.1rem; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px rgba(239,68,68,0.3); margin-top: 12px;">
+            <i class="fas fa-sign-out-alt"></i> Clock Out
+        </button>
+    </div>
+    {% else %}
+    <div style="margin: 20px 0;">
+        <i class="fas fa-check-double" style="font-size: 3rem; color: #10B981; margin-bottom: 12px;"></i>
+        <div style="display: inline-block; background: #D1FAE5; color: #065F46; padding: 8px 20px; border-radius: 20px; font-size: 0.9rem; font-weight: 600;">
+            <i class="fas fa-clock"></i> Completed - {{ today_record.hours_worked }} hours today
+        </div>
+        <div style="font-size: 0.85rem; color: #64748B; margin-top: 8px;">
+            In: {{ today_record.time_in[11:16] if today_record.time_in else '' }} &middot; Out: {{ today_record.time_out[11:16] if today_record.time_out else '' }}
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Monthly Summary -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; margin-bottom: 24px;">
+    <div style="background: white; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); text-align: center; border-top: 3px solid #10B981;">
+        <div style="font-size: 2rem; font-weight: 700; color: #10B981;">{{ summary.present or 0 }}</div>
+        <div style="font-size: 0.8rem; color: #64748B;">Days Present</div>
+    </div>
+    <div style="background: white; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); text-align: center; border-top: 3px solid #F59E0B;">
+        <div style="font-size: 2rem; font-weight: 700; color: #F59E0B;">{{ summary.late or 0 }}</div>
+        <div style="font-size: 0.8rem; color: #64748B;">Days Late</div>
+    </div>
+    <div style="background: white; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); text-align: center; border-top: 3px solid #EF4444;">
+        <div style="font-size: 2rem; font-weight: 700; color: #EF4444;">{{ summary.absent or 0 }}</div>
+        <div style="font-size: 0.8rem; color: #64748B;">Days Absent</div>
+    </div>
+    <div style="background: white; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); text-align: center; border-top: 3px solid #3B82F6;">
+        <div style="font-size: 2rem; font-weight: 700; color: #3B82F6;">{{ "%.1f"|format(summary.total_hours or 0) }}</div>
+        <div style="font-size: 0.8rem; color: #64748B;">Total Hours</div>
+    </div>
+</div>
+
+<!-- Attendance History -->
+<div style="background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); overflow: hidden;">
+    <div style="padding: 16px 20px; border-bottom: 1px solid #E2E8F0;">
+        <h3 style="margin: 0; font-size: 1rem;"><i class="fas fa-history" style="color: #3B82F6;"></i> Attendance History</h3>
+    </div>
+    {% if attendance %}
+    <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+            <tr style="background: #F8FAFC;">
+                <th style="padding: 10px 16px; text-align: left; font-size: 0.8rem; color: #64748B;">Date</th>
+                <th style="padding: 10px 16px; text-align: center; font-size: 0.8rem; color: #64748B;">Time In</th>
+                <th style="padding: 10px 16px; text-align: center; font-size: 0.8rem; color: #64748B;">Time Out</th>
+                <th style="padding: 10px 16px; text-align: center; font-size: 0.8rem; color: #64748B;">Hours</th>
+                <th style="padding: 10px 16px; text-align: center; font-size: 0.8rem; color: #64748B;">Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for a in attendance %}
+            <tr style="border-bottom: 1px solid #F1F5F9;">
+                <td style="padding: 10px 16px; font-weight: 600;">{{ a.date }}</td>
+                <td style="padding: 10px 16px; text-align: center; color: #10B981;">{{ a.time_in[11:16] if a.time_in else '-' }}</td>
+                <td style="padding: 10px 16px; text-align: center; color: #EF4444;">{{ a.time_out[11:16] if a.time_out else '-' }}</td>
+                <td style="padding: 10px 16px; text-align: center; font-weight: 600;">{{ a.hours_worked or '-' }}</td>
+                <td style="padding: 10px 16px; text-align: center;">
+                    {% if a.status == 'present' %}
+                    <span style="background: #D1FAE5; color: #065F46; padding: 2px 10px; border-radius: 12px; font-size: 0.75rem;">Present</span>
+                    {% elif a.status == 'late' %}
+                    <span style="background: #FEF3C7; color: #92400E; padding: 2px 10px; border-radius: 12px; font-size: 0.75rem;">Late</span>
+                    {% else %}
+                    <span style="background: #FEE2E2; color: #991B1B; padding: 2px 10px; border-radius: 12px; font-size: 0.75rem;">Absent</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div style="padding: 40px; text-align: center; color: #94A3B8;">
+        <p>No attendance records this month.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function clockIn() {
+    fetch('/api/attendance/clock-in', { method: 'POST' })
+        .then(r => r.json())
+        .then(d => {
+            if (d.success) location.reload();
+            else alert(d.error || 'Failed to clock in');
+        });
+}
+
+function clockOut() {
+    if (!confirm('Clock out for today?')) return;
+    fetch('/api/attendance/clock-out', { method: 'POST' })
+        .then(r => r.json())
+        .then(d => {
+            if (d.success) location.reload();
+            else alert(d.error || 'Failed to clock out');
+        });
+}
+</script>
+{% endblock %}

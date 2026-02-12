@@ -1,0 +1,144 @@
+{% extends 'base.html' %}
+
+{% block title %}Manage Instructors - Sangrenes LMS Portal{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1><i class="fas fa-chalkboard-teacher"></i> Manage Instructors</h1>
+        <p>Assign institutions, manage profiles and salary rates</p>
+    </div>
+</div>
+
+<div style="background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); overflow: hidden;">
+    {% if instructors %}
+    <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+            <tr style="background: #F8FAFC;">
+                <th style="padding: 12px 16px; text-align: left; font-size: 0.8rem; color: #64748B;">Instructor</th>
+                <th style="padding: 12px 16px; text-align: center; font-size: 0.8rem; color: #64748B;">Employee ID</th>
+                <th style="padding: 12px 16px; text-align: center; font-size: 0.8rem; color: #64748B;">Institution</th>
+                <th style="padding: 12px 16px; text-align: center; font-size: 0.8rem; color: #64748B;">Contract</th>
+                <th style="padding: 12px 16px; text-align: center; font-size: 0.8rem; color: #64748B;">Salary</th>
+                <th style="padding: 12px 16px; text-align: center; font-size: 0.8rem; color: #64748B;">Hire Date</th>
+                <th style="padding: 12px 16px; text-align: right; font-size: 0.8rem; color: #64748B;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for inst in instructors %}
+            <tr style="border-bottom: 1px solid #F1F5F9;">
+                <td style="padding: 12px 16px; display: flex; align-items: center; gap: 10px;">
+                    <div style="width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg, #3B82F6, #8B5CF6); display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 0.8rem; flex-shrink: 0;">
+                        {{ inst.full_name[0] }}
+                    </div>
+                    <div>
+                        <div style="font-weight: 600; color: #1E293B;">{{ inst.full_name }}</div>
+                        <div style="font-size: 0.75rem; color: #94A3B8;">{{ inst.username }}</div>
+                    </div>
+                </td>
+                <td style="padding: 12px 16px; text-align: center; font-size: 0.85rem; color: #64748B;">{{ inst.employee_id or '-' }}</td>
+                <td style="padding: 12px 16px; text-align: center;">
+                    {% if inst.institution_name %}
+                    <span style="background: #EDE9FE; color: #7C3AED; padding: 2px 10px; border-radius: 12px; font-size: 0.75rem;">{{ inst.institution_name }}</span>
+                    {% else %}
+                    <span style="color: #CBD5E1;">Unassigned</span>
+                    {% endif %}
+                </td>
+                <td style="padding: 12px 16px; text-align: center; font-size: 0.85rem;">{{ inst.contract_type or '-' }}</td>
+                <td style="padding: 12px 16px; text-align: center; font-weight: 600; color: #10B981;">
+                    {% if inst.salary_rate %}&#8369;{{ "{:,.2f}".format(inst.salary_rate) }}/{{ inst.salary_frequency or 'mo' }}{% else %}-{% endif %}
+                </td>
+                <td style="padding: 12px 16px; text-align: center; font-size: 0.85rem; color: #64748B;">{{ inst.hire_date or '-' }}</td>
+                <td style="padding: 12px 16px; text-align: right;">
+                    <button style="padding: 4px 12px; font-size: 0.8rem; background: #EFF6FF; color: #3B82F6; border: none; border-radius: 6px; cursor: pointer;"
+                            onclick="editProfile({{ inst.id }}, {{ inst.institution_id or 'null' }}, '{{ inst.employee_id or '' }}', '{{ inst.hire_date or '' }}', '{{ inst.contract_type or 'full-time' }}', {{ inst.salary_rate or 0 }}, '{{ inst.salary_frequency or 'monthly' }}')">
+                        <i class="fas fa-edit"></i> Edit
+                    </button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div style="padding: 60px; text-align: center; color: #94A3B8;">
+        <i class="fas fa-chalkboard-teacher" style="font-size: 3rem; margin-bottom: 16px;"></i>
+        <p>No instructors found.</p>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Edit Modal -->
+<div id="editModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000;">
+    <div style="background:white; border-radius:16px; padding:30px; max-width:450px; width:90%; margin:auto; position:relative; top:50%; transform:translateY(-50%);">
+        <h3 style="margin:0 0 20px;"><i class="fas fa-user-edit" style="color:#3B82F6;"></i> Edit Instructor Profile</h3>
+        <input type="hidden" id="editUserId">
+        <div style="display:flex; flex-direction:column; gap:12px;">
+            <label style="font-size:0.8rem; color:#64748B;">Institution</label>
+            <select id="editInst" style="padding:10px; border:1px solid #E2E8F0; border-radius:8px;">
+                <option value="">-- Select Institution --</option>
+                {% for i in institutions %}
+                <option value="{{ i.id }}">{{ i.name }} ({{ i.short_name }})</option>
+                {% endfor %}
+            </select>
+            <label style="font-size:0.8rem; color:#64748B;">Employee ID</label>
+            <input type="text" id="editEmpId" placeholder="e.g. EMP-001" style="padding:10px; border:1px solid #E2E8F0; border-radius:8px;">
+            <label style="font-size:0.8rem; color:#64748B;">Hire Date</label>
+            <input type="date" id="editHireDate" style="padding:10px; border:1px solid #E2E8F0; border-radius:8px;">
+            <label style="font-size:0.8rem; color:#64748B;">Contract Type</label>
+            <select id="editContract" style="padding:10px; border:1px solid #E2E8F0; border-radius:8px;">
+                <option value="full-time">Full-Time</option>
+                <option value="part-time">Part-Time</option>
+                <option value="adjunct">Adjunct</option>
+            </select>
+            <div style="display:grid; grid-template-columns:2fr 1fr; gap:10px;">
+                <div>
+                    <label style="font-size:0.8rem; color:#64748B;">Salary Rate (&#8369;)</label>
+                    <input type="number" id="editSalary" step="0.01" placeholder="0.00" style="padding:10px; border:1px solid #E2E8F0; border-radius:8px; width:100%; box-sizing:border-box;">
+                </div>
+                <div>
+                    <label style="font-size:0.8rem; color:#64748B;">Frequency</label>
+                    <select id="editFreq" style="padding:10px; border:1px solid #E2E8F0; border-radius:8px; width:100%;">
+                        <option value="monthly">Monthly</option>
+                        <option value="hourly">Hourly</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+        <div style="display:flex; gap:10px; margin-top:20px; justify-content:flex-end;">
+            <button onclick="closeModal('editModal')" style="padding:8px 20px; border:1px solid #E2E8F0; border-radius:8px; background:white; cursor:pointer;">Cancel</button>
+            <button onclick="saveProfile()" style="padding:8px 20px; border:none; border-radius:8px; background:#3B82F6; color:white; cursor:pointer; font-weight:600;">Save</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function editProfile(userId, instId, empId, hireDate, contract, salary, freq) {
+    document.getElementById('editUserId').value = userId;
+    document.getElementById('editInst').value = instId || '';
+    document.getElementById('editEmpId').value = empId;
+    document.getElementById('editHireDate').value = hireDate;
+    document.getElementById('editContract').value = contract;
+    document.getElementById('editSalary').value = salary;
+    document.getElementById('editFreq').value = freq;
+    openModal('editModal');
+}
+
+function saveProfile() {
+    const userId = document.getElementById('editUserId').value;
+    fetch(`/api/admin/instructor-profile/${userId}`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            institution_id: document.getElementById('editInst').value || null,
+            employee_id: document.getElementById('editEmpId').value,
+            hire_date: document.getElementById('editHireDate').value,
+            contract_type: document.getElementById('editContract').value,
+            salary_rate: parseFloat(document.getElementById('editSalary').value) || 0,
+            salary_frequency: document.getElementById('editFreq').value
+        })
+    }).then(r => r.json()).then(d => { if(d.success) location.reload(); else alert('Failed'); });
+}
+</script>
+{% endblock %}
