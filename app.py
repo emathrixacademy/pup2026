@@ -7147,7 +7147,7 @@ def admin_subjects():
         LEFT JOIN users u ON s.instructor_id = u.id
         ORDER BY s.code, s.section
     ''')
-    subjects = cursor.fetchall()
+    subjects = [dict(row) for row in cursor.fetchall()]
     cursor.execute('SELECT id, name, short_name FROM institutions WHERE is_active = 1 ORDER BY name')
     institutions = cursor.fetchall()
     cursor.execute('SELECT id, full_name FROM users WHERE role = "instructor" ORDER BY full_name')
@@ -7621,7 +7621,7 @@ def admin_subscriptions():
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute('SELECT * FROM subscription_plans ORDER BY price_monthly')
-    plans = cursor.fetchall()
+    plans = [dict(row) for row in cursor.fetchall()]
     cursor.execute('''
         SELECT i.*, sp.name as plan_name, sp.price_monthly,
                (SELECT COUNT(*) FROM users WHERE institution_id = i.id AND role = 'student') as student_count,
@@ -7702,7 +7702,7 @@ def admin_teacher_profiles():
         WHERE u.role = 'instructor'
         ORDER BY u.full_name
     ''')
-    teachers = cursor.fetchall()
+    teachers = [dict(row) for row in cursor.fetchall()]
     cursor.execute('SELECT id, name, short_name FROM institutions WHERE is_active = 1 ORDER BY name')
     institutions = cursor.fetchall()
     cursor.execute('SELECT id, name, institution_id FROM departments ORDER BY name')
