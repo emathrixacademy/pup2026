@@ -1,4 +1,4 @@
-// Sangrenes LMS Portal 2026 - Main JavaScript
+// eMathrix LMS 2026 - Main JavaScript
 
 // On page load: close all modals and ensure page is interactive
 document.addEventListener('DOMContentLoaded', function() {

@@ -7870,7 +7870,7 @@ def email_backup(filepath):
         msg['To'] = BACKUP_EMAIL_TO
         msg['Subject'] = f'LMS Database Backup - {datetime.now().strftime("%b %d, %Y %I:%M %p")}'
 
-        body = f"""Sangrenes LMS Portal - Automatic Database Backup
+        body = f"""eMathrix LMS - Automatic Database Backup
 
 Backup File: {filename}
 Database Size: {db_size} MB

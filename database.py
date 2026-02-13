@@ -1126,7 +1126,7 @@ def init_db():
 
     # Seed default platform settings
     default_settings = [
-        (None, 'platform_name', 'Sangrenes LMS Portal', 'string', 'Platform display name'),
+        (None, 'platform_name', 'eMathrix LMS', 'string', 'Platform display name'),
         (None, 'ai_admin_enabled', 'true', 'boolean', 'Enable AI Admin agent'),
         (None, 'ai_admin_interval_minutes', '30', 'integer', 'AI Admin check interval in minutes'),
         (None, 'auto_payroll_enabled', 'true', 'boolean', 'Enable automatic payroll calculation'),
