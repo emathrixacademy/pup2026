@@ -1,176 +1,116 @@
 {% extends 'base.html' %}
 
-{% block title %}Instructor Dashboard - Sangrenes LMS Portal{% endblock %}
+{% block title %}Dashboard - Sangrenes LMS{% endblock %}
 
 {% block content %}
-<div class="page-header">
-    <div>
-        <h1><i class="fas fa-tachometer-alt"></i> Instructor Dashboard</h1>
-        <p>Welcome back! Manage your classes, students, and activities.</p>
-    </div>
-</div>
-
-<!-- Pending Enrollments Alert -->
+<!-- Pending Alert -->
 {% if stats.pending > 0 %}
-<div class="pending-alert">
-    <div class="pending-alert-content">
-        <div class="pending-alert-icon">
-            <i class="fas fa-user-clock"></i>
-        </div>
-        <div class="pending-alert-text">
-            <strong>{{ stats.pending }} pending enrollment{{ 's' if stats.pending != 1 else '' }}</strong>
-            <p>New students are waiting for your approval</p>
-        </div>
-        <a href="{{ url_for('enrollments') }}" class="btn btn-warning">
-            <i class="fas fa-user-check"></i> Review Now
-        </a>
-    </div>
+<div style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:10px;padding:14px 20px;margin-bottom:20px;display:flex;align-items:center;gap:12px;">
+    <div style="width:40px;height:40px;background:#F59E0B;color:white;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;"><i class="fas fa-user-clock"></i></div>
+    <div style="flex:1;"><strong style="color:#92400E;">{{ stats.pending }} pending enrollment{{ 's' if stats.pending != 1 }}</strong><br><span style="font-size:0.82rem;color:#B45309;">Students waiting for approval</span></div>
+    <a href="{{ url_for('enrollments') }}" style="padding:8px 16px;background:#F59E0B;color:white;border-radius:8px;font-size:0.82rem;font-weight:600;text-decoration:none;">Review</a>
 </div>
 {% endif %}
 
-<!-- Statistics Cards -->
-<div class="stats-grid">
-    <div class="stat-card blue">
-        <div class="stat-number">{{ stats.students }}</div>
-        <div class="stat-label"><i class="fas fa-user-graduate"></i> Approved Students</div>
+<!-- Stats Row -->
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:24px;">
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:18px;text-align:center;">
+        <div style="font-size:1.8rem;font-weight:700;color:var(--primary);">{{ stats.students }}</div>
+        <div style="font-size:0.78rem;color:var(--muted);"><i class="fas fa-user-graduate"></i> Students</div>
     </div>
-    <a href="{{ url_for('enrollments') }}" class="stat-card yellow clickable">
-        <div class="stat-number">{{ stats.pending }}</div>
-        <div class="stat-label"><i class="fas fa-user-clock"></i> Pending Approval</div>
-    </a>
-    <div class="stat-card green">
-        <div class="stat-number">{{ stats.subjects }}</div>
-        <div class="stat-label"><i class="fas fa-chalkboard"></i> Classes</div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:18px;text-align:center;">
+        <div style="font-size:1.8rem;font-weight:700;color:#10B981;">{{ stats.subjects }}</div>
+        <div style="font-size:0.78rem;color:var(--muted);"><i class="fas fa-chalkboard"></i> Classes</div>
     </div>
-    <div class="stat-card purple">
-        <div class="stat-number">{{ stats.sessions }}</div>
-        <div class="stat-label"><i class="fas fa-book-open"></i> Sessions</div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:18px;text-align:center;">
+        <div style="font-size:1.8rem;font-weight:700;color:#F59E0B;">{{ stats.sessions }}</div>
+        <div style="font-size:0.78rem;color:var(--muted);"><i class="fas fa-book-open"></i> Sessions</div>
     </div>
-    <div class="stat-card orange">
-        <div class="stat-number">{{ stats.activities }}</div>
-        <div class="stat-label"><i class="fas fa-tasks"></i> Activities</div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:18px;text-align:center;">
+        <div style="font-size:1.8rem;font-weight:700;color:#8B5CF6;">{{ stats.activities }}</div>
+        <div style="font-size:0.78rem;color:var(--muted);"><i class="fas fa-tasks"></i> Activities</div>
     </div>
-    <div class="stat-card teal">
-        <div class="stat-number">{{ stats.quizzes }}</div>
-        <div class="stat-label"><i class="fas fa-question-circle"></i> Quizzes</div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:18px;text-align:center;">
+        <div style="font-size:1.8rem;font-weight:700;color:#EF4444;">{{ stats.quizzes }}</div>
+        <div style="font-size:0.78rem;color:var(--muted);"><i class="fas fa-question-circle"></i> Quizzes</div>
     </div>
 </div>
 
-<!-- My Classes Section -->
-<div class="card">
-    <div class="card-header">
-        <h3><i class="fas fa-chalkboard-teacher"></i> My Classes</h3>
-    </div>
-    <div class="card-body">
-        <div class="dashboard-grid">
+<!-- Two-column: Classes + Monitoring -->
+<div style="display:grid;grid-template-columns:1fr 360px;gap:20px;align-items:start;">
+    <!-- My Classes -->
+    <div>
+        <h2 style="font-size:1rem;font-weight:600;margin:0 0 14px;color:var(--text);"><i class="fas fa-chalkboard-teacher" style="color:var(--primary);"></i> My Classes</h2>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;">
+            {% set colors = ['#6366F1','#10B981','#8B5CF6','#F59E0B','#EF4444','#3B82F6'] %}
             {% for subject in subjects %}
-            {% set color_class = 'blue' %}
-            {% if subject.code == 'COMP019' %}
-                {% set color_class = 'blue' %}
-            {% elif subject.code == 'COMP012' %}
-                {% set color_class = 'green' %}
-            {% elif subject.code == 'CNS' %}
-                {% set color_class = 'purple' %}
-            {% elif subject.code == 'ES' %}
-                {% set color_class = 'orange' %}
-            {% endif %}
-            <div class="subject-card">
-                <div class="subject-card-header {{ color_class }}">
-                    <span class="schedule-badge">
-                        <i class="fas fa-clock"></i> {{ subject.day }} {{ subject.time_schedule }}
-                    </span>
-                    <h3>{{ subject.code }} - {{ subject.name }}</h3>
-                    <p class="section-info">{{ subject.section }}</p>
+            <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;">
+                <div style="background:{{ colors[loop.index0 % 6] }};padding:16px 18px;color:white;">
+                    <div style="font-size:0.72rem;opacity:0.85;"><i class="fas fa-clock"></i> {{ subject.day }} {{ subject.time_schedule }}</div>
+                    <div style="font-size:1.05rem;font-weight:700;margin-top:4px;">{{ subject.code }}</div>
+                    <div style="font-size:0.82rem;opacity:0.9;">{{ subject.name }}</div>
+                    <div style="font-size:0.75rem;opacity:0.8;margin-top:2px;">{{ subject.section }}</div>
                 </div>
-                <div class="subject-card-body">
-                    <a href="{{ url_for('subject_detail', id=subject.id) }}" class="btn btn-primary btn-sm">
-                        <i class="fas fa-folder-open"></i> Sessions
-                    </a>
-                    <a href="{{ url_for('all_activities', subject_id=subject.id) }}" class="btn btn-secondary btn-sm">
-                        <i class="fas fa-tasks"></i> Activities
-                    </a>
-                    <a href="{{ url_for('subject_exams', subject_id=subject.id) }}" class="btn btn-secondary btn-sm">
-                        <i class="fas fa-file-alt"></i> Exams
-                    </a>
+                <div style="padding:12px 18px;display:flex;gap:8px;flex-wrap:wrap;">
+                    <a href="{{ url_for('subject_detail', id=subject.id) }}" style="padding:5px 12px;font-size:0.75rem;background:var(--primary-light);color:var(--primary);border-radius:6px;text-decoration:none;font-weight:500;"><i class="fas fa-folder-open"></i> Sessions</a>
+                    <a href="{{ url_for('all_activities', subject_id=subject.id) }}" style="padding:5px 12px;font-size:0.75rem;background:#F1F5F9;color:var(--muted);border-radius:6px;text-decoration:none;font-weight:500;"><i class="fas fa-tasks"></i> Activities</a>
+                    <a href="{{ url_for('subject_exams', subject_id=subject.id) }}" style="padding:5px 12px;font-size:0.75rem;background:#F1F5F9;color:var(--muted);border-radius:6px;text-decoration:none;font-weight:500;"><i class="fas fa-file-alt"></i> Exams</a>
                 </div>
             </div>
             {% endfor %}
         </div>
     </div>
+
+    <!-- Monitoring Panel -->
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;">
+        <div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+            <h3 style="margin:0;font-size:0.9rem;font-weight:600;"><i class="fas fa-shield-alt" style="color:#EF4444;"></i> Student Monitoring</h3>
+        </div>
+
+        <!-- Summary -->
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0;border-bottom:1px solid var(--border);">
+            <div style="padding:14px;text-align:center;border-right:1px solid var(--border);">
+                <div style="font-size:1.4rem;font-weight:700;color:#EF4444;">{{ at_risk_count }}</div>
+                <div style="font-size:0.7rem;color:var(--muted);">At Risk</div>
+            </div>
+            <div style="padding:14px;text-align:center;border-right:1px solid var(--border);">
+                <div style="font-size:1.4rem;font-weight:700;color:#F59E0B;">{{ missed_count }}</div>
+                <div style="font-size:0.7rem;color:var(--muted);">Missed</div>
+            </div>
+            <div style="padding:14px;text-align:center;">
+                <div style="font-size:1.4rem;font-weight:700;color:#8B5CF6;">{{ low_grade_count }}</div>
+                <div style="font-size:0.7rem;color:var(--muted);">Low Grade</div>
+            </div>
+        </div>
+
+        <!-- At-risk students list -->
+        {% if at_risk_list %}
+        <div style="max-height:400px;overflow-y:auto;">
+            {% for s in at_risk_list %}
+            <div style="padding:12px 18px;border-bottom:1px solid #F1F5F9;display:flex;gap:10px;align-items:flex-start;">
+                <div style="width:32px;height:32px;background:#FEE2E2;color:#EF4444;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:700;flex-shrink:0;">{{ s.grade|int if s.grade else '?' }}%</div>
+                <div style="flex:1;min-width:0;">
+                    <div style="font-size:0.82rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ s.name }}</div>
+                    <div style="font-size:0.72rem;color:var(--muted);">{{ s.subject }} &middot; {{ s.section or '' }}</div>
+                    {% for issue in s.issues %}
+                    <span style="display:inline-block;font-size:0.68rem;padding:1px 8px;border-radius:4px;margin-top:3px;{% if 'Failing' in issue %}background:#FEE2E2;color:#991B1B;{% else %}background:#FEF3C7;color:#92400E;{% endif %}">{{ issue }}</span>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div style="padding:40px;text-align:center;color:var(--muted);">
+            <i class="fas fa-check-circle" style="font-size:2rem;color:#10B981;margin-bottom:8px;display:block;"></i>
+            <div style="font-size:0.85rem;">All students on track</div>
+        </div>
+        {% endif %}
+    </div>
 </div>
 
 <style>
-.pending-alert {
-    background: linear-gradient(135deg, #FEF3C7, #FDE68A);
-    border: 2px solid #F59E0B;
-    border-radius: 12px;
-    padding: 1rem 1.5rem;
-    margin-bottom: 1.5rem;
-}
-
-.pending-alert-content {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-}
-
-.pending-alert-icon {
-    width: 50px;
-    height: 50px;
-    background: #F59E0B;
-    color: white;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.5rem;
-    flex-shrink: 0;
-}
-
-.pending-alert-text {
-    flex: 1;
-}
-
-.pending-alert-text strong {
-    color: #92400E;
-    font-size: 1.1rem;
-}
-
-.pending-alert-text p {
-    margin: 0;
-    color: #B45309;
-    font-size: 0.9rem;
-}
-
-.stat-card.yellow {
-    background: linear-gradient(135deg, #FEF3C7, #FDE68A);
-    border-left: 4px solid #F59E0B;
-}
-
-.stat-card.yellow .stat-number {
-    color: #92400E;
-}
-
-.stat-card.yellow .stat-label {
-    color: #B45309;
-}
-
-.stat-card.clickable {
-    text-decoration: none;
-    cursor: pointer;
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-
-.stat-card.clickable:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 8px 25px rgba(245, 158, 11, 0.3);
-}
-
-@media (max-width: 600px) {
-    .pending-alert-content {
-        flex-direction: column;
-        text-align: center;
-    }
+@media (max-width: 900px) {
+    div[style*="grid-template-columns:1fr 360px"] { grid-template-columns: 1fr !important; }
 }
 </style>
 {% endblock %}

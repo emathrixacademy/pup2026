@@ -1,0 +1,175 @@
+{% extends 'base.html' %}
+
+{% block title %}Academics - Sangrenes LMS{% endblock %}
+
+{% block content %}
+<h1 style="font-size:1.2rem;font-weight:700;margin:0 0 16px;"><i class="fas fa-book-open" style="color:var(--primary);"></i> Academics</h1>
+
+<!-- Tabs -->
+<div class="tab-bar">
+    <button class="active" data-tab-btn="acad" onclick="switchTab('acad','tab-students')"><i class="fas fa-users"></i> Students</button>
+    <button data-tab-btn="acad" onclick="switchTab('acad','tab-subjects')"><i class="fas fa-chalkboard"></i> Subjects</button>
+    <button data-tab-btn="acad" onclick="switchTab('acad','tab-peer')"><i class="fas fa-user-friends"></i> Peer Reviews</button>
+    <button data-tab-btn="acad" onclick="switchTab('acad','tab-grades')"><i class="fas fa-chart-line"></i> Grades</button>
+</div>
+
+<!-- ========== STUDENTS TAB ========== -->
+<div id="tab-students" class="tab-panel active" data-tab-group="acad">
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;">
+        <div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+            <span style="font-size:0.85rem;font-weight:600;">{{ students|length }} Students</span>
+            <div style="display:flex;gap:8px;">
+                <select id="filterSection" onchange="filterStudents()" style="padding:6px 12px;border:1px solid var(--border);border-radius:7px;font-size:0.8rem;">
+                    <option value="">All Sections</option>
+                    {% for sec in sections %}<option value="{{ sec }}">{{ sec }}</option>{% endfor %}
+                </select>
+                <input id="searchStudent" onkeyup="filterStudents()" placeholder="Search..." style="padding:6px 12px;border:1px solid var(--border);border-radius:7px;font-size:0.8rem;width:160px;">
+            </div>
+        </div>
+        <div style="overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;" id="studentsTable">
+                <thead>
+                    <tr style="background:#F8FAFC;">
+                        <th style="padding:10px 14px;text-align:left;font-size:0.78rem;color:var(--muted);">Student</th>
+                        <th style="padding:10px 14px;text-align:center;font-size:0.78rem;color:var(--muted);">ID</th>
+                        <th style="padding:10px 14px;text-align:center;font-size:0.78rem;color:var(--muted);">Section</th>
+                        <th style="padding:10px 14px;text-align:center;font-size:0.78rem;color:var(--muted);">Enrolled In</th>
+                        <th style="padding:10px 14px;text-align:center;font-size:0.78rem;color:var(--muted);">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for s in students %}
+                    <tr class="student-row" data-name="{{ s.full_name|lower }}" data-section="{{ s.section or '' }}" style="border-bottom:1px solid #F1F5F9;">
+                        <td style="padding:10px 14px;">
+                            <div style="display:flex;align-items:center;gap:10px;">
+                                <img src="{{ url_for('static', filename='uploads/photos/' + (s.photo or 'default.png')) }}" onerror="this.src='https://ui-avatars.com/api/?name={{ s.full_name }}&background=6366F1&color=fff&size=32'" style="width:32px;height:32px;border-radius:50%;object-fit:cover;">
+                                <div>
+                                    <div style="font-size:0.85rem;font-weight:600;">{{ s.full_name }}</div>
+                                    <div style="font-size:0.72rem;color:var(--muted);">{{ s.email or '' }}</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td style="padding:10px 14px;text-align:center;font-size:0.82rem;color:var(--muted);">{{ s.student_id or '-' }}</td>
+                        <td style="padding:10px 14px;text-align:center;"><span style="background:var(--primary-light);color:var(--primary);padding:2px 10px;border-radius:12px;font-size:0.72rem;font-weight:500;">{{ s.section or '-' }}</span></td>
+                        <td style="padding:10px 14px;text-align:center;font-size:0.78rem;color:var(--muted);">
+                            {% if s.id in enrollment_map %}{{ enrollment_map[s.id].subject_count }} subject(s){% else %}<span style="color:#CBD5E1;">None</span>{% endif %}
+                        </td>
+                        <td style="padding:10px 14px;text-align:center;">
+                            {% if s.is_approved %}<span style="background:#D1FAE5;color:#065F46;padding:2px 10px;border-radius:12px;font-size:0.72rem;">Approved</span>
+                            {% else %}<span style="background:#FEF3C7;color:#92400E;padding:2px 10px;border-radius:12px;font-size:0.72rem;">Pending</span>{% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- ========== SUBJECTS TAB ========== -->
+<div id="tab-subjects" class="tab-panel" data-tab-group="acad">
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;">
+        {% set colors = ['#6366F1','#10B981','#8B5CF6','#F59E0B','#EF4444','#3B82F6'] %}
+        {% for s in subjects %}
+        <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;">
+            <div style="background:{{ colors[loop.index0 % 6] }};padding:16px 18px;color:white;">
+                <div style="font-size:1rem;font-weight:700;">{{ s.code }}</div>
+                <div style="font-size:0.82rem;opacity:0.9;">{{ s.name }}</div>
+                <div style="font-size:0.72rem;opacity:0.8;margin-top:4px;">{{ s.section }} &middot; {{ s.day }} {{ s.time_schedule }}</div>
+            </div>
+            <div style="padding:14px 18px;">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:0.78rem;color:var(--muted);margin-bottom:10px;">
+                    {% if s.room %}<div><i class="fas fa-door-open" style="width:16px;"></i> {{ s.room }}</div>{% endif %}
+                    {% if s.credits %}<div><i class="fas fa-star" style="width:16px;"></i> {{ s.credits }} credits</div>{% endif %}
+                </div>
+                <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                    <a href="{{ url_for('subject_detail', id=s.id) }}" style="padding:5px 12px;font-size:0.72rem;background:var(--primary-light);color:var(--primary);border-radius:6px;text-decoration:none;font-weight:500;"><i class="fas fa-folder-open"></i> View</a>
+                    <a href="{{ url_for('all_activities', subject_id=s.id) }}" style="padding:5px 12px;font-size:0.72rem;background:#F1F5F9;color:var(--muted);border-radius:6px;text-decoration:none;font-weight:500;"><i class="fas fa-tasks"></i> Activities</a>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- ========== PEER REVIEWS TAB ========== -->
+<div id="tab-peer" class="tab-panel" data-tab-group="acad">
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;">
+        {% if peer_reviews %}
+        <div style="overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;">
+                <thead>
+                    <tr style="background:#F8FAFC;">
+                        <th style="padding:10px 14px;text-align:left;font-size:0.78rem;color:var(--muted);">Activity</th>
+                        <th style="padding:10px 14px;text-align:center;font-size:0.78rem;color:var(--muted);">Subject</th>
+                        <th style="padding:10px 14px;text-align:center;font-size:0.78rem;color:var(--muted);">Session</th>
+                        <th style="padding:10px 14px;text-align:center;font-size:0.78rem;color:var(--muted);">Assigned</th>
+                        <th style="padding:10px 14px;text-align:center;font-size:0.78rem;color:var(--muted);">Completed</th>
+                        <th style="padding:10px 14px;text-align:center;font-size:0.78rem;color:var(--muted);">Progress</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for pr in peer_reviews %}
+                    <tr style="border-bottom:1px solid #F1F5F9;">
+                        <td style="padding:10px 14px;font-size:0.85rem;font-weight:600;">{{ pr.title }}</td>
+                        <td style="padding:10px 14px;text-align:center;"><span style="background:var(--primary-light);color:var(--primary);padding:2px 10px;border-radius:12px;font-size:0.72rem;">{{ pr.code }} {{ pr.section }}</span></td>
+                        <td style="padding:10px 14px;text-align:center;font-size:0.82rem;color:var(--muted);">Session {{ pr.session_number }}</td>
+                        <td style="padding:10px 14px;text-align:center;font-size:0.85rem;font-weight:600;">{{ pr.assigned }}</td>
+                        <td style="padding:10px 14px;text-align:center;font-size:0.85rem;font-weight:600;color:#10B981;">{{ pr.completed }}</td>
+                        <td style="padding:10px 14px;text-align:center;">
+                            {% set pct = (pr.completed / pr.assigned * 100) if pr.assigned > 0 else 0 %}
+                            <div style="background:#F1F5F9;border-radius:4px;height:6px;width:80px;display:inline-block;vertical-align:middle;">
+                                <div style="background:{% if pct >= 80 %}#10B981{% elif pct >= 40 %}#F59E0B{% else %}#EF4444{% endif %};height:100%;border-radius:4px;width:{{ pct }}%;"></div>
+                            </div>
+                            <span style="font-size:0.72rem;color:var(--muted);margin-left:4px;">{{ pct|int }}%</span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div style="padding:50px;text-align:center;color:var(--muted);">
+            <i class="fas fa-user-friends" style="font-size:2rem;color:#CBD5E1;margin-bottom:8px;display:block;"></i>
+            <div style="font-size:0.85rem;">No peer review activities enabled yet.</div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- ========== GRADES TAB ========== -->
+<div id="tab-grades" class="tab-panel" data-tab-group="acad">
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;">
+        {% for gs in grade_subjects %}
+        <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+                <div style="width:40px;height:40px;background:var(--primary-light);color:var(--primary);border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.85rem;">{{ gs.code[:3] }}</div>
+                <div>
+                    <div style="font-size:0.9rem;font-weight:700;">{{ gs.code }}</div>
+                    <div style="font-size:0.75rem;color:var(--muted);">{{ gs.name }} &middot; {{ gs.section }}</div>
+                </div>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+                <span style="font-size:0.82rem;color:var(--muted);"><i class="fas fa-users"></i> {{ gs.enrolled }} enrolled</span>
+                <a href="{{ url_for('grades', subject_id=gs.id) }}" style="padding:5px 14px;font-size:0.75rem;background:var(--primary);color:white;border-radius:6px;text-decoration:none;font-weight:500;">Gradebook</a>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function filterStudents() {
+    const q = document.getElementById('searchStudent').value.toLowerCase();
+    const sec = document.getElementById('filterSection').value;
+    document.querySelectorAll('.student-row').forEach(r => {
+        const matchName = r.dataset.name.includes(q);
+        const matchSec = !sec || r.dataset.section === sec;
+        r.style.display = matchName && matchSec ? '' : 'none';
+    });
+}
+</script>
+{% endblock %}

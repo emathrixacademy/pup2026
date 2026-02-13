@@ -1756,7 +1756,6 @@ def dashboard():
     activity_count = cursor.fetchone()['count']
     cursor.execute('SELECT COUNT(*) as count FROM quizzes')
     quiz_count = cursor.fetchone()['count']
-    conn.close()
 
     stats = {
         'students': student_count,
@@ -1767,7 +1766,49 @@ def dashboard():
         'quizzes': quiz_count
     }
 
-    return render_template('dashboard.html', subjects=subjects, student_count=student_count, stats=stats)
+    # Monitoring: at-risk summary (lightweight)
+    at_risk_count = 0
+    missed_count = 0
+    low_grade_count = 0
+    at_risk_list = []
+    for subj in subjects[:5]:
+        cursor.execute('''
+            SELECT u.id, u.full_name, u.student_id, u.section FROM users u
+            JOIN enrollments e ON u.id = e.student_id
+            WHERE e.subject_id = ? AND u.is_approved = 1
+        ''', (subj['id'],))
+        for student in cursor.fetchall():
+            issues = []
+            cursor.execute('''
+                SELECT COUNT(*) as cnt FROM activities a
+                JOIN sessions ses ON a.session_id = ses.id
+                WHERE ses.subject_id = ? AND a.due_date IS NOT NULL
+                AND a.due_date < date('now') AND a.is_visible = 1
+                AND a.id NOT IN (SELECT activity_id FROM submissions WHERE student_id = ?)
+            ''', (subj['id'], student['id']))
+            missed = cursor.fetchone()['cnt']
+            if missed > 0:
+                issues.append(f'{missed} missed deadline(s)')
+                missed_count += missed
+
+            weighted = compute_weighted_grade(cursor, subj['id'], student['id'])
+            if weighted > 0 and weighted < 75:
+                issues.append(f'Failing: {weighted:.0f}%')
+                low_grade_count += 1
+
+            if issues:
+                at_risk_count += 1
+                if len(at_risk_list) < 8:
+                    at_risk_list.append({
+                        'name': student['full_name'], 'sid': student['student_id'],
+                        'section': student['section'], 'subject': subj['code'],
+                        'issues': issues, 'grade': weighted
+                    })
+    conn.close()
+
+    return render_template('dashboard.html', subjects=subjects, student_count=student_count, stats=stats,
+        at_risk_count=at_risk_count, missed_count=missed_count, low_grade_count=low_grade_count,
+        at_risk_list=at_risk_list)
 
 # ==================== STUDENT MANAGEMENT ====================
 
@@ -6408,6 +6449,117 @@ def instructor_payroll_view():
     conn.close()
     return render_template('instructor_payroll.html',
         payrolls=payrolls, profile=profile, attendance_summary=attendance_summary)
+
+
+# ============== COMBINED INSTRUCTOR PAGES ==============
+
+@app.route('/instructor/academics')
+@login_required
+def instructor_academics():
+    """Combined page: Students + Subjects + Peer Reviews + Grades"""
+    if current_user.role != 'instructor':
+        return redirect(url_for('student_dashboard'))
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # Students data
+    cursor.execute('SELECT * FROM users WHERE role = "student" ORDER BY full_name')
+    students_list = cursor.fetchall()
+    cursor.execute('SELECT DISTINCT section FROM users WHERE role = "student" AND section IS NOT NULL ORDER BY section')
+    sections = [r['section'] for r in cursor.fetchall()]
+    cursor.execute('''
+        SELECT e.student_id, COUNT(*) as subject_count,
+               GROUP_CONCAT(s.code || ' ' || s.section, ', ') as enrolled_subjects
+        FROM enrollments e JOIN subjects s ON e.subject_id = s.id GROUP BY e.student_id
+    ''')
+    enrollment_map = {r['student_id']: r for r in cursor.fetchall()}
+
+    # Subjects data
+    cursor.execute('SELECT * FROM subjects ORDER BY code, section')
+    subjects = cursor.fetchall()
+
+    # Peer reviews data
+    cursor.execute('''
+        SELECT a.id, a.title, a.enable_peer_review, ses.session_number, s.code, s.section,
+               (SELECT COUNT(*) FROM peer_review_assignments pra
+                JOIN submissions sub ON pra.submission_id = sub.id
+                WHERE sub.activity_id = a.id) as assigned,
+               (SELECT COUNT(*) FROM peer_review_responses prr
+                JOIN peer_review_assignments pra2 ON prr.assignment_id = pra2.id
+                JOIN submissions sub2 ON pra2.submission_id = sub2.id
+                WHERE sub2.activity_id = a.id) as completed
+        FROM activities a
+        JOIN sessions ses ON a.session_id = ses.id
+        JOIN subjects s ON ses.subject_id = s.id
+        WHERE a.enable_peer_review = 1
+        ORDER BY s.code, ses.session_number
+    ''')
+    peer_reviews = cursor.fetchall()
+
+    # Grades data
+    cursor.execute('''
+        SELECT s.id, s.code, s.name, s.section,
+               (SELECT COUNT(*) FROM enrollments WHERE subject_id = s.id) as enrolled
+        FROM subjects s ORDER BY s.code, s.section
+    ''')
+    grade_subjects = cursor.fetchall()
+
+    conn.close()
+    return render_template('instructor_academics.html',
+        students=students_list, sections=sections, enrollment_map=enrollment_map,
+        subjects=subjects, peer_reviews=peer_reviews, grade_subjects=grade_subjects)
+
+
+@app.route('/instructor/work')
+@login_required
+def instructor_work():
+    """Combined page: Attendance + Payroll"""
+    if current_user.role not in ('instructor', 'admin'):
+        return redirect(url_for('student_dashboard'))
+
+    conn = get_db()
+    cursor = conn.cursor()
+    today = datetime.now().strftime('%Y-%m-%d')
+    month_start = datetime.now().strftime('%Y-%m-01')
+
+    # Attendance data
+    cursor.execute('''
+        SELECT * FROM instructor_attendance
+        WHERE instructor_id = ? AND date BETWEEN ? AND ?
+        ORDER BY date DESC
+    ''', (current_user.id, month_start, today))
+    attendance_records = cursor.fetchall()
+
+    cursor.execute('''
+        SELECT * FROM instructor_attendance WHERE instructor_id = ? AND date = ?
+    ''', (current_user.id, today))
+    today_record = cursor.fetchone()
+
+    cursor.execute('''
+        SELECT COUNT(*) as total_days,
+               SUM(CASE WHEN status = 'present' THEN 1 ELSE 0 END) as present,
+               SUM(CASE WHEN status = 'absent' THEN 1 ELSE 0 END) as absent,
+               SUM(CASE WHEN status = 'late' THEN 1 ELSE 0 END) as late,
+               SUM(hours_worked) as total_hours
+        FROM instructor_attendance
+        WHERE instructor_id = ? AND date BETWEEN ? AND ?
+    ''', (current_user.id, month_start, today))
+    summary = cursor.fetchone()
+
+    # Payroll data
+    cursor.execute('''
+        SELECT * FROM instructor_payroll WHERE instructor_id = ? ORDER BY period_end DESC
+    ''', (current_user.id,))
+    payrolls = cursor.fetchall()
+
+    cursor.execute('SELECT * FROM instructor_profiles WHERE user_id = ?', (current_user.id,))
+    profile = cursor.fetchone()
+
+    conn.close()
+    return render_template('instructor_work.html',
+        attendance=attendance_records, today_record=today_record,
+        summary=summary, today=today, payrolls=payrolls, profile=profile)
 
 
 # ============== AI ADMIN AGENT ==============

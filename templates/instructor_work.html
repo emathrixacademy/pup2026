@@ -1,0 +1,192 @@
+{% extends 'base.html' %}
+
+{% block title %}My Work - Sangrenes LMS{% endblock %}
+
+{% block content %}
+<h1 style="font-size:1.2rem;font-weight:700;margin:0 0 16px;"><i class="fas fa-briefcase" style="color:var(--primary);"></i> My Work</h1>
+
+<!-- Tabs -->
+<div class="tab-bar">
+    <button class="active" data-tab-btn="work" onclick="switchTab('work','tab-attendance')"><i class="fas fa-calendar-check"></i> Attendance</button>
+    <button data-tab-btn="work" onclick="switchTab('work','tab-payroll')"><i class="fas fa-money-check-alt"></i> Payroll</button>
+</div>
+
+<!-- ========== ATTENDANCE TAB ========== -->
+<div id="tab-attendance" class="tab-panel active" data-tab-group="work">
+    <!-- Today's Status -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px;">
+        <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;">
+            <div style="font-size:0.78rem;color:var(--muted);margin-bottom:8px;">Today &middot; {{ today }}</div>
+            {% if today_record %}
+                <div style="display:flex;align-items:center;gap:10px;">
+                    <div style="width:42px;height:42px;background:#D1FAE5;color:#065F46;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.1rem;"><i class="fas fa-check"></i></div>
+                    <div>
+                        <div style="font-size:0.9rem;font-weight:600;">Clocked In</div>
+                        <div style="font-size:0.78rem;color:var(--muted);">{{ today_record.time_in or 'N/A' }}{% if today_record.time_out %} - {{ today_record.time_out }}{% endif %}</div>
+                    </div>
+                </div>
+            {% else %}
+                <div style="display:flex;align-items:center;gap:10px;">
+                    <div style="width:42px;height:42px;background:#FEE2E2;color:#991B1B;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.1rem;"><i class="fas fa-times"></i></div>
+                    <div>
+                        <div style="font-size:0.9rem;font-weight:600;">Not Clocked In</div>
+                        <div style="font-size:0.78rem;color:var(--muted);">You haven't clocked in today</div>
+                    </div>
+                </div>
+            {% endif %}
+            <div style="margin-top:12px;display:flex;gap:8px;">
+                {% if not today_record %}
+                <button onclick="clockAction('in')" style="padding:7px 16px;border:none;border-radius:8px;background:#10B981;color:white;font-size:0.8rem;font-weight:600;cursor:pointer;"><i class="fas fa-sign-in-alt"></i> Clock In</button>
+                {% elif not today_record.time_out %}
+                <button onclick="clockAction('out')" style="padding:7px 16px;border:none;border-radius:8px;background:#EF4444;color:white;font-size:0.8rem;font-weight:600;cursor:pointer;"><i class="fas fa-sign-out-alt"></i> Clock Out</button>
+                {% else %}
+                <span style="font-size:0.78rem;color:#10B981;font-weight:500;"><i class="fas fa-check-circle"></i> Day complete</span>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Monthly Summary -->
+        <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;">
+            <div style="font-size:0.78rem;color:var(--muted);margin-bottom:8px;">This Month</div>
+            <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;">
+                <div style="text-align:center;">
+                    <div style="font-size:1.5rem;font-weight:700;color:#10B981;">{{ summary.present or 0 }}</div>
+                    <div style="font-size:0.72rem;color:var(--muted);">Present</div>
+                </div>
+                <div style="text-align:center;">
+                    <div style="font-size:1.5rem;font-weight:700;color:#EF4444;">{{ summary.absent or 0 }}</div>
+                    <div style="font-size:0.72rem;color:var(--muted);">Absent</div>
+                </div>
+                <div style="text-align:center;">
+                    <div style="font-size:1.5rem;font-weight:700;color:#F59E0B;">{{ summary.late or 0 }}</div>
+                    <div style="font-size:0.72rem;color:var(--muted);">Late</div>
+                </div>
+                <div style="text-align:center;">
+                    <div style="font-size:1.5rem;font-weight:700;color:var(--primary);">{{ "%.1f"|format(summary.total_hours or 0) }}</div>
+                    <div style="font-size:0.72rem;color:var(--muted);">Hours</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Attendance Records -->
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;">
+        <div style="padding:14px 18px;border-bottom:1px solid var(--border);">
+            <span style="font-size:0.85rem;font-weight:600;">Attendance History</span>
+        </div>
+        {% if attendance %}
+        <div style="overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;">
+                <thead>
+                    <tr style="background:#F8FAFC;">
+                        <th style="padding:10px 14px;text-align:left;font-size:0.78rem;color:var(--muted);">Date</th>
+                        <th style="padding:10px 14px;text-align:center;font-size:0.78rem;color:var(--muted);">Time In</th>
+                        <th style="padding:10px 14px;text-align:center;font-size:0.78rem;color:var(--muted);">Time Out</th>
+                        <th style="padding:10px 14px;text-align:center;font-size:0.78rem;color:var(--muted);">Hours</th>
+                        <th style="padding:10px 14px;text-align:center;font-size:0.78rem;color:var(--muted);">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for a in attendance %}
+                    <tr style="border-bottom:1px solid #F1F5F9;">
+                        <td style="padding:10px 14px;font-size:0.85rem;font-weight:500;">{{ a.date }}</td>
+                        <td style="padding:10px 14px;text-align:center;font-size:0.82rem;color:var(--muted);">{{ a.time_in or '-' }}</td>
+                        <td style="padding:10px 14px;text-align:center;font-size:0.82rem;color:var(--muted);">{{ a.time_out or '-' }}</td>
+                        <td style="padding:10px 14px;text-align:center;font-size:0.85rem;font-weight:600;color:var(--primary);">{{ "%.1f"|format(a.hours_worked or 0) }}h</td>
+                        <td style="padding:10px 14px;text-align:center;">
+                            <span style="padding:2px 10px;border-radius:12px;font-size:0.72rem;font-weight:500;
+                                {% if a.status == 'present' %}background:#D1FAE5;color:#065F46;
+                                {% elif a.status == 'late' %}background:#FEF3C7;color:#92400E;
+                                {% elif a.status == 'absent' %}background:#FEE2E2;color:#991B1B;
+                                {% else %}background:#F1F5F9;color:var(--muted);{% endif %}">{{ (a.status or 'unknown')|capitalize }}</span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div style="padding:40px;text-align:center;color:var(--muted);">
+            <i class="fas fa-calendar" style="font-size:2rem;color:#CBD5E1;margin-bottom:8px;display:block;"></i>
+            <div style="font-size:0.85rem;">No attendance records this month.</div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- ========== PAYROLL TAB ========== -->
+<div id="tab-payroll" class="tab-panel" data-tab-group="work">
+    <!-- Salary Info -->
+    {% if profile %}
+    <div style="background:linear-gradient(135deg,var(--primary),#4F46E5);border-radius:12px;padding:24px;color:white;margin-bottom:20px;">
+        <div style="font-size:0.82rem;opacity:0.85;">Base Salary</div>
+        <div style="font-size:2.2rem;font-weight:800;">P{{ "{:,.2f}".format(profile.salary_rate or 0) }}</div>
+        <div style="font-size:0.78rem;opacity:0.7;margin-top:4px;">{{ profile.contract_type or 'Full-Time' }} &middot; {{ profile.department or 'General' }}</div>
+    </div>
+    {% endif %}
+
+    <!-- Payroll Records -->
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;">
+        <div style="padding:14px 18px;border-bottom:1px solid var(--border);">
+            <span style="font-size:0.85rem;font-weight:600;">Pay History</span>
+        </div>
+        {% if payrolls %}
+        <div style="overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;">
+                <thead>
+                    <tr style="background:#F8FAFC;">
+                        <th style="padding:10px 14px;text-align:left;font-size:0.78rem;color:var(--muted);">Period</th>
+                        <th style="padding:10px 14px;text-align:center;font-size:0.78rem;color:var(--muted);">Base Pay</th>
+                        <th style="padding:10px 14px;text-align:center;font-size:0.78rem;color:var(--muted);">Hours</th>
+                        <th style="padding:10px 14px;text-align:center;font-size:0.78rem;color:var(--muted);">Deductions</th>
+                        <th style="padding:10px 14px;text-align:center;font-size:0.78rem;color:var(--muted);">Bonus</th>
+                        <th style="padding:10px 14px;text-align:center;font-size:0.78rem;color:var(--muted);">Net Pay</th>
+                        <th style="padding:10px 14px;text-align:center;font-size:0.78rem;color:var(--muted);">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for p in payrolls %}
+                    <tr style="border-bottom:1px solid #F1F5F9;">
+                        <td style="padding:10px 14px;">
+                            <div style="font-size:0.85rem;font-weight:600;">{{ p.period_start }} to {{ p.period_end }}</div>
+                        </td>
+                        <td style="padding:10px 14px;text-align:center;font-size:0.82rem;">P{{ "{:,.2f}".format(p.base_salary or 0) }}</td>
+                        <td style="padding:10px 14px;text-align:center;font-size:0.82rem;color:var(--muted);">{{ "%.1f"|format(p.hours_worked or 0) }}h</td>
+                        <td style="padding:10px 14px;text-align:center;font-size:0.82rem;color:#EF4444;">-P{{ "{:,.2f}".format(p.deductions or 0) }}</td>
+                        <td style="padding:10px 14px;text-align:center;font-size:0.82rem;color:#10B981;">+P{{ "{:,.2f}".format(p.bonuses or 0) }}</td>
+                        <td style="padding:10px 14px;text-align:center;font-size:0.92rem;font-weight:700;color:var(--primary);">P{{ "{:,.2f}".format(p.net_pay or 0) }}</td>
+                        <td style="padding:10px 14px;text-align:center;">
+                            <span style="padding:2px 10px;border-radius:12px;font-size:0.72rem;font-weight:500;
+                                {% if p.status == 'paid' %}background:#D1FAE5;color:#065F46;
+                                {% elif p.status == 'pending' %}background:#FEF3C7;color:#92400E;
+                                {% else %}background:#F1F5F9;color:var(--muted);{% endif %}">{{ (p.status or 'pending')|capitalize }}</span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div style="padding:40px;text-align:center;color:var(--muted);">
+            <i class="fas fa-money-check-alt" style="font-size:2rem;color:#CBD5E1;margin-bottom:8px;display:block;"></i>
+            <div style="font-size:0.85rem;">No payroll records yet.</div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function clockAction(type) {
+    fetch('/api/instructor/attendance/clock', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({action: type})
+    }).then(r => r.json()).then(d => {
+        if (d.success) location.reload();
+        else alert(d.error || 'Failed');
+    });
+}
+</script>
+{% endblock %}
