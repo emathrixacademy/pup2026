@@ -7048,6 +7048,712 @@ def delete_backup(filename):
     return redirect(url_for('backup_page'))
 
 
+# ============== ADMIN STUDENTS MANAGEMENT ==============
+
+@app.route('/admin/students')
+@login_required
+@admin_required
+def admin_students():
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT u.*, i.short_name as institution_name,
+               (SELECT COUNT(*) FROM enrollments WHERE student_id = u.id) as enrolled_subjects,
+               (SELECT COUNT(*) FROM submissions WHERE student_id = u.id) as total_submissions,
+               (SELECT COUNT(*) FROM quiz_attempts WHERE student_id = u.id) as quiz_attempts
+        FROM users u
+        LEFT JOIN institutions i ON u.institution_id = i.id
+        WHERE u.role = 'student'
+        ORDER BY u.full_name
+    ''')
+    students = cursor.fetchall()
+    cursor.execute('SELECT id, name, short_name FROM institutions WHERE is_active = 1 ORDER BY name')
+    institutions = cursor.fetchall()
+    cursor.execute('SELECT DISTINCT section FROM users WHERE section IS NOT NULL AND section != "" ORDER BY section')
+    sections = [r['section'] for r in cursor.fetchall()]
+    conn.close()
+    return render_template('admin_students.html', students=students, institutions=institutions, sections=sections)
+
+
+@app.route('/api/admin/students', methods=['POST'])
+@login_required
+@admin_required
+def admin_create_student():
+    data = request.get_json()
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute('''
+            INSERT INTO users (username, password_hash, full_name, role, student_id, section,
+                             institution_id, email, contact_number, is_approved, profile_completed)
+            VALUES (?, ?, ?, 'student', ?, ?, ?, ?, ?, 1, 1)
+        ''', (data.get('username'), generate_password_hash(data.get('password', 'student123')),
+              data.get('full_name'), data.get('student_id'), data.get('section'),
+              data.get('institution_id'), data.get('email'), data.get('contact_number')))
+        conn.commit()
+        conn.close()
+        return jsonify({'success': True})
+    except Exception as e:
+        conn.close()
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/admin/students/<int:user_id>', methods=['PUT'])
+@login_required
+@admin_required
+def admin_update_student(user_id):
+    data = request.get_json()
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('''
+        UPDATE users SET full_name=?, email=?, student_id=?, section=?, contact_number=?,
+               institution_id=?, is_approved=?, status=?
+        WHERE id=? AND role='student'
+    ''', (data.get('full_name'), data.get('email'), data.get('student_id'), data.get('section'),
+          data.get('contact_number'), data.get('institution_id'),
+          data.get('is_approved', 1), data.get('status', 'active'), user_id))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+
+
+@app.route('/api/admin/students/<int:user_id>', methods=['DELETE'])
+@login_required
+@admin_required
+def admin_delete_student(user_id):
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('UPDATE users SET status = "inactive" WHERE id = ? AND role = "student"', (user_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+
+
+# ============== ADMIN SUBJECTS MANAGEMENT ==============
+
+@app.route('/admin/subjects')
+@login_required
+@admin_required
+def admin_subjects():
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT s.*, i.short_name as institution_name, u.full_name as instructor_name,
+               (SELECT COUNT(*) FROM enrollments WHERE subject_id = s.id) as student_count,
+               (SELECT COUNT(*) FROM sessions WHERE subject_id = s.id) as session_count,
+               (SELECT COUNT(*) FROM activities a JOIN sessions se ON a.session_id = se.id WHERE se.subject_id = s.id) as activity_count
+        FROM subjects s
+        LEFT JOIN institutions i ON s.institution_id = i.id
+        LEFT JOIN users u ON s.instructor_id = u.id
+        ORDER BY s.code, s.section
+    ''')
+    subjects = cursor.fetchall()
+    cursor.execute('SELECT id, name, short_name FROM institutions WHERE is_active = 1 ORDER BY name')
+    institutions = cursor.fetchall()
+    cursor.execute('SELECT id, full_name FROM users WHERE role = "instructor" ORDER BY full_name')
+    instructors = cursor.fetchall()
+    conn.close()
+    return render_template('admin_subjects.html', subjects=subjects, institutions=institutions, instructors=instructors)
+
+
+@app.route('/api/admin/subjects', methods=['POST'])
+@login_required
+@admin_required
+def admin_create_subject():
+    data = request.get_json()
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute('''
+            INSERT INTO subjects (code, name, description, section, day, time_schedule,
+                                institution_id, instructor_id, room, credits, max_students, color_theme)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (data.get('code'), data.get('name'), data.get('description'), data.get('section'),
+              data.get('day'), data.get('time_schedule'), data.get('institution_id'),
+              data.get('instructor_id'), data.get('room'), data.get('credits', 3),
+              data.get('max_students', 50), data.get('color_theme', 'blue')))
+        subject_id = cursor.lastrowid
+        # Create 16 sessions
+        for i in range(1, 17):
+            title = f"Session {i}: {'Lesson' if i <= 12 else 'Project'}"
+            cursor.execute('INSERT INTO sessions (subject_id, session_number, title) VALUES (?, ?, ?)',
+                         (subject_id, i, title))
+        conn.commit()
+        conn.close()
+        return jsonify({'success': True})
+    except Exception as e:
+        conn.close()
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/admin/subjects/<int:subject_id>', methods=['PUT'])
+@login_required
+@admin_required
+def admin_update_subject(subject_id):
+    data = request.get_json()
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('''
+        UPDATE subjects SET code=?, name=?, description=?, section=?, day=?, time_schedule=?,
+               institution_id=?, instructor_id=?, room=?, credits=?, max_students=?, color_theme=?
+        WHERE id=?
+    ''', (data.get('code'), data.get('name'), data.get('description'), data.get('section'),
+          data.get('day'), data.get('time_schedule'), data.get('institution_id'),
+          data.get('instructor_id'), data.get('room'), data.get('credits', 3),
+          data.get('max_students', 50), data.get('color_theme', 'blue'), subject_id))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+
+
+# ============== ADMIN MATERIALS & VIDEOS ==============
+
+@app.route('/admin/materials')
+@login_required
+@admin_required
+def admin_materials():
+    conn = get_db()
+    cursor = conn.cursor()
+    # Get all sessions with their materials info
+    cursor.execute('''
+        SELECT se.*, s.code as subject_code, s.name as subject_name, s.section,
+               (SELECT COUNT(*) FROM activities WHERE session_id = se.id) as activity_count,
+               (SELECT COUNT(*) FROM quizzes WHERE session_id = se.id) as quiz_count
+        FROM sessions se
+        JOIN subjects s ON se.subject_id = s.id
+        ORDER BY s.code, s.section, se.session_number
+    ''')
+    sessions = cursor.fetchall()
+    # Get file storage entries
+    cursor.execute('''
+        SELECT f.*, u.full_name as uploader_name, s.code as subject_code, s.name as subject_name
+        FROM file_storage f
+        LEFT JOIN users u ON f.uploaded_by = u.id
+        LEFT JOIN subjects s ON f.subject_id = s.id
+        ORDER BY f.created_at DESC
+        LIMIT 100
+    ''')
+    files = cursor.fetchall()
+    cursor.execute('SELECT id, code, name, section FROM subjects ORDER BY code, section')
+    subjects = cursor.fetchall()
+    conn.close()
+    return render_template('admin_materials.html', sessions=sessions, files=files, subjects=subjects)
+
+
+@app.route('/api/admin/materials/upload', methods=['POST'])
+@login_required
+@admin_required
+def admin_upload_material():
+    if 'file' not in request.files:
+        return jsonify({'success': False, 'error': 'No file provided'})
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'success': False, 'error': 'No file selected'})
+
+    safe_name = secure_filename(file.filename)
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    file_name = f"{timestamp}_{safe_name}"
+    file_path = os.path.join(app.config['DOCUMENT_FOLDER'], file_name)
+    file.save(file_path)
+    file_size = os.path.getsize(file_path)
+
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT INTO file_storage (uploaded_by, file_name, original_name, file_path, file_size,
+                                 file_type, category, subject_id, description, is_public)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (current_user.id, file_name, safe_name, file_path, file_size,
+          safe_name.rsplit('.', 1)[-1] if '.' in safe_name else 'unknown',
+          request.form.get('category', 'general'),
+          request.form.get('subject_id') or None,
+          request.form.get('description', ''),
+          1 if request.form.get('is_public') else 0))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+
+
+@app.route('/api/admin/materials/<int:file_id>', methods=['DELETE'])
+@login_required
+@admin_required
+def admin_delete_material(file_id):
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('SELECT file_path FROM file_storage WHERE id = ?', (file_id,))
+    f = cursor.fetchone()
+    if f and os.path.exists(f['file_path']):
+        os.remove(f['file_path'])
+    cursor.execute('DELETE FROM file_storage WHERE id = ?', (file_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+
+
+# ============== ADMIN QUIZZES MANAGEMENT ==============
+
+@app.route('/admin/quizzes')
+@login_required
+@admin_required
+def admin_quizzes():
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT q.*, se.session_number, s.code as subject_code, s.name as subject_name, s.section,
+               (SELECT COUNT(*) FROM quiz_questions WHERE quiz_id = q.id) as question_count,
+               (SELECT COUNT(*) FROM quiz_attempts WHERE quiz_id = q.id) as attempt_count,
+               (SELECT AVG(score) FROM quiz_attempts WHERE quiz_id = q.id) as avg_score
+        FROM quizzes q
+        JOIN sessions se ON q.session_id = se.id
+        JOIN subjects s ON se.subject_id = s.id
+        ORDER BY s.code, se.session_number
+    ''')
+    quizzes = cursor.fetchall()
+    # Exams too
+    cursor.execute('''
+        SELECT e.*, s.code as subject_code, s.name as subject_name, s.section,
+               (SELECT COUNT(*) FROM exam_questions WHERE exam_id = e.id) as question_count,
+               (SELECT COUNT(*) FROM exam_attempts WHERE exam_id = e.id) as attempt_count,
+               (SELECT AVG(score) FROM exam_attempts WHERE exam_id = e.id) as avg_score
+        FROM exams e
+        JOIN subjects s ON e.subject_id = s.id
+        ORDER BY s.code, e.exam_type
+    ''')
+    exams = cursor.fetchall()
+    conn.close()
+    return render_template('admin_quizzes.html', quizzes=quizzes, exams=exams)
+
+
+# ============== ADMIN GRADES OVERVIEW ==============
+
+@app.route('/admin/grades')
+@login_required
+@admin_required
+def admin_grades():
+    conn = get_db()
+    cursor = conn.cursor()
+    # Per-subject grade summary
+    cursor.execute('''
+        SELECT s.id, s.code, s.name, s.section,
+               (SELECT COUNT(*) FROM enrollments WHERE subject_id = s.id) as enrolled,
+               (SELECT AVG(sub.score) FROM submissions sub
+                JOIN activities a ON sub.activity_id = a.id
+                JOIN sessions se ON a.session_id = se.id
+                WHERE se.subject_id = s.id AND sub.score IS NOT NULL) as avg_activity_score,
+               (SELECT AVG(qa.score) FROM quiz_attempts qa
+                JOIN quizzes q ON qa.quiz_id = q.id
+                JOIN sessions se ON q.session_id = se.id
+                WHERE se.subject_id = s.id AND qa.score IS NOT NULL) as avg_quiz_score,
+               (SELECT AVG(ea.score) FROM exam_attempts ea
+                JOIN exams e ON ea.exam_id = e.id
+                WHERE e.subject_id = s.id AND ea.score IS NOT NULL) as avg_exam_score
+        FROM subjects s
+        ORDER BY s.code, s.section
+    ''')
+    grade_summary = cursor.fetchall()
+    # Top and bottom performers
+    cursor.execute('''
+        SELECT u.id, u.full_name, u.section, u.student_id,
+               COUNT(DISTINCT sub.activity_id) as activities_done,
+               AVG(sub.score) as avg_score
+        FROM users u
+        JOIN submissions sub ON u.id = sub.student_id
+        WHERE u.role = 'student' AND sub.score IS NOT NULL
+        GROUP BY u.id
+        ORDER BY avg_score DESC
+        LIMIT 20
+    ''')
+    top_students = cursor.fetchall()
+    cursor.execute('''
+        SELECT u.id, u.full_name, u.section, u.student_id,
+               (SELECT COUNT(*) FROM submissions WHERE student_id = u.id AND score IS NOT NULL) as graded,
+               (SELECT AVG(score) FROM submissions WHERE student_id = u.id AND score IS NOT NULL) as avg_score
+        FROM users u WHERE u.role = 'student'
+        AND (SELECT AVG(score) FROM submissions WHERE student_id = u.id AND score IS NOT NULL) IS NOT NULL
+        ORDER BY avg_score ASC
+        LIMIT 20
+    ''')
+    at_risk_students = cursor.fetchall()
+    conn.close()
+    return render_template('admin_grades.html', grade_summary=grade_summary,
+                          top_students=top_students, at_risk_students=at_risk_students)
+
+
+# ============== ADMIN ATTENDANCE OVERVIEW ==============
+
+@app.route('/admin/attendance')
+@login_required
+@admin_required
+def admin_attendance():
+    conn = get_db()
+    cursor = conn.cursor()
+    today = datetime.now().strftime('%Y-%m-%d')
+    month_start = datetime.now().strftime('%Y-%m-01')
+
+    # Instructor attendance summary
+    cursor.execute('''
+        SELECT u.id, u.full_name, ip.employee_id,
+               (SELECT COUNT(*) FROM instructor_attendance WHERE instructor_id = u.id AND date BETWEEN ? AND ? AND status='present') as present,
+               (SELECT COUNT(*) FROM instructor_attendance WHERE instructor_id = u.id AND date BETWEEN ? AND ? AND status='late') as late,
+               (SELECT COUNT(*) FROM instructor_attendance WHERE instructor_id = u.id AND date BETWEEN ? AND ? AND status='absent') as absent,
+               (SELECT SUM(hours_worked) FROM instructor_attendance WHERE instructor_id = u.id AND date BETWEEN ? AND ?) as total_hours,
+               (SELECT time_in FROM instructor_attendance WHERE instructor_id = u.id AND date = ?) as today_in,
+               (SELECT time_out FROM instructor_attendance WHERE instructor_id = u.id AND date = ?) as today_out
+        FROM users u
+        LEFT JOIN instructor_profiles ip ON u.id = ip.user_id
+        WHERE u.role = 'instructor'
+        ORDER BY u.full_name
+    ''', (month_start, today, month_start, today, month_start, today, month_start, today, today, today))
+    instructor_attendance = cursor.fetchall()
+
+    # Student attendance
+    cursor.execute('''
+        SELECT sa.date, s.code as subject_code, s.section,
+               SUM(CASE WHEN sa.status = 'present' THEN 1 ELSE 0 END) as present,
+               SUM(CASE WHEN sa.status = 'absent' THEN 1 ELSE 0 END) as absent,
+               SUM(CASE WHEN sa.status = 'late' THEN 1 ELSE 0 END) as late,
+               COUNT(*) as total
+        FROM student_attendance sa
+        JOIN subjects s ON sa.subject_id = s.id
+        WHERE sa.date BETWEEN ? AND ?
+        GROUP BY sa.date, sa.subject_id
+        ORDER BY sa.date DESC
+        LIMIT 50
+    ''', (month_start, today))
+    student_attendance = cursor.fetchall()
+
+    conn.close()
+    return render_template('admin_attendance.html',
+        instructor_attendance=instructor_attendance,
+        student_attendance=student_attendance,
+        today=today, month_start=month_start)
+
+
+@app.route('/api/admin/student-attendance', methods=['POST'])
+@login_required
+@admin_required
+def admin_record_student_attendance():
+    data = request.get_json()
+    conn = get_db()
+    cursor = conn.cursor()
+    subject_id = data.get('subject_id')
+    date = data.get('date', datetime.now().strftime('%Y-%m-%d'))
+    records = data.get('records', [])
+
+    for rec in records:
+        try:
+            cursor.execute('''
+                INSERT INTO student_attendance (student_id, subject_id, date, status, recorded_by)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (rec['student_id'], subject_id, date, rec.get('status', 'present'), current_user.id))
+        except Exception:
+            cursor.execute('''
+                UPDATE student_attendance SET status = ?, recorded_by = ?
+                WHERE student_id = ? AND subject_id = ? AND date = ?
+            ''', (rec.get('status', 'present'), current_user.id, rec['student_id'], subject_id, date))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+
+
+# ============== ADMIN PAYMENTS & TUITION ==============
+
+@app.route('/admin/payments')
+@login_required
+@admin_required
+def admin_payments():
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT sp.*, u.full_name, u.student_id as sid, u.section, i.short_name as institution_name
+        FROM student_payments sp
+        JOIN users u ON sp.student_id = u.id
+        LEFT JOIN institutions i ON sp.institution_id = i.id
+        ORDER BY sp.created_at DESC
+        LIMIT 200
+    ''')
+    payments = cursor.fetchall()
+    # Summary stats
+    cursor.execute('SELECT SUM(amount) FROM student_payments')
+    total_billed = cursor.fetchone()[0] or 0
+    cursor.execute('SELECT SUM(amount_paid) FROM student_payments WHERE status IN ("paid","partial")')
+    total_collected = cursor.fetchone()[0] or 0
+    cursor.execute('SELECT SUM(balance) FROM student_payments WHERE status IN ("pending","partial","overdue")')
+    total_outstanding = cursor.fetchone()[0] or 0
+    cursor.execute('SELECT COUNT(*) FROM student_payments WHERE status = "overdue"')
+    overdue_count = cursor.fetchone()[0]
+    # Tuition plans
+    cursor.execute('''
+        SELECT tp.*, i.short_name as institution_name
+        FROM tuition_plans tp
+        LEFT JOIN institutions i ON tp.institution_id = i.id
+        WHERE tp.is_active = 1
+        ORDER BY tp.name
+    ''')
+    tuition_plans = cursor.fetchall()
+    cursor.execute('SELECT id, name, short_name FROM institutions WHERE is_active = 1 ORDER BY name')
+    institutions = cursor.fetchall()
+    cursor.execute('''SELECT id, full_name, student_id, section FROM users WHERE role = 'student' AND status != 'inactive' ORDER BY full_name''')
+    students = cursor.fetchall()
+    conn.close()
+    return render_template('admin_payments.html', payments=payments,
+        total_billed=total_billed, total_collected=total_collected,
+        total_outstanding=total_outstanding, overdue_count=overdue_count,
+        tuition_plans=tuition_plans, institutions=institutions, students=students)
+
+
+@app.route('/api/admin/payments', methods=['POST'])
+@login_required
+@admin_required
+def admin_create_payment():
+    data = request.get_json()
+    conn = get_db()
+    cursor = conn.cursor()
+    amount = float(data.get('amount', 0))
+    cursor.execute('''
+        INSERT INTO student_payments (student_id, institution_id, payment_type, description,
+                                     amount, balance, due_date, status, created_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+    ''', (data.get('student_id'), data.get('institution_id'), data.get('payment_type', 'tuition'),
+          data.get('description'), amount, amount, data.get('due_date'), current_user.id))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+
+
+@app.route('/api/admin/payments/<int:payment_id>/pay', methods=['POST'])
+@login_required
+@admin_required
+def admin_record_payment(payment_id):
+    data = request.get_json()
+    conn = get_db()
+    cursor = conn.cursor()
+    amount_paid = float(data.get('amount_paid', 0))
+    cursor.execute('SELECT * FROM student_payments WHERE id = ?', (payment_id,))
+    payment = cursor.fetchone()
+    if not payment:
+        conn.close()
+        return jsonify({'success': False, 'error': 'Payment not found'})
+    new_paid = (payment['amount_paid'] or 0) + amount_paid
+    new_balance = payment['amount'] - new_paid
+    status = 'paid' if new_balance <= 0 else 'partial'
+    cursor.execute('''
+        UPDATE student_payments SET amount_paid = ?, balance = ?, status = ?,
+               payment_method = ?, reference_number = ?, paid_at = ?
+        WHERE id = ?
+    ''', (new_paid, max(0, new_balance), status,
+          data.get('payment_method'), data.get('reference_number'),
+          datetime.now().strftime('%Y-%m-%d %H:%M:%S'), payment_id))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+
+
+@app.route('/api/admin/tuition-plans', methods=['POST'])
+@login_required
+@admin_required
+def admin_create_tuition_plan():
+    data = request.get_json()
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT INTO tuition_plans (institution_id, name, amount, frequency, description)
+        VALUES (?, ?, ?, ?, ?)
+    ''', (data.get('institution_id'), data.get('name'), data.get('amount', 0),
+          data.get('frequency', 'semester'), data.get('description')))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+
+
+# ============== ADMIN FILES MANAGEMENT ==============
+
+@app.route('/admin/files')
+@login_required
+@admin_required
+def admin_files():
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT f.*, u.full_name as uploader_name, s.code as subject_code, s.name as subject_name
+        FROM file_storage f
+        LEFT JOIN users u ON f.uploaded_by = u.id
+        LEFT JOIN subjects s ON f.subject_id = s.id
+        ORDER BY f.created_at DESC
+    ''')
+    files = cursor.fetchall()
+    # Storage summary
+    cursor.execute('SELECT SUM(file_size) FROM file_storage')
+    total_size = cursor.fetchone()[0] or 0
+    cursor.execute('SELECT COUNT(*) FROM file_storage')
+    total_files = cursor.fetchone()[0]
+    cursor.execute('SELECT COUNT(DISTINCT category) FROM file_storage')
+    total_categories = cursor.fetchone()[0]
+    cursor.execute('SELECT id, code, name, section FROM subjects ORDER BY code, section')
+    subjects = cursor.fetchall()
+    conn.close()
+    return render_template('admin_files.html', files=files, total_size=total_size,
+                          total_files=total_files, total_categories=total_categories, subjects=subjects)
+
+
+@app.route('/admin/files/download/<int:file_id>')
+@login_required
+def admin_download_file(file_id):
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM file_storage WHERE id = ?', (file_id,))
+    f = cursor.fetchone()
+    if not f:
+        flash('File not found.', 'error')
+        return redirect(url_for('admin_files'))
+    cursor.execute('UPDATE file_storage SET download_count = download_count + 1 WHERE id = ?', (file_id,))
+    conn.commit()
+    conn.close()
+    return send_file(f['file_path'], as_attachment=True, download_name=f['original_name'])
+
+
+# ============== ADMIN SUBSCRIPTIONS ==============
+
+@app.route('/admin/subscriptions')
+@login_required
+@admin_required
+def admin_subscriptions():
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM subscription_plans ORDER BY price_monthly')
+    plans = cursor.fetchall()
+    cursor.execute('''
+        SELECT i.*, sp.name as plan_name, sp.price_monthly,
+               (SELECT COUNT(*) FROM users WHERE institution_id = i.id AND role = 'student') as student_count,
+               (SELECT COUNT(*) FROM users WHERE institution_id = i.id AND role = 'instructor') as instructor_count
+        FROM institutions i
+        LEFT JOIN subscription_plans sp ON i.plan = sp.name
+        WHERE i.is_active = 1
+        ORDER BY i.name
+    ''')
+    institutions = cursor.fetchall()
+    # Revenue
+    cursor.execute('SELECT SUM(price_monthly) FROM subscription_plans sp JOIN institutions i ON i.plan = sp.name WHERE i.is_active = 1')
+    monthly_revenue = cursor.fetchone()[0] or 0
+    conn.close()
+    return render_template('admin_subscriptions.html', plans=plans, institutions=institutions, monthly_revenue=monthly_revenue)
+
+
+@app.route('/api/admin/subscriptions', methods=['POST'])
+@login_required
+@admin_required
+def admin_create_plan():
+    data = request.get_json()
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute('''
+            INSERT INTO subscription_plans (name, price_monthly, price_yearly, max_students, max_instructors, max_subjects, features)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (data.get('name'), data.get('price_monthly', 0), data.get('price_yearly', 0),
+              data.get('max_students', 100), data.get('max_instructors', 5),
+              data.get('max_subjects', 20), data.get('features', '')))
+        conn.commit()
+        conn.close()
+        return jsonify({'success': True})
+    except Exception as e:
+        conn.close()
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/admin/subscriptions/<int:plan_id>', methods=['PUT'])
+@login_required
+@admin_required
+def admin_update_plan(plan_id):
+    data = request.get_json()
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('''
+        UPDATE subscription_plans SET name=?, price_monthly=?, price_yearly=?, max_students=?,
+               max_instructors=?, max_subjects=?, features=?, is_active=?
+        WHERE id=?
+    ''', (data.get('name'), data.get('price_monthly', 0), data.get('price_yearly', 0),
+          data.get('max_students'), data.get('max_instructors'), data.get('max_subjects'),
+          data.get('features'), data.get('is_active', 1), plan_id))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+
+
+# ============== ADMIN TEACHER PROFILES ==============
+
+@app.route('/admin/teacher-profiles')
+@login_required
+@admin_required
+def admin_teacher_profiles():
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT u.*, ip.*, i.name as institution_name, i.short_name as inst_short,
+               d.name as department_name,
+               (SELECT COUNT(*) FROM subjects WHERE instructor_id = u.id) as subject_count,
+               (SELECT COUNT(*) FROM instructor_attendance WHERE instructor_id = u.id AND status = 'present') as total_present,
+               (SELECT SUM(hours_worked) FROM instructor_attendance WHERE instructor_id = u.id) as total_hours,
+               (SELECT SUM(net_pay) FROM instructor_payroll WHERE instructor_id = u.id AND status = 'paid') as total_earned
+        FROM users u
+        LEFT JOIN instructor_profiles ip ON u.id = ip.user_id
+        LEFT JOIN institutions i ON ip.institution_id = i.id
+        LEFT JOIN departments d ON ip.department_id = d.id
+        WHERE u.role = 'instructor'
+        ORDER BY u.full_name
+    ''')
+    teachers = cursor.fetchall()
+    cursor.execute('SELECT id, name, short_name FROM institutions WHERE is_active = 1 ORDER BY name')
+    institutions = cursor.fetchall()
+    cursor.execute('SELECT id, name, institution_id FROM departments ORDER BY name')
+    departments = cursor.fetchall()
+    conn.close()
+    return render_template('admin_teacher_profiles.html', teachers=teachers,
+                          institutions=institutions, departments=departments)
+
+
+@app.route('/api/admin/teacher-profile/<int:user_id>', methods=['POST'])
+@login_required
+@admin_required
+def admin_update_teacher_profile(user_id):
+    data = request.get_json()
+    conn = get_db()
+    cursor = conn.cursor()
+    # Update user basic info
+    cursor.execute('''
+        UPDATE users SET full_name=?, email=?, contact_number=?, institution_id=?
+        WHERE id=? AND role='instructor'
+    ''', (data.get('full_name'), data.get('email'), data.get('contact_number'),
+          data.get('institution_id'), user_id))
+    # Upsert profile
+    cursor.execute('SELECT id FROM instructor_profiles WHERE user_id = ?', (user_id,))
+    if cursor.fetchone():
+        cursor.execute('''
+            UPDATE instructor_profiles SET institution_id=?, department_id=?, employee_id=?,
+                   hire_date=?, contract_type=?, salary_rate=?, salary_frequency=?,
+                   tax_id=?, bank_account=?, emergency_contact=?, emergency_phone=?
+            WHERE user_id=?
+        ''', (data.get('institution_id'), data.get('department_id'), data.get('employee_id'),
+              data.get('hire_date'), data.get('contract_type', 'full-time'),
+              data.get('salary_rate', 0), data.get('salary_frequency', 'monthly'),
+              data.get('tax_id'), data.get('bank_account'),
+              data.get('emergency_contact'), data.get('emergency_phone'), user_id))
+    else:
+        cursor.execute('''
+            INSERT INTO instructor_profiles (user_id, institution_id, department_id, employee_id,
+                   hire_date, contract_type, salary_rate, salary_frequency, tax_id, bank_account,
+                   emergency_contact, emergency_phone)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (user_id, data.get('institution_id'), data.get('department_id'), data.get('employee_id'),
+              data.get('hire_date'), data.get('contract_type', 'full-time'),
+              data.get('salary_rate', 0), data.get('salary_frequency', 'monthly'),
+              data.get('tax_id'), data.get('bank_account'),
+              data.get('emergency_contact'), data.get('emergency_phone')))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+
+
 if __name__ == '__main__':
     init_db()
     app.run(debug=True, port=3000)

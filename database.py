@@ -579,6 +579,91 @@ def init_db():
         )
     ''')
 
+    # Student payments / tuition tracking
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS student_payments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            student_id INTEGER NOT NULL,
+            institution_id INTEGER,
+            payment_type TEXT DEFAULT 'tuition',
+            description TEXT,
+            amount REAL NOT NULL,
+            amount_paid REAL DEFAULT 0,
+            balance REAL DEFAULT 0,
+            due_date DATE,
+            paid_at TIMESTAMP,
+            payment_method TEXT,
+            reference_number TEXT,
+            academic_period_id INTEGER,
+            status TEXT DEFAULT 'pending',
+            created_by INTEGER,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (student_id) REFERENCES users (id),
+            FOREIGN KEY (institution_id) REFERENCES institutions (id),
+            FOREIGN KEY (academic_period_id) REFERENCES academic_periods (id),
+            FOREIGN KEY (created_by) REFERENCES users (id)
+        )
+    ''')
+
+    # Tuition fee plans per institution
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS tuition_plans (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            institution_id INTEGER,
+            name TEXT NOT NULL,
+            amount REAL NOT NULL,
+            frequency TEXT DEFAULT 'semester',
+            description TEXT,
+            is_active INTEGER DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (institution_id) REFERENCES institutions (id)
+        )
+    ''')
+
+    # File storage / document management
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS file_storage (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            uploaded_by INTEGER NOT NULL,
+            institution_id INTEGER,
+            file_name TEXT NOT NULL,
+            original_name TEXT NOT NULL,
+            file_path TEXT NOT NULL,
+            file_size INTEGER DEFAULT 0,
+            file_type TEXT,
+            category TEXT DEFAULT 'general',
+            subject_id INTEGER,
+            session_id INTEGER,
+            description TEXT,
+            is_public INTEGER DEFAULT 0,
+            download_count INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (uploaded_by) REFERENCES users (id),
+            FOREIGN KEY (institution_id) REFERENCES institutions (id),
+            FOREIGN KEY (subject_id) REFERENCES subjects (id),
+            FOREIGN KEY (session_id) REFERENCES sessions (id)
+        )
+    ''')
+
+    # Student attendance tracking
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS student_attendance (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            student_id INTEGER NOT NULL,
+            subject_id INTEGER NOT NULL,
+            session_id INTEGER,
+            date DATE NOT NULL,
+            status TEXT DEFAULT 'present',
+            remarks TEXT,
+            recorded_by INTEGER,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (student_id) REFERENCES users (id),
+            FOREIGN KEY (subject_id) REFERENCES subjects (id),
+            FOREIGN KEY (session_id) REFERENCES sessions (id),
+            FOREIGN KEY (recorded_by) REFERENCES users (id)
+        )
+    ''')
+
     # Platform settings (global + per-institution)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS platform_settings (
@@ -689,6 +774,17 @@ def init_db():
         ("subjects", "institution_id", "INTEGER"),
         ("subjects", "academic_period_id", "INTEGER"),
         ("subjects", "department_id", "INTEGER"),
+        ("subjects", "instructor_id", "INTEGER"),
+        ("subjects", "room", "TEXT"),
+        ("subjects", "credits", "INTEGER DEFAULT 3"),
+        ("subjects", "max_students", "INTEGER DEFAULT 50"),
+        # User additional fields
+        ("users", "date_of_birth", "DATE"),
+        ("users", "gender", "TEXT"),
+        ("users", "guardian_name", "TEXT"),
+        ("users", "guardian_phone", "TEXT"),
+        ("users", "year_level", "TEXT"),
+        ("users", "status", "TEXT DEFAULT 'active'"),
     ]
 
     for table, column, col_type in migrations:

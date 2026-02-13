@@ -1,0 +1,149 @@
+{% extends 'base.html' %}
+
+{% block title %}Subscriptions - Sangrenes LMS Portal{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1><i class="fas fa-crown"></i> Subscription Management</h1>
+        <p>Manage subscription plans and institutional billing</p>
+    </div>
+    <button class="btn btn-primary" onclick="openModal('addPlanModal')"><i class="fas fa-plus"></i> Add Plan</button>
+</div>
+
+<!-- Revenue Stats -->
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px;">
+    <div style="background:linear-gradient(135deg,#8B5CF6,#6D28D9);border-radius:12px;padding:24px;color:white;box-shadow:0 4px 12px rgba(139,92,246,0.3);">
+        <div style="font-size:0.85rem;opacity:0.9;">Monthly Revenue</div>
+        <div style="font-size:2rem;font-weight:700;">P{{ "{:,.2f}".format(monthly_revenue) }}</div>
+    </div>
+    <div style="background:linear-gradient(135deg,#3B82F6,#1D4ED8);border-radius:12px;padding:24px;color:white;box-shadow:0 4px 12px rgba(59,130,246,0.3);">
+        <div style="font-size:0.85rem;opacity:0.9;">Active Institutions</div>
+        <div style="font-size:2rem;font-weight:700;">{{ institutions|length }}</div>
+    </div>
+    <div style="background:linear-gradient(135deg,#10B981,#059669);border-radius:12px;padding:24px;color:white;box-shadow:0 4px 12px rgba(16,185,129,0.3);">
+        <div style="font-size:0.85rem;opacity:0.9;">Total Plans</div>
+        <div style="font-size:2rem;font-weight:700;">{{ plans|length }}</div>
+    </div>
+</div>
+
+<!-- Subscription Plans -->
+<div style="background:white;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.06);overflow:hidden;margin-bottom:24px;">
+    <div style="padding:16px 20px;border-bottom:1px solid #E2E8F0;">
+        <h3 style="margin:0;font-size:1rem;"><i class="fas fa-tags" style="color:#8B5CF6;"></i> Subscription Plans</h3>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:20px;padding:24px;">
+        {% for p in plans %}
+        <div style="border:2px solid {% if p.name == 'premium' %}#8B5CF6{% elif p.name == 'enterprise' %}#F59E0B{% else %}#E2E8F0{% endif %};border-radius:14px;padding:24px;text-align:center;position:relative;{% if p.name == 'premium' %}background:linear-gradient(135deg,#FAF5FF,#F3E8FF);{% endif %}">
+            {% if p.name == 'premium' %}<div style="position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:#8B5CF6;color:white;padding:2px 14px;border-radius:12px;font-size:0.7rem;font-weight:600;">POPULAR</div>{% endif %}
+            <h3 style="margin:0 0 4px;color:#1E293B;text-transform:capitalize;">{{ p.name }}</h3>
+            <div style="font-size:2.2rem;font-weight:800;color:#8B5CF6;margin:10px 0;">P{{ "{:,.0f}".format(p.price_monthly or 0) }}<span style="font-size:0.85rem;font-weight:400;color:#94A3B8;">/mo</span></div>
+            {% if p.price_yearly %}<div style="font-size:0.8rem;color:#64748B;margin-bottom:12px;">P{{ "{:,.0f}".format(p.price_yearly) }}/year</div>{% endif %}
+            <div style="text-align:left;font-size:0.85rem;color:#64748B;margin-top:12px;">
+                <div style="padding:4px 0;"><i class="fas fa-users" style="color:#3B82F6;width:20px;"></i> Up to {{ p.max_students or 'Unlimited' }} students</div>
+                <div style="padding:4px 0;"><i class="fas fa-chalkboard-teacher" style="color:#10B981;width:20px;"></i> Up to {{ p.max_instructors or 'Unlimited' }} instructors</div>
+                <div style="padding:4px 0;"><i class="fas fa-book" style="color:#F59E0B;width:20px;"></i> Up to {{ p.max_subjects or 'Unlimited' }} subjects</div>
+                {% if p.features %}<div style="padding:4px 0;font-size:0.8rem;color:#94A3B8;">{{ p.features }}</div>{% endif %}
+            </div>
+            <div style="margin-top:16px;display:flex;gap:8px;justify-content:center;">
+                <button onclick='editPlan({{ p|tojson }})' style="padding:6px 16px;font-size:0.8rem;border:1px solid #E2E8F0;border-radius:8px;background:white;cursor:pointer;">Edit</button>
+                <span style="padding:6px 16px;font-size:0.8rem;border-radius:8px;background:{% if p.is_active %}#D1FAE5;color:#065F46{% else %}#FEE2E2;color:#991B1B{% endif %};">{{ 'Active' if p.is_active else 'Inactive' }}</span>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Institution Subscriptions -->
+<div style="background:white;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.06);overflow:hidden;">
+    <div style="padding:16px 20px;border-bottom:1px solid #E2E8F0;">
+        <h3 style="margin:0;font-size:1rem;"><i class="fas fa-university" style="color:#3B82F6;"></i> Institution Subscriptions</h3>
+    </div>
+    {% if institutions %}
+    <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;">
+            <thead>
+                <tr style="background:#F8FAFC;">
+                    <th style="padding:10px 14px;text-align:left;font-size:0.8rem;color:#64748B;">Institution</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.8rem;color:#64748B;">Plan</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.8rem;color:#64748B;">Monthly</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.8rem;color:#64748B;">Students</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.8rem;color:#64748B;">Instructors</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for i in institutions %}
+                <tr style="border-bottom:1px solid #F1F5F9;">
+                    <td style="padding:10px 14px;font-weight:600;">{{ i.name }}</td>
+                    <td style="padding:10px 14px;text-align:center;"><span style="background:{% if i.plan_name == 'enterprise' %}#FEF3C7;color:#92400E{% elif i.plan_name == 'premium' %}#EDE9FE;color:#7C3AED{% elif i.plan_name == 'basic' %}#DBEAFE;color:#1E40AF{% else %}#F1F5F9;color:#64748B{% endif %};padding:2px 10px;border-radius:12px;font-size:0.75rem;text-transform:capitalize;">{{ i.plan_name or i.plan or 'free' }}</span></td>
+                    <td style="padding:10px 14px;text-align:center;font-weight:600;color:#8B5CF6;">P{{ "{:,.0f}".format(i.price_monthly or 0) }}</td>
+                    <td style="padding:10px 14px;text-align:center;">{{ i.student_count }}<span style="color:#94A3B8;font-size:0.8rem;">/{{ i.max_students }}</span></td>
+                    <td style="padding:10px 14px;text-align:center;">{{ i.instructor_count }}<span style="color:#94A3B8;font-size:0.8rem;">/{{ i.max_instructors }}</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div style="padding:40px;text-align:center;color:#94A3B8;"><p>No institutions subscribed yet.</p></div>
+    {% endif %}
+</div>
+
+<!-- Add/Edit Plan Modal -->
+<div id="addPlanModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1000;">
+    <div style="background:white;border-radius:16px;padding:30px;max-width:500px;width:90%;margin:auto;position:relative;top:50%;transform:translateY(-50%);">
+        <h3 style="margin:0 0 20px;" id="planModalTitle"><i class="fas fa-plus-circle" style="color:#8B5CF6;"></i> Add Subscription Plan</h3>
+        <input type="hidden" id="editPlanId">
+        <div style="display:flex;flex-direction:column;gap:12px;">
+            <div><label style="font-size:0.8rem;color:#64748B;">Plan Name *</label><input type="text" id="spName" placeholder="e.g., premium" style="padding:10px;border:1px solid #E2E8F0;border-radius:8px;width:100%;box-sizing:border-box;"></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div><label style="font-size:0.8rem;color:#64748B;">Monthly Price (PHP)</label><input type="number" id="spMonthly" step="0.01" style="padding:10px;border:1px solid #E2E8F0;border-radius:8px;width:100%;box-sizing:border-box;"></div>
+                <div><label style="font-size:0.8rem;color:#64748B;">Yearly Price (PHP)</label><input type="number" id="spYearly" step="0.01" style="padding:10px;border:1px solid #E2E8F0;border-radius:8px;width:100%;box-sizing:border-box;"></div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
+                <div><label style="font-size:0.8rem;color:#64748B;">Max Students</label><input type="number" id="spStudents" style="padding:10px;border:1px solid #E2E8F0;border-radius:8px;width:100%;box-sizing:border-box;"></div>
+                <div><label style="font-size:0.8rem;color:#64748B;">Max Instructors</label><input type="number" id="spInstructors" style="padding:10px;border:1px solid #E2E8F0;border-radius:8px;width:100%;box-sizing:border-box;"></div>
+                <div><label style="font-size:0.8rem;color:#64748B;">Max Subjects</label><input type="number" id="spSubjects" style="padding:10px;border:1px solid #E2E8F0;border-radius:8px;width:100%;box-sizing:border-box;"></div>
+            </div>
+            <div><label style="font-size:0.8rem;color:#64748B;">Features Description</label><input type="text" id="spFeatures" style="padding:10px;border:1px solid #E2E8F0;border-radius:8px;width:100%;box-sizing:border-box;"></div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end;">
+            <button onclick="closeModal('addPlanModal')" style="padding:8px 20px;border:1px solid #E2E8F0;border-radius:8px;background:white;cursor:pointer;">Cancel</button>
+            <button onclick="savePlan()" style="padding:8px 20px;border:none;border-radius:8px;background:#8B5CF6;color:white;cursor:pointer;font-weight:600;">Save</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function editPlan(p) {
+    document.getElementById('editPlanId').value = p.id;
+    document.getElementById('planModalTitle').innerHTML = '<i class="fas fa-edit" style="color:#8B5CF6;"></i> Edit Plan';
+    document.getElementById('spName').value = p.name || '';
+    document.getElementById('spMonthly').value = p.price_monthly || 0;
+    document.getElementById('spYearly').value = p.price_yearly || 0;
+    document.getElementById('spStudents').value = p.max_students || '';
+    document.getElementById('spInstructors').value = p.max_instructors || '';
+    document.getElementById('spSubjects').value = p.max_subjects || '';
+    document.getElementById('spFeatures').value = p.features || '';
+    openModal('addPlanModal');
+}
+function savePlan() {
+    const id = document.getElementById('editPlanId').value;
+    const data = {
+        name: document.getElementById('spName').value,
+        price_monthly: parseFloat(document.getElementById('spMonthly').value) || 0,
+        price_yearly: parseFloat(document.getElementById('spYearly').value) || 0,
+        max_students: parseInt(document.getElementById('spStudents').value) || 100,
+        max_instructors: parseInt(document.getElementById('spInstructors').value) || 5,
+        max_subjects: parseInt(document.getElementById('spSubjects').value) || 20,
+        features: document.getElementById('spFeatures').value
+    };
+    const url = id ? `/api/admin/subscriptions/${id}` : '/api/admin/subscriptions';
+    const method = id ? 'PUT' : 'POST';
+    fetch(url, { method, headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) })
+        .then(r => r.json()).then(d => { if (d.success) location.reload(); else alert(d.error || 'Failed'); });
+}
+</script>
+{% endblock %}

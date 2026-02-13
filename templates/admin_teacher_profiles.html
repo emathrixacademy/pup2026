@@ -1,0 +1,179 @@
+{% extends 'base.html' %}
+
+{% block title %}Teacher Profiles - Sangrenes LMS Portal{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1><i class="fas fa-id-card"></i> Teacher Profiles & Salary</h1>
+        <p>Manage teacher profiles, salaries, and performance</p>
+    </div>
+</div>
+
+<!-- Teacher Cards -->
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:20px;">
+    {% for t in teachers %}
+    <div style="background:white;border-radius:14px;box-shadow:0 2px 8px rgba(0,0,0,0.06);overflow:hidden;">
+        <!-- Header -->
+        <div style="background:linear-gradient(135deg,#3B82F6,#8B5CF6);padding:20px;color:white;text-align:center;">
+            <div style="width:60px;height:60px;border-radius:50%;background:rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;margin:0 auto 10px;font-size:1.5rem;font-weight:700;">{{ t.full_name[0] }}</div>
+            <h3 style="margin:0;font-size:1.1rem;">{{ t.full_name }}</h3>
+            <div style="font-size:0.8rem;opacity:0.9;">{{ t.employee_id or 'No Employee ID' }}</div>
+        </div>
+        <!-- Details -->
+        <div style="padding:16px;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
+                <div style="text-align:center;padding:8px;background:#F8FAFC;border-radius:8px;">
+                    <div style="font-size:1.2rem;font-weight:700;color:#3B82F6;">{{ t.subject_count }}</div>
+                    <div style="font-size:0.7rem;color:#64748B;">Subjects</div>
+                </div>
+                <div style="text-align:center;padding:8px;background:#F8FAFC;border-radius:8px;">
+                    <div style="font-size:1.2rem;font-weight:700;color:#10B981;">{{ "%.0f"|format(t.total_hours or 0) }}h</div>
+                    <div style="font-size:0.7rem;color:#64748B;">Hours Worked</div>
+                </div>
+            </div>
+            <div style="font-size:0.85rem;color:#64748B;margin-bottom:8px;">
+                <div style="padding:4px 0;"><i class="fas fa-university" style="width:20px;color:#8B5CF6;"></i> {{ t.institution_name or 'Unassigned' }}</div>
+                <div style="padding:4px 0;"><i class="fas fa-building" style="width:20px;color:#F59E0B;"></i> {{ t.department_name or 'No Department' }}</div>
+                <div style="padding:4px 0;"><i class="fas fa-file-contract" style="width:20px;color:#3B82F6;"></i> {{ (t.contract_type or 'N/A')|capitalize }}</div>
+                <div style="padding:4px 0;"><i class="fas fa-calendar" style="width:20px;color:#10B981;"></i> Hired: {{ t.hire_date or 'N/A' }}</div>
+                <div style="padding:4px 0;"><i class="fas fa-envelope" style="width:20px;color:#EF4444;"></i> {{ t.email or 'No email' }}</div>
+                <div style="padding:4px 0;"><i class="fas fa-phone" style="width:20px;color:#64748B;"></i> {{ t.contact_number or 'No phone' }}</div>
+            </div>
+            <!-- Salary -->
+            <div style="border-top:1px solid #E2E8F0;padding-top:12px;margin-top:8px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <div>
+                        <div style="font-size:0.75rem;color:#94A3B8;">Salary Rate</div>
+                        <div style="font-size:1.3rem;font-weight:700;color:#10B981;">P{{ "{:,.2f}".format(t.salary_rate or 0) }}<span style="font-size:0.75rem;font-weight:400;color:#94A3B8;">/{{ t.salary_frequency or 'mo' }}</span></div>
+                    </div>
+                    <div style="text-align:right;">
+                        <div style="font-size:0.75rem;color:#94A3B8;">Total Earned</div>
+                        <div style="font-size:1rem;font-weight:600;color:#3B82F6;">P{{ "{:,.2f}".format(t.total_earned or 0) }}</div>
+                    </div>
+                </div>
+            </div>
+            <button onclick='editTeacher({{ t|tojson }})' style="width:100%;margin-top:14px;padding:8px;border:1px solid #E2E8F0;border-radius:8px;background:white;cursor:pointer;font-size:0.85rem;color:#3B82F6;font-weight:600;"><i class="fas fa-edit"></i> Edit Profile</button>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{% if not teachers %}
+<div style="background:white;border-radius:12px;padding:60px;text-align:center;color:#94A3B8;box-shadow:0 2px 8px rgba(0,0,0,0.06);">
+    <i class="fas fa-chalkboard-teacher" style="font-size:3rem;margin-bottom:16px;color:#CBD5E1;"></i>
+    <h3 style="color:#64748B;">No teachers registered yet</h3>
+</div>
+{% endif %}
+
+<!-- Edit Teacher Modal -->
+<div id="editTeacherModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1000;">
+    <div style="background:white;border-radius:16px;padding:30px;max-width:550px;width:90%;margin:auto;position:relative;top:50%;transform:translateY(-50%);max-height:80vh;overflow-y:auto;">
+        <h3 style="margin:0 0 20px;"><i class="fas fa-user-edit" style="color:#3B82F6;"></i> Edit Teacher Profile</h3>
+        <input type="hidden" id="etId">
+        <div style="display:flex;flex-direction:column;gap:12px;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div><label style="font-size:0.8rem;color:#64748B;">Full Name</label><input type="text" id="etName" style="padding:10px;border:1px solid #E2E8F0;border-radius:8px;width:100%;box-sizing:border-box;"></div>
+                <div><label style="font-size:0.8rem;color:#64748B;">Employee ID</label><input type="text" id="etEmpId" style="padding:10px;border:1px solid #E2E8F0;border-radius:8px;width:100%;box-sizing:border-box;"></div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div><label style="font-size:0.8rem;color:#64748B;">Email</label><input type="email" id="etEmail" style="padding:10px;border:1px solid #E2E8F0;border-radius:8px;width:100%;box-sizing:border-box;"></div>
+                <div><label style="font-size:0.8rem;color:#64748B;">Phone</label><input type="text" id="etPhone" style="padding:10px;border:1px solid #E2E8F0;border-radius:8px;width:100%;box-sizing:border-box;"></div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div><label style="font-size:0.8rem;color:#64748B;">Institution</label>
+                    <select id="etInst" style="padding:10px;border:1px solid #E2E8F0;border-radius:8px;width:100%;">
+                        <option value="">-- Select --</option>
+                        {% for i in institutions %}<option value="{{ i.id }}">{{ i.name }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div><label style="font-size:0.8rem;color:#64748B;">Department</label>
+                    <select id="etDept" style="padding:10px;border:1px solid #E2E8F0;border-radius:8px;width:100%;">
+                        <option value="">-- Select --</option>
+                        {% for d in departments %}<option value="{{ d.id }}">{{ d.name }}</option>{% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div><label style="font-size:0.8rem;color:#64748B;">Contract Type</label>
+                    <select id="etContract" style="padding:10px;border:1px solid #E2E8F0;border-radius:8px;width:100%;">
+                        <option value="full-time">Full-Time</option>
+                        <option value="part-time">Part-Time</option>
+                        <option value="contractual">Contractual</option>
+                        <option value="individual">Individual/Freelance</option>
+                    </select>
+                </div>
+                <div><label style="font-size:0.8rem;color:#64748B;">Hire Date</label><input type="date" id="etHire" style="padding:10px;border:1px solid #E2E8F0;border-radius:8px;width:100%;box-sizing:border-box;"></div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div><label style="font-size:0.8rem;color:#64748B;">Salary Rate (PHP)</label><input type="number" id="etSalary" step="0.01" style="padding:10px;border:1px solid #E2E8F0;border-radius:8px;width:100%;box-sizing:border-box;"></div>
+                <div><label style="font-size:0.8rem;color:#64748B;">Frequency</label>
+                    <select id="etFreq" style="padding:10px;border:1px solid #E2E8F0;border-radius:8px;width:100%;">
+                        <option value="monthly">Monthly</option>
+                        <option value="semi-monthly">Semi-Monthly</option>
+                        <option value="hourly">Hourly</option>
+                        <option value="per-session">Per Session</option>
+                    </select>
+                </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div><label style="font-size:0.8rem;color:#64748B;">Tax ID / TIN</label><input type="text" id="etTax" style="padding:10px;border:1px solid #E2E8F0;border-radius:8px;width:100%;box-sizing:border-box;"></div>
+                <div><label style="font-size:0.8rem;color:#64748B;">Bank Account</label><input type="text" id="etBank" style="padding:10px;border:1px solid #E2E8F0;border-radius:8px;width:100%;box-sizing:border-box;"></div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div><label style="font-size:0.8rem;color:#64748B;">Emergency Contact</label><input type="text" id="etEmergName" style="padding:10px;border:1px solid #E2E8F0;border-radius:8px;width:100%;box-sizing:border-box;"></div>
+                <div><label style="font-size:0.8rem;color:#64748B;">Emergency Phone</label><input type="text" id="etEmergPhone" style="padding:10px;border:1px solid #E2E8F0;border-radius:8px;width:100%;box-sizing:border-box;"></div>
+            </div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end;">
+            <button onclick="closeModal('editTeacherModal')" style="padding:8px 20px;border:1px solid #E2E8F0;border-radius:8px;background:white;cursor:pointer;">Cancel</button>
+            <button onclick="saveTeacher()" style="padding:8px 20px;border:none;border-radius:8px;background:#3B82F6;color:white;cursor:pointer;font-weight:600;">Save</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function editTeacher(t) {
+    document.getElementById('etId').value = t.id;
+    document.getElementById('etName').value = t.full_name || '';
+    document.getElementById('etEmpId').value = t.employee_id || '';
+    document.getElementById('etEmail').value = t.email || '';
+    document.getElementById('etPhone').value = t.contact_number || '';
+    document.getElementById('etInst').value = t.institution_id || '';
+    document.getElementById('etDept').value = t.department_id || '';
+    document.getElementById('etContract').value = t.contract_type || 'full-time';
+    document.getElementById('etHire').value = t.hire_date || '';
+    document.getElementById('etSalary').value = t.salary_rate || 0;
+    document.getElementById('etFreq').value = t.salary_frequency || 'monthly';
+    document.getElementById('etTax').value = t.tax_id || '';
+    document.getElementById('etBank').value = t.bank_account || '';
+    document.getElementById('etEmergName').value = t.emergency_contact || '';
+    document.getElementById('etEmergPhone').value = t.emergency_phone || '';
+    openModal('editTeacherModal');
+}
+function saveTeacher() {
+    const id = document.getElementById('etId').value;
+    fetch(`/api/admin/teacher-profile/${id}`, {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            full_name: document.getElementById('etName').value,
+            employee_id: document.getElementById('etEmpId').value,
+            email: document.getElementById('etEmail').value,
+            contact_number: document.getElementById('etPhone').value,
+            institution_id: document.getElementById('etInst').value || null,
+            department_id: document.getElementById('etDept').value || null,
+            contract_type: document.getElementById('etContract').value,
+            hire_date: document.getElementById('etHire').value,
+            salary_rate: parseFloat(document.getElementById('etSalary').value) || 0,
+            salary_frequency: document.getElementById('etFreq').value,
+            tax_id: document.getElementById('etTax').value,
+            bank_account: document.getElementById('etBank').value,
+            emergency_contact: document.getElementById('etEmergName').value,
+            emergency_phone: document.getElementById('etEmergPhone').value
+        })
+    }).then(r => r.json()).then(d => { if (d.success) location.reload(); else alert('Failed'); });
+}
+</script>
+{% endblock %}

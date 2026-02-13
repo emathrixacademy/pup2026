@@ -1,0 +1,154 @@
+{% extends 'base.html' %}
+
+{% block title %}Materials & Videos - Sangrenes LMS Portal{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1><i class="fas fa-photo-video"></i> Materials & Videos</h1>
+        <p>Manage learning materials, videos, and documents across all subjects</p>
+    </div>
+    <button class="btn btn-primary" onclick="openModal('uploadModal')"><i class="fas fa-upload"></i> Upload Material</button>
+</div>
+
+<!-- Video & Material Overview by Subject -->
+<div style="background:white;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.06);overflow:hidden;margin-bottom:24px;">
+    <div style="padding:16px 20px;border-bottom:1px solid #E2E8F0;">
+        <h3 style="margin:0;font-size:1rem;"><i class="fas fa-video" style="color:#EF4444;"></i> Session Videos & Content</h3>
+    </div>
+    <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;min-width:800px;">
+            <thead>
+                <tr style="background:#F8FAFC;">
+                    <th style="padding:10px 14px;text-align:left;font-size:0.8rem;color:#64748B;">Subject</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.8rem;color:#64748B;">Session</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.8rem;color:#64748B;">Video</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.8rem;color:#64748B;">Reading</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.8rem;color:#64748B;">Activities</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.8rem;color:#64748B;">Quizzes</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in sessions[:50] %}
+                <tr style="border-bottom:1px solid #F1F5F9;">
+                    <td style="padding:10px 14px;font-size:0.85rem;"><strong>{{ s.subject_code }}</strong> <span style="color:#94A3B8;">{{ s.section }}</span></td>
+                    <td style="padding:10px 14px;text-align:center;font-size:0.85rem;">Session {{ s.session_number }}: {{ s.title }}</td>
+                    <td style="padding:10px 14px;text-align:center;">
+                        {% if s.youtube_url %}<span style="color:#EF4444;"><i class="fab fa-youtube"></i> Set</span>{% else %}<span style="color:#CBD5E1;">None</span>{% endif %}
+                    </td>
+                    <td style="padding:10px 14px;text-align:center;">
+                        {% if s.reading_materials %}<span style="color:#10B981;"><i class="fas fa-book-reader"></i> Set</span>{% else %}<span style="color:#CBD5E1;">None</span>{% endif %}
+                    </td>
+                    <td style="padding:10px 14px;text-align:center;font-weight:600;color:#3B82F6;">{{ s.activity_count }}</td>
+                    <td style="padding:10px 14px;text-align:center;font-weight:600;color:#8B5CF6;">{{ s.quiz_count }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- File Storage -->
+<div style="background:white;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.06);overflow:hidden;">
+    <div style="padding:16px 20px;border-bottom:1px solid #E2E8F0;">
+        <h3 style="margin:0;font-size:1rem;"><i class="fas fa-folder-open" style="color:#F59E0B;"></i> Uploaded Files ({{ files|length }})</h3>
+    </div>
+    {% if files %}
+    <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;">
+            <thead>
+                <tr style="background:#F8FAFC;">
+                    <th style="padding:10px 14px;text-align:left;font-size:0.8rem;color:#64748B;">File</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.8rem;color:#64748B;">Category</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.8rem;color:#64748B;">Subject</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.8rem;color:#64748B;">Uploader</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.8rem;color:#64748B;">Size</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.8rem;color:#64748B;">Downloads</th>
+                    <th style="padding:10px 14px;text-align:right;font-size:0.8rem;color:#64748B;">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for f in files %}
+                <tr style="border-bottom:1px solid #F1F5F9;">
+                    <td style="padding:10px 14px;">
+                        <div style="display:flex;align-items:center;gap:8px;">
+                            <i class="fas fa-{% if f.file_type in ('pdf',) %}file-pdf{% elif f.file_type in ('doc','docx') %}file-word{% elif f.file_type in ('ppt','pptx') %}file-powerpoint{% elif f.file_type in ('xls','xlsx') %}file-excel{% elif f.file_type in ('jpg','jpeg','png','gif') %}file-image{% elif f.file_type in ('mp4','avi','mov') %}file-video{% else %}file-alt{% endif %}" style="color:#3B82F6;font-size:1.2rem;"></i>
+                            <div>
+                                <div style="font-weight:600;font-size:0.85rem;">{{ f.original_name }}</div>
+                                <div style="font-size:0.7rem;color:#94A3B8;">{{ f.created_at[:10] if f.created_at else '' }}</div>
+                            </div>
+                        </div>
+                    </td>
+                    <td style="padding:10px 14px;text-align:center;"><span style="background:#F1F5F9;color:#64748B;padding:2px 10px;border-radius:12px;font-size:0.75rem;">{{ f.category }}</span></td>
+                    <td style="padding:10px 14px;text-align:center;font-size:0.85rem;">{{ f.subject_code or '-' }}</td>
+                    <td style="padding:10px 14px;text-align:center;font-size:0.85rem;color:#64748B;">{{ f.uploader_name }}</td>
+                    <td style="padding:10px 14px;text-align:center;font-size:0.85rem;color:#64748B;">{{ "%.1f"|format((f.file_size or 0) / 1024) }} KB</td>
+                    <td style="padding:10px 14px;text-align:center;font-size:0.85rem;color:#64748B;">{{ f.download_count }}</td>
+                    <td style="padding:10px 14px;text-align:right;">
+                        <a href="/admin/files/download/{{ f.id }}" style="padding:4px 10px;font-size:0.75rem;background:#D1FAE5;color:#065F46;border:none;border-radius:6px;text-decoration:none;margin-right:4px;"><i class="fas fa-download"></i></a>
+                        <button onclick="deleteFile({{ f.id }})" style="padding:4px 10px;font-size:0.75rem;background:#FEE2E2;color:#991B1B;border:none;border-radius:6px;cursor:pointer;"><i class="fas fa-trash"></i></button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div style="padding:60px;text-align:center;color:#94A3B8;">
+        <i class="fas fa-cloud-upload-alt" style="font-size:3rem;margin-bottom:16px;color:#CBD5E1;"></i>
+        <h3 style="color:#64748B;">No files uploaded yet</h3>
+        <p>Upload materials, documents, and resources for your courses.</p>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Upload Modal -->
+<div id="uploadModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1000;">
+    <div style="background:white;border-radius:16px;padding:30px;max-width:450px;width:90%;margin:auto;position:relative;top:50%;transform:translateY(-50%);">
+        <h3 style="margin:0 0 20px;"><i class="fas fa-upload" style="color:#3B82F6;"></i> Upload Material</h3>
+        <form id="uploadForm" enctype="multipart/form-data">
+            <div style="display:flex;flex-direction:column;gap:12px;">
+                <div><label style="font-size:0.8rem;color:#64748B;">File *</label><input type="file" name="file" required style="padding:10px;border:1px solid #E2E8F0;border-radius:8px;width:100%;box-sizing:border-box;"></div>
+                <div><label style="font-size:0.8rem;color:#64748B;">Category</label>
+                    <select name="category" style="padding:10px;border:1px solid #E2E8F0;border-radius:8px;width:100%;">
+                        <option value="general">General</option>
+                        <option value="lecture">Lecture</option>
+                        <option value="lab">Lab Material</option>
+                        <option value="reference">Reference</option>
+                        <option value="syllabus">Syllabus</option>
+                        <option value="template">Template</option>
+                    </select>
+                </div>
+                <div><label style="font-size:0.8rem;color:#64748B;">Subject</label>
+                    <select name="subject_id" style="padding:10px;border:1px solid #E2E8F0;border-radius:8px;width:100%;">
+                        <option value="">-- General (No Subject) --</option>
+                        {% for s in subjects %}<option value="{{ s.id }}">{{ s.code }} - {{ s.name }} ({{ s.section }})</option>{% endfor %}
+                    </select>
+                </div>
+                <div><label style="font-size:0.8rem;color:#64748B;">Description</label><input type="text" name="description" style="padding:10px;border:1px solid #E2E8F0;border-radius:8px;width:100%;box-sizing:border-box;"></div>
+                <label style="font-size:0.85rem;color:#64748B;"><input type="checkbox" name="is_public" value="1"> Make publicly accessible</label>
+            </div>
+            <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end;">
+                <button type="button" onclick="closeModal('uploadModal')" style="padding:8px 20px;border:1px solid #E2E8F0;border-radius:8px;background:white;cursor:pointer;">Cancel</button>
+                <button type="submit" style="padding:8px 20px;border:none;border-radius:8px;background:#3B82F6;color:white;cursor:pointer;font-weight:600;">Upload</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('uploadForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const formData = new FormData(this);
+    fetch('/api/admin/materials/upload', { method: 'POST', body: formData })
+        .then(r => r.json()).then(d => { if (d.success) location.reload(); else alert(d.error || 'Upload failed'); });
+});
+function deleteFile(id) {
+    if (!confirm('Delete this file?')) return;
+    fetch(`/api/admin/materials/${id}`, { method: 'DELETE' })
+        .then(r => r.json()).then(d => { if (d.success) location.reload(); });
+}
+</script>
+{% endblock %}

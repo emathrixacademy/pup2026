@@ -1,0 +1,212 @@
+{% extends 'base.html' %}
+
+{% block title %}Manage Subjects - Sangrenes LMS Portal{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1><i class="fas fa-book-open"></i> Manage Subjects & Courses</h1>
+        <p>{{ subjects|length }} subjects across all institutions</p>
+    </div>
+    <button class="btn btn-primary" onclick="openModal('addSubjectModal')"><i class="fas fa-plus"></i> Add Subject</button>
+</div>
+
+<!-- Stats -->
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px;margin-bottom:24px;">
+    <div style="background:white;border-radius:12px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,0.06);text-align:center;border-top:3px solid #3B82F6;">
+        <div style="font-size:2rem;font-weight:700;color:#3B82F6;">{{ subjects|length }}</div>
+        <div style="font-size:0.8rem;color:#64748B;">Total Subjects</div>
+    </div>
+    <div style="background:white;border-radius:12px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,0.06);text-align:center;border-top:3px solid #10B981;">
+        <div style="font-size:2rem;font-weight:700;color:#10B981;">{{ subjects|sum(attribute='student_count') }}</div>
+        <div style="font-size:0.8rem;color:#64748B;">Total Enrollments</div>
+    </div>
+    <div style="background:white;border-radius:12px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,0.06);text-align:center;border-top:3px solid #F59E0B;">
+        <div style="font-size:2rem;font-weight:700;color:#F59E0B;">{{ subjects|sum(attribute='activity_count') }}</div>
+        <div style="font-size:0.8rem;color:#64748B;">Total Activities</div>
+    </div>
+</div>
+
+<!-- Subjects Table -->
+<div style="background:white;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.06);overflow:hidden;">
+    <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;min-width:1000px;">
+            <thead>
+                <tr style="background:#F8FAFC;">
+                    <th style="padding:12px 14px;text-align:left;font-size:0.8rem;color:#64748B;">Subject</th>
+                    <th style="padding:12px 14px;text-align:center;font-size:0.8rem;color:#64748B;">Section</th>
+                    <th style="padding:12px 14px;text-align:center;font-size:0.8rem;color:#64748B;">Schedule</th>
+                    <th style="padding:12px 14px;text-align:center;font-size:0.8rem;color:#64748B;">Instructor</th>
+                    <th style="padding:12px 14px;text-align:center;font-size:0.8rem;color:#64748B;">Institution</th>
+                    <th style="padding:12px 14px;text-align:center;font-size:0.8rem;color:#64748B;">Students</th>
+                    <th style="padding:12px 14px;text-align:center;font-size:0.8rem;color:#64748B;">Sessions</th>
+                    <th style="padding:12px 14px;text-align:center;font-size:0.8rem;color:#64748B;">Activities</th>
+                    <th style="padding:12px 14px;text-align:right;font-size:0.8rem;color:#64748B;">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in subjects %}
+                <tr style="border-bottom:1px solid #F1F5F9;">
+                    <td style="padding:12px 14px;">
+                        <div style="font-weight:600;color:#1E293B;">{{ s.code }}</div>
+                        <div style="font-size:0.75rem;color:#94A3B8;">{{ s.name }}</div>
+                    </td>
+                    <td style="padding:12px 14px;text-align:center;"><span style="background:#EDE9FE;color:#7C3AED;padding:2px 10px;border-radius:12px;font-size:0.75rem;">{{ s.section or 'N/A' }}</span></td>
+                    <td style="padding:12px 14px;text-align:center;font-size:0.8rem;color:#64748B;">{{ s.day or '' }} {{ s.time_schedule or '' }}</td>
+                    <td style="padding:12px 14px;text-align:center;font-size:0.85rem;">{{ s.instructor_name or '-' }}</td>
+                    <td style="padding:12px 14px;text-align:center;font-size:0.85rem;color:#64748B;">{{ s.institution_name or '-' }}</td>
+                    <td style="padding:12px 14px;text-align:center;font-weight:600;color:#3B82F6;">{{ s.student_count }}</td>
+                    <td style="padding:12px 14px;text-align:center;color:#64748B;">{{ s.session_count }}</td>
+                    <td style="padding:12px 14px;text-align:center;color:#10B981;font-weight:600;">{{ s.activity_count }}</td>
+                    <td style="padding:12px 14px;text-align:right;">
+                        <button onclick='editSubject({{ s|tojson }})' style="padding:4px 10px;font-size:0.75rem;background:#EFF6FF;color:#3B82F6;border:none;border-radius:6px;cursor:pointer;"><i class="fas fa-edit"></i></button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Add Subject Modal -->
+<div id="addSubjectModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1000;">
+    <div style="background:white;border-radius:16px;padding:30px;max-width:550px;width:90%;margin:auto;position:relative;top:50%;transform:translateY(-50%);max-height:80vh;overflow-y:auto;">
+        <h3 style="margin:0 0 20px;"><i class="fas fa-plus-circle" style="color:#3B82F6;"></i> Add New Subject</h3>
+        <div style="display:flex;flex-direction:column;gap:12px;">
+            <div style="display:grid;grid-template-columns:1fr 2fr;gap:10px;">
+                <div><label style="font-size:0.8rem;color:#64748B;">Code *</label><input type="text" id="addCode" placeholder="COMP019" style="padding:10px;border:1px solid #E2E8F0;border-radius:8px;width:100%;box-sizing:border-box;"></div>
+                <div><label style="font-size:0.8rem;color:#64748B;">Name *</label><input type="text" id="addSubName" placeholder="Subject Name" style="padding:10px;border:1px solid #E2E8F0;border-radius:8px;width:100%;box-sizing:border-box;"></div>
+            </div>
+            <div><label style="font-size:0.8rem;color:#64748B;">Description</label><input type="text" id="addDesc" style="padding:10px;border:1px solid #E2E8F0;border-radius:8px;width:100%;box-sizing:border-box;"></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
+                <div><label style="font-size:0.8rem;color:#64748B;">Section</label><input type="text" id="addSubSection" placeholder="BSIT 3-1" style="padding:10px;border:1px solid #E2E8F0;border-radius:8px;width:100%;box-sizing:border-box;"></div>
+                <div><label style="font-size:0.8rem;color:#64748B;">Day</label><input type="text" id="addDay" placeholder="Monday" style="padding:10px;border:1px solid #E2E8F0;border-radius:8px;width:100%;box-sizing:border-box;"></div>
+                <div><label style="font-size:0.8rem;color:#64748B;">Time</label><input type="text" id="addTime" placeholder="1:00-6:00PM" style="padding:10px;border:1px solid #E2E8F0;border-radius:8px;width:100%;box-sizing:border-box;"></div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div><label style="font-size:0.8rem;color:#64748B;">Institution</label>
+                    <select id="addSubInst" style="padding:10px;border:1px solid #E2E8F0;border-radius:8px;width:100%;">
+                        <option value="">-- Select --</option>
+                        {% for i in institutions %}<option value="{{ i.id }}">{{ i.short_name }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div><label style="font-size:0.8rem;color:#64748B;">Instructor</label>
+                    <select id="addSubInstructor" style="padding:10px;border:1px solid #E2E8F0;border-radius:8px;width:100%;">
+                        <option value="">-- Select --</option>
+                        {% for i in instructors %}<option value="{{ i.id }}">{{ i.full_name }}</option>{% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
+                <div><label style="font-size:0.8rem;color:#64748B;">Room</label><input type="text" id="addRoom" style="padding:10px;border:1px solid #E2E8F0;border-radius:8px;width:100%;box-sizing:border-box;"></div>
+                <div><label style="font-size:0.8rem;color:#64748B;">Credits</label><input type="number" id="addCredits" value="3" style="padding:10px;border:1px solid #E2E8F0;border-radius:8px;width:100%;box-sizing:border-box;"></div>
+                <div><label style="font-size:0.8rem;color:#64748B;">Max Students</label><input type="number" id="addMaxStudents" value="50" style="padding:10px;border:1px solid #E2E8F0;border-radius:8px;width:100%;box-sizing:border-box;"></div>
+            </div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end;">
+            <button onclick="closeModal('addSubjectModal')" style="padding:8px 20px;border:1px solid #E2E8F0;border-radius:8px;background:white;cursor:pointer;">Cancel</button>
+            <button onclick="createSubject()" style="padding:8px 20px;border:none;border-radius:8px;background:#3B82F6;color:white;cursor:pointer;font-weight:600;">Create Subject</button>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Subject Modal -->
+<div id="editSubjectModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1000;">
+    <div style="background:white;border-radius:16px;padding:30px;max-width:550px;width:90%;margin:auto;position:relative;top:50%;transform:translateY(-50%);max-height:80vh;overflow-y:auto;">
+        <h3 style="margin:0 0 20px;"><i class="fas fa-edit" style="color:#3B82F6;"></i> Edit Subject</h3>
+        <input type="hidden" id="editSubId">
+        <div style="display:flex;flex-direction:column;gap:12px;">
+            <div style="display:grid;grid-template-columns:1fr 2fr;gap:10px;">
+                <div><label style="font-size:0.8rem;color:#64748B;">Code</label><input type="text" id="editCode" style="padding:10px;border:1px solid #E2E8F0;border-radius:8px;width:100%;box-sizing:border-box;"></div>
+                <div><label style="font-size:0.8rem;color:#64748B;">Name</label><input type="text" id="editSubName" style="padding:10px;border:1px solid #E2E8F0;border-radius:8px;width:100%;box-sizing:border-box;"></div>
+            </div>
+            <div><label style="font-size:0.8rem;color:#64748B;">Description</label><input type="text" id="editDesc" style="padding:10px;border:1px solid #E2E8F0;border-radius:8px;width:100%;box-sizing:border-box;"></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
+                <div><label style="font-size:0.8rem;color:#64748B;">Section</label><input type="text" id="editSubSection" style="padding:10px;border:1px solid #E2E8F0;border-radius:8px;width:100%;box-sizing:border-box;"></div>
+                <div><label style="font-size:0.8rem;color:#64748B;">Day</label><input type="text" id="editDay" style="padding:10px;border:1px solid #E2E8F0;border-radius:8px;width:100%;box-sizing:border-box;"></div>
+                <div><label style="font-size:0.8rem;color:#64748B;">Time</label><input type="text" id="editTime" style="padding:10px;border:1px solid #E2E8F0;border-radius:8px;width:100%;box-sizing:border-box;"></div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div><label style="font-size:0.8rem;color:#64748B;">Institution</label>
+                    <select id="editSubInst" style="padding:10px;border:1px solid #E2E8F0;border-radius:8px;width:100%;">
+                        <option value="">-- Select --</option>
+                        {% for i in institutions %}<option value="{{ i.id }}">{{ i.short_name }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div><label style="font-size:0.8rem;color:#64748B;">Instructor</label>
+                    <select id="editSubInstructor" style="padding:10px;border:1px solid #E2E8F0;border-radius:8px;width:100%;">
+                        <option value="">-- Select --</option>
+                        {% for i in instructors %}<option value="{{ i.id }}">{{ i.full_name }}</option>{% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
+                <div><label style="font-size:0.8rem;color:#64748B;">Room</label><input type="text" id="editRoom" style="padding:10px;border:1px solid #E2E8F0;border-radius:8px;width:100%;box-sizing:border-box;"></div>
+                <div><label style="font-size:0.8rem;color:#64748B;">Credits</label><input type="number" id="editCredits" style="padding:10px;border:1px solid #E2E8F0;border-radius:8px;width:100%;box-sizing:border-box;"></div>
+                <div><label style="font-size:0.8rem;color:#64748B;">Max Students</label><input type="number" id="editMaxStudents" style="padding:10px;border:1px solid #E2E8F0;border-radius:8px;width:100%;box-sizing:border-box;"></div>
+            </div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end;">
+            <button onclick="closeModal('editSubjectModal')" style="padding:8px 20px;border:1px solid #E2E8F0;border-radius:8px;background:white;cursor:pointer;">Cancel</button>
+            <button onclick="updateSubject()" style="padding:8px 20px;border:none;border-radius:8px;background:#3B82F6;color:white;cursor:pointer;font-weight:600;">Save</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function createSubject() {
+    fetch('/api/admin/subjects', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            code: document.getElementById('addCode').value,
+            name: document.getElementById('addSubName').value,
+            description: document.getElementById('addDesc').value,
+            section: document.getElementById('addSubSection').value,
+            day: document.getElementById('addDay').value,
+            time_schedule: document.getElementById('addTime').value,
+            institution_id: document.getElementById('addSubInst').value || null,
+            instructor_id: document.getElementById('addSubInstructor').value || null,
+            room: document.getElementById('addRoom').value,
+            credits: parseInt(document.getElementById('addCredits').value) || 3,
+            max_students: parseInt(document.getElementById('addMaxStudents').value) || 50
+        })
+    }).then(r => r.json()).then(d => { if (d.success) location.reload(); else alert(d.error || 'Failed'); });
+}
+function editSubject(s) {
+    document.getElementById('editSubId').value = s.id;
+    document.getElementById('editCode').value = s.code || '';
+    document.getElementById('editSubName').value = s.name || '';
+    document.getElementById('editDesc').value = s.description || '';
+    document.getElementById('editSubSection').value = s.section || '';
+    document.getElementById('editDay').value = s.day || '';
+    document.getElementById('editTime').value = s.time_schedule || '';
+    document.getElementById('editSubInst').value = s.institution_id || '';
+    document.getElementById('editSubInstructor').value = s.instructor_id || '';
+    document.getElementById('editRoom').value = s.room || '';
+    document.getElementById('editCredits').value = s.credits || 3;
+    document.getElementById('editMaxStudents').value = s.max_students || 50;
+    openModal('editSubjectModal');
+}
+function updateSubject() {
+    const id = document.getElementById('editSubId').value;
+    fetch(`/api/admin/subjects/${id}`, {
+        method: 'PUT', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            code: document.getElementById('editCode').value,
+            name: document.getElementById('editSubName').value,
+            description: document.getElementById('editDesc').value,
+            section: document.getElementById('editSubSection').value,
+            day: document.getElementById('editDay').value,
+            time_schedule: document.getElementById('editTime').value,
+            institution_id: document.getElementById('editSubInst').value || null,
+            instructor_id: document.getElementById('editSubInstructor').value || null,
+            room: document.getElementById('editRoom').value,
+            credits: parseInt(document.getElementById('editCredits').value) || 3,
+            max_students: parseInt(document.getElementById('editMaxStudents').value) || 50
+        })
+    }).then(r => r.json()).then(d => { if (d.success) location.reload(); else alert('Failed'); });
+}
+</script>
+{% endblock %}

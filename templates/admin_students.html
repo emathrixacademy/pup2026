@@ -1,0 +1,199 @@
+{% extends 'base.html' %}
+
+{% block title %}Manage Students - Sangrenes LMS Portal{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1><i class="fas fa-user-graduate"></i> Manage Students</h1>
+        <p>{{ students|length }} students across all institutions</p>
+    </div>
+    <div style="display:flex;gap:10px;">
+        <input type="text" id="searchInput" placeholder="Search students..." onkeyup="filterStudents()" style="padding:8px 16px;border:1px solid #E2E8F0;border-radius:8px;font-size:0.85rem;">
+        <select id="filterSection" onchange="filterStudents()" style="padding:8px 12px;border:1px solid #E2E8F0;border-radius:8px;font-size:0.85rem;">
+            <option value="">All Sections</option>
+            {% for s in sections %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+        </select>
+        <button class="btn btn-primary" onclick="openModal('addStudentModal')"><i class="fas fa-plus"></i> Add Student</button>
+    </div>
+</div>
+
+<!-- Stats -->
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px;margin-bottom:24px;">
+    <div style="background:white;border-radius:12px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,0.06);text-align:center;border-top:3px solid #3B82F6;">
+        <div style="font-size:2rem;font-weight:700;color:#3B82F6;">{{ students|length }}</div>
+        <div style="font-size:0.8rem;color:#64748B;">Total Students</div>
+    </div>
+    <div style="background:white;border-radius:12px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,0.06);text-align:center;border-top:3px solid #10B981;">
+        <div style="font-size:2rem;font-weight:700;color:#10B981;">{{ students|selectattr('is_approved')|list|length }}</div>
+        <div style="font-size:0.8rem;color:#64748B;">Approved</div>
+    </div>
+    <div style="background:white;border-radius:12px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,0.06);text-align:center;border-top:3px solid #8B5CF6;">
+        <div style="font-size:2rem;font-weight:700;color:#8B5CF6;">{{ sections|length }}</div>
+        <div style="font-size:0.8rem;color:#64748B;">Sections</div>
+    </div>
+</div>
+
+<!-- Students Table -->
+<div style="background:white;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.06);overflow:hidden;">
+    <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;min-width:900px;" id="studentsTable">
+            <thead>
+                <tr style="background:#F8FAFC;">
+                    <th style="padding:12px 14px;text-align:left;font-size:0.8rem;color:#64748B;">Student</th>
+                    <th style="padding:12px 14px;text-align:center;font-size:0.8rem;color:#64748B;">Student ID</th>
+                    <th style="padding:12px 14px;text-align:center;font-size:0.8rem;color:#64748B;">Section</th>
+                    <th style="padding:12px 14px;text-align:center;font-size:0.8rem;color:#64748B;">Institution</th>
+                    <th style="padding:12px 14px;text-align:center;font-size:0.8rem;color:#64748B;">Subjects</th>
+                    <th style="padding:12px 14px;text-align:center;font-size:0.8rem;color:#64748B;">Submissions</th>
+                    <th style="padding:12px 14px;text-align:center;font-size:0.8rem;color:#64748B;">Status</th>
+                    <th style="padding:12px 14px;text-align:right;font-size:0.8rem;color:#64748B;">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in students %}
+                <tr style="border-bottom:1px solid #F1F5F9;" class="student-row" data-name="{{ s.full_name|lower }}" data-section="{{ s.section or '' }}">
+                    <td style="padding:12px 14px;">
+                        <div style="display:flex;align-items:center;gap:10px;">
+                            <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#3B82F6,#8B5CF6);display:flex;align-items:center;justify-content:center;color:white;font-weight:600;font-size:0.8rem;flex-shrink:0;">{{ s.full_name[0] }}</div>
+                            <div>
+                                <div style="font-weight:600;color:#1E293B;">{{ s.full_name }}</div>
+                                <div style="font-size:0.75rem;color:#94A3B8;">{{ s.username }} {% if s.email %}&middot; {{ s.email }}{% endif %}</div>
+                            </div>
+                        </div>
+                    </td>
+                    <td style="padding:12px 14px;text-align:center;font-size:0.85rem;color:#64748B;">{{ s.student_id or '-' }}</td>
+                    <td style="padding:12px 14px;text-align:center;"><span style="background:#EDE9FE;color:#7C3AED;padding:2px 10px;border-radius:12px;font-size:0.75rem;">{{ s.section or 'N/A' }}</span></td>
+                    <td style="padding:12px 14px;text-align:center;font-size:0.85rem;color:#64748B;">{{ s.institution_name or '-' }}</td>
+                    <td style="padding:12px 14px;text-align:center;font-weight:600;color:#3B82F6;">{{ s.enrolled_subjects }}</td>
+                    <td style="padding:12px 14px;text-align:center;font-weight:600;color:#10B981;">{{ s.total_submissions }}</td>
+                    <td style="padding:12px 14px;text-align:center;">
+                        {% if s.is_approved %}<span style="background:#D1FAE5;color:#065F46;padding:2px 10px;border-radius:12px;font-size:0.75rem;">Active</span>
+                        {% else %}<span style="background:#FEF3C7;color:#92400E;padding:2px 10px;border-radius:12px;font-size:0.75rem;">Pending</span>{% endif %}
+                    </td>
+                    <td style="padding:12px 14px;text-align:right;">
+                        <button onclick="editStudent({{ s.id }}, '{{ s.full_name }}', '{{ s.email or '' }}', '{{ s.student_id or '' }}', '{{ s.section or '' }}', '{{ s.contact_number or '' }}', {{ s.institution_id or 'null' }})" style="padding:4px 10px;font-size:0.75rem;background:#EFF6FF;color:#3B82F6;border:none;border-radius:6px;cursor:pointer;"><i class="fas fa-edit"></i></button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Add Student Modal -->
+<div id="addStudentModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1000;">
+    <div style="background:white;border-radius:16px;padding:30px;max-width:500px;width:90%;margin:auto;position:relative;top:50%;transform:translateY(-50%);max-height:80vh;overflow-y:auto;">
+        <h3 style="margin:0 0 20px;"><i class="fas fa-user-plus" style="color:#3B82F6;"></i> Add New Student</h3>
+        <div style="display:flex;flex-direction:column;gap:12px;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div><label style="font-size:0.8rem;color:#64748B;">Full Name *</label><input type="text" id="addName" style="padding:10px;border:1px solid #E2E8F0;border-radius:8px;width:100%;box-sizing:border-box;"></div>
+                <div><label style="font-size:0.8rem;color:#64748B;">Username *</label><input type="text" id="addUsername" style="padding:10px;border:1px solid #E2E8F0;border-radius:8px;width:100%;box-sizing:border-box;"></div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div><label style="font-size:0.8rem;color:#64748B;">Student ID</label><input type="text" id="addSid" style="padding:10px;border:1px solid #E2E8F0;border-radius:8px;width:100%;box-sizing:border-box;"></div>
+                <div><label style="font-size:0.8rem;color:#64748B;">Section</label><input type="text" id="addSection" style="padding:10px;border:1px solid #E2E8F0;border-radius:8px;width:100%;box-sizing:border-box;"></div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div><label style="font-size:0.8rem;color:#64748B;">Email</label><input type="email" id="addEmail" style="padding:10px;border:1px solid #E2E8F0;border-radius:8px;width:100%;box-sizing:border-box;"></div>
+                <div><label style="font-size:0.8rem;color:#64748B;">Contact</label><input type="text" id="addContact" style="padding:10px;border:1px solid #E2E8F0;border-radius:8px;width:100%;box-sizing:border-box;"></div>
+            </div>
+            <div><label style="font-size:0.8rem;color:#64748B;">Institution</label>
+                <select id="addInst" style="padding:10px;border:1px solid #E2E8F0;border-radius:8px;width:100%;">
+                    <option value="">-- Select --</option>
+                    {% for i in institutions %}<option value="{{ i.id }}">{{ i.name }} ({{ i.short_name }})</option>{% endfor %}
+                </select>
+            </div>
+            <div><label style="font-size:0.8rem;color:#64748B;">Password</label><input type="text" id="addPassword" value="student123" style="padding:10px;border:1px solid #E2E8F0;border-radius:8px;width:100%;box-sizing:border-box;"></div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end;">
+            <button onclick="closeModal('addStudentModal')" style="padding:8px 20px;border:1px solid #E2E8F0;border-radius:8px;background:white;cursor:pointer;">Cancel</button>
+            <button onclick="addStudent()" style="padding:8px 20px;border:none;border-radius:8px;background:#3B82F6;color:white;cursor:pointer;font-weight:600;">Add Student</button>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Student Modal -->
+<div id="editStudentModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1000;">
+    <div style="background:white;border-radius:16px;padding:30px;max-width:500px;width:90%;margin:auto;position:relative;top:50%;transform:translateY(-50%);">
+        <h3 style="margin:0 0 20px;"><i class="fas fa-user-edit" style="color:#3B82F6;"></i> Edit Student</h3>
+        <input type="hidden" id="editStudentId">
+        <div style="display:flex;flex-direction:column;gap:12px;">
+            <div><label style="font-size:0.8rem;color:#64748B;">Full Name</label><input type="text" id="editName" style="padding:10px;border:1px solid #E2E8F0;border-radius:8px;width:100%;box-sizing:border-box;"></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div><label style="font-size:0.8rem;color:#64748B;">Student ID</label><input type="text" id="editSid" style="padding:10px;border:1px solid #E2E8F0;border-radius:8px;width:100%;box-sizing:border-box;"></div>
+                <div><label style="font-size:0.8rem;color:#64748B;">Section</label><input type="text" id="editSection" style="padding:10px;border:1px solid #E2E8F0;border-radius:8px;width:100%;box-sizing:border-box;"></div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div><label style="font-size:0.8rem;color:#64748B;">Email</label><input type="email" id="editEmail" style="padding:10px;border:1px solid #E2E8F0;border-radius:8px;width:100%;box-sizing:border-box;"></div>
+                <div><label style="font-size:0.8rem;color:#64748B;">Contact</label><input type="text" id="editContact" style="padding:10px;border:1px solid #E2E8F0;border-radius:8px;width:100%;box-sizing:border-box;"></div>
+            </div>
+            <div><label style="font-size:0.8rem;color:#64748B;">Institution</label>
+                <select id="editInst2" style="padding:10px;border:1px solid #E2E8F0;border-radius:8px;width:100%;">
+                    <option value="">-- Select --</option>
+                    {% for i in institutions %}<option value="{{ i.id }}">{{ i.name }} ({{ i.short_name }})</option>{% endfor %}
+                </select>
+            </div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end;">
+            <button onclick="closeModal('editStudentModal')" style="padding:8px 20px;border:1px solid #E2E8F0;border-radius:8px;background:white;cursor:pointer;">Cancel</button>
+            <button onclick="saveStudent()" style="padding:8px 20px;border:none;border-radius:8px;background:#3B82F6;color:white;cursor:pointer;font-weight:600;">Save</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function filterStudents() {
+    const search = document.getElementById('searchInput').value.toLowerCase();
+    const section = document.getElementById('filterSection').value;
+    document.querySelectorAll('.student-row').forEach(row => {
+        const name = row.dataset.name;
+        const sec = row.dataset.section;
+        const matchSearch = !search || name.includes(search);
+        const matchSection = !section || sec === section;
+        row.style.display = matchSearch && matchSection ? '' : 'none';
+    });
+}
+function addStudent() {
+    fetch('/api/admin/students', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            full_name: document.getElementById('addName').value,
+            username: document.getElementById('addUsername').value,
+            student_id: document.getElementById('addSid').value,
+            section: document.getElementById('addSection').value,
+            email: document.getElementById('addEmail').value,
+            contact_number: document.getElementById('addContact').value,
+            institution_id: document.getElementById('addInst').value || null,
+            password: document.getElementById('addPassword').value
+        })
+    }).then(r => r.json()).then(d => { if (d.success) location.reload(); else alert(d.error || 'Failed'); });
+}
+function editStudent(id, name, email, sid, section, contact, instId) {
+    document.getElementById('editStudentId').value = id;
+    document.getElementById('editName').value = name;
+    document.getElementById('editEmail').value = email;
+    document.getElementById('editSid').value = sid;
+    document.getElementById('editSection').value = section;
+    document.getElementById('editContact').value = contact;
+    document.getElementById('editInst2').value = instId || '';
+    openModal('editStudentModal');
+}
+function saveStudent() {
+    const id = document.getElementById('editStudentId').value;
+    fetch(`/api/admin/students/${id}`, {
+        method: 'PUT', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            full_name: document.getElementById('editName').value,
+            email: document.getElementById('editEmail').value,
+            student_id: document.getElementById('editSid').value,
+            section: document.getElementById('editSection').value,
+            contact_number: document.getElementById('editContact').value,
+            institution_id: document.getElementById('editInst2').value || null
+        })
+    }).then(r => r.json()).then(d => { if (d.success) location.reload(); else alert('Failed'); });
+}
+</script>
+{% endblock %}

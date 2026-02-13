@@ -1,0 +1,110 @@
+{% extends 'base.html' %}
+
+{% block title %}Quiz & Exam Management - Sangrenes LMS Portal{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1><i class="fas fa-question-circle"></i> Quiz & Exam Management</h1>
+        <p>Overview of all quizzes and exams across subjects</p>
+    </div>
+</div>
+
+<!-- Stats -->
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px;margin-bottom:24px;">
+    <div style="background:white;border-radius:12px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,0.06);text-align:center;border-top:3px solid #8B5CF6;">
+        <div style="font-size:2rem;font-weight:700;color:#8B5CF6;">{{ quizzes|length }}</div>
+        <div style="font-size:0.8rem;color:#64748B;">Total Quizzes</div>
+    </div>
+    <div style="background:white;border-radius:12px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,0.06);text-align:center;border-top:3px solid #EF4444;">
+        <div style="font-size:2rem;font-weight:700;color:#EF4444;">{{ exams|length }}</div>
+        <div style="font-size:0.8rem;color:#64748B;">Total Exams</div>
+    </div>
+    <div style="background:white;border-radius:12px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,0.06);text-align:center;border-top:3px solid #10B981;">
+        <div style="font-size:2rem;font-weight:700;color:#10B981;">{{ quizzes|sum(attribute='question_count') }}</div>
+        <div style="font-size:0.8rem;color:#64748B;">Quiz Questions</div>
+    </div>
+    <div style="background:white;border-radius:12px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,0.06);text-align:center;border-top:3px solid #F59E0B;">
+        <div style="font-size:2rem;font-weight:700;color:#F59E0B;">{{ quizzes|sum(attribute='attempt_count') }}</div>
+        <div style="font-size:0.8rem;color:#64748B;">Quiz Attempts</div>
+    </div>
+</div>
+
+<!-- Quizzes Table -->
+<div style="background:white;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.06);overflow:hidden;margin-bottom:24px;">
+    <div style="padding:16px 20px;border-bottom:1px solid #E2E8F0;">
+        <h3 style="margin:0;font-size:1rem;"><i class="fas fa-clipboard-list" style="color:#8B5CF6;"></i> Quizzes</h3>
+    </div>
+    {% if quizzes %}
+    <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;">
+            <thead>
+                <tr style="background:#F8FAFC;">
+                    <th style="padding:10px 14px;text-align:left;font-size:0.8rem;color:#64748B;">Quiz</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.8rem;color:#64748B;">Subject</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.8rem;color:#64748B;">Session</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.8rem;color:#64748B;">Questions</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.8rem;color:#64748B;">Time Limit</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.8rem;color:#64748B;">Attempts</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.8rem;color:#64748B;">Avg Score</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for q in quizzes %}
+                <tr style="border-bottom:1px solid #F1F5F9;">
+                    <td style="padding:10px 14px;font-weight:600;">{{ q.title }}</td>
+                    <td style="padding:10px 14px;text-align:center;"><span style="background:#EDE9FE;color:#7C3AED;padding:2px 10px;border-radius:12px;font-size:0.75rem;">{{ q.subject_code }} {{ q.section }}</span></td>
+                    <td style="padding:10px 14px;text-align:center;font-size:0.85rem;">Session {{ q.session_number }}</td>
+                    <td style="padding:10px 14px;text-align:center;font-weight:600;color:#3B82F6;">{{ q.question_count }}</td>
+                    <td style="padding:10px 14px;text-align:center;font-size:0.85rem;color:#64748B;">{{ q.time_limit or 'None' }}{% if q.time_limit %} min{% endif %}</td>
+                    <td style="padding:10px 14px;text-align:center;font-weight:600;color:#10B981;">{{ q.attempt_count }}</td>
+                    <td style="padding:10px 14px;text-align:center;font-weight:600;color:#F59E0B;">{{ "%.1f"|format(q.avg_score or 0) }}%</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div style="padding:40px;text-align:center;color:#94A3B8;"><p>No quizzes created yet.</p></div>
+    {% endif %}
+</div>
+
+<!-- Exams Table -->
+<div style="background:white;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.06);overflow:hidden;">
+    <div style="padding:16px 20px;border-bottom:1px solid #E2E8F0;">
+        <h3 style="margin:0;font-size:1rem;"><i class="fas fa-file-alt" style="color:#EF4444;"></i> Exams (Midterm & Finals)</h3>
+    </div>
+    {% if exams %}
+    <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;">
+            <thead>
+                <tr style="background:#F8FAFC;">
+                    <th style="padding:10px 14px;text-align:left;font-size:0.8rem;color:#64748B;">Exam</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.8rem;color:#64748B;">Type</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.8rem;color:#64748B;">Subject</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.8rem;color:#64748B;">Questions</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.8rem;color:#64748B;">Attempts</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.8rem;color:#64748B;">Avg Score</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for e in exams %}
+                <tr style="border-bottom:1px solid #F1F5F9;">
+                    <td style="padding:10px 14px;font-weight:600;">{{ e.title }}</td>
+                    <td style="padding:10px 14px;text-align:center;">
+                        <span style="background:{% if e.exam_type == 'midterm' %}#DBEAFE;color:#1E40AF{% else %}#FEF3C7;color:#92400E{% endif %};padding:2px 10px;border-radius:12px;font-size:0.75rem;">{{ e.exam_type|capitalize }}</span>
+                    </td>
+                    <td style="padding:10px 14px;text-align:center;font-size:0.85rem;">{{ e.subject_code }} {{ e.section }}</td>
+                    <td style="padding:10px 14px;text-align:center;font-weight:600;color:#3B82F6;">{{ e.question_count }}</td>
+                    <td style="padding:10px 14px;text-align:center;font-weight:600;color:#10B981;">{{ e.attempt_count }}</td>
+                    <td style="padding:10px 14px;text-align:center;font-weight:600;color:#F59E0B;">{{ "%.1f"|format(e.avg_score or 0) }}%</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div style="padding:40px;text-align:center;color:#94A3B8;"><p>No exams created yet.</p></div>
+    {% endif %}
+</div>
+{% endblock %}

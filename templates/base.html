@@ -25,18 +25,35 @@
                 <a href="{{ url_for('admin_institutions') }}" class="{% if 'institution' in request.endpoint %}active{% endif %}">
                     <i class="fas fa-university"></i> Institutions
                 </a>
-                <a href="{{ url_for('admin_instructors') }}" class="{% if request.endpoint == 'admin_instructors' %}active{% endif %}">
-                    <i class="fas fa-chalkboard-teacher"></i> Instructors
+                <a href="{{ url_for('admin_teacher_profiles') }}" class="{% if 'teacher' in request.endpoint %}active{% endif %}">
+                    <i class="fas fa-chalkboard-teacher"></i> Teachers
                 </a>
-                <a href="{{ url_for('admin_payroll') }}" class="{% if 'payroll' in request.endpoint %}active{% endif %}">
-                    <i class="fas fa-money-check-alt"></i> Payroll
+                <a href="{{ url_for('admin_students') }}" class="{% if request.endpoint == 'admin_students' %}active{% endif %}">
+                    <i class="fas fa-user-graduate"></i> Students
                 </a>
-                <a href="{{ url_for('admin_ai_logs') }}" class="{% if 'ai_log' in request.endpoint %}active{% endif %}">
-                    <i class="fas fa-robot"></i> AI Logs
+                <a href="{{ url_for('admin_subjects') }}" class="{% if request.endpoint == 'admin_subjects' %}active{% endif %}">
+                    <i class="fas fa-book-open"></i> Subjects
                 </a>
-                <a href="{{ url_for('admin_ai_rules') }}" class="{% if 'ai_rule' in request.endpoint %}active{% endif %}">
-                    <i class="fas fa-cogs"></i> AI Rules
-                </a>
+                <!-- Admin Dropdown: More -->
+                <div class="nav-more-dropdown" style="position:relative;display:inline-block;">
+                    <a href="#" onclick="event.preventDefault();document.getElementById('adminMoreMenu').classList.toggle('show');" class="{% if request.endpoint in ['admin_materials','admin_quizzes','admin_grades','admin_attendance','admin_payments','admin_files','admin_subscriptions','admin_payroll','admin_ai_logs','admin_ai_rules'] %}active{% endif %}">
+                        <i class="fas fa-ellipsis-h"></i> More
+                    </a>
+                    <div id="adminMoreMenu" class="dropdown-menu" style="position:absolute;top:100%;left:0;min-width:220px;background:white;border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.12);z-index:1000;display:none;padding:8px 0;">
+                        <a href="{{ url_for('admin_materials') }}" style="display:block;padding:8px 16px;font-size:0.85rem;color:#1E293B;text-decoration:none;"><i class="fas fa-photo-video" style="width:20px;color:#EF4444;"></i> Materials & Videos</a>
+                        <a href="{{ url_for('admin_quizzes') }}" style="display:block;padding:8px 16px;font-size:0.85rem;color:#1E293B;text-decoration:none;"><i class="fas fa-question-circle" style="width:20px;color:#8B5CF6;"></i> Quizzes & Exams</a>
+                        <a href="{{ url_for('admin_grades') }}" style="display:block;padding:8px 16px;font-size:0.85rem;color:#1E293B;text-decoration:none;"><i class="fas fa-chart-line" style="width:20px;color:#10B981;"></i> Grades & Performance</a>
+                        <a href="{{ url_for('admin_attendance') }}" style="display:block;padding:8px 16px;font-size:0.85rem;color:#1E293B;text-decoration:none;"><i class="fas fa-calendar-check" style="width:20px;color:#3B82F6;"></i> Attendance</a>
+                        <div style="border-top:1px solid #E2E8F0;margin:4px 0;"></div>
+                        <a href="{{ url_for('admin_payments') }}" style="display:block;padding:8px 16px;font-size:0.85rem;color:#1E293B;text-decoration:none;"><i class="fas fa-money-bill-wave" style="width:20px;color:#F59E0B;"></i> Payments & Tuition</a>
+                        <a href="{{ url_for('admin_payroll') }}" style="display:block;padding:8px 16px;font-size:0.85rem;color:#1E293B;text-decoration:none;"><i class="fas fa-money-check-alt" style="width:20px;color:#10B981;"></i> Payroll</a>
+                        <a href="{{ url_for('admin_files') }}" style="display:block;padding:8px 16px;font-size:0.85rem;color:#1E293B;text-decoration:none;"><i class="fas fa-hdd" style="width:20px;color:#64748B;"></i> File Storage</a>
+                        <a href="{{ url_for('admin_subscriptions') }}" style="display:block;padding:8px 16px;font-size:0.85rem;color:#1E293B;text-decoration:none;"><i class="fas fa-crown" style="width:20px;color:#8B5CF6;"></i> Subscriptions</a>
+                        <div style="border-top:1px solid #E2E8F0;margin:4px 0;"></div>
+                        <a href="{{ url_for('admin_ai_logs') }}" style="display:block;padding:8px 16px;font-size:0.85rem;color:#1E293B;text-decoration:none;"><i class="fas fa-robot" style="width:20px;color:#3B82F6;"></i> AI Logs</a>
+                        <a href="{{ url_for('admin_ai_rules') }}" style="display:block;padding:8px 16px;font-size:0.85rem;color:#1E293B;text-decoration:none;"><i class="fas fa-cogs" style="width:20px;color:#64748B;"></i> AI Rules</a>
+                    </div>
+                </div>
             {% elif current_user.role == 'instructor' %}
                 <a href="{{ url_for('dashboard') }}" class="{% if request.endpoint == 'dashboard' %}active{% endif %}">
                     <i class="fas fa-home"></i> Dashboard
@@ -177,8 +194,27 @@
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 
     <script>
+    // Modal helpers
+    function openModal(id) { document.getElementById(id).style.display = 'flex'; }
+    function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+
     // Dropdown functionality
     document.addEventListener('DOMContentLoaded', function() {
+        // Admin More dropdown
+        document.addEventListener('click', function(e) {
+            const moreMenu = document.getElementById('adminMoreMenu');
+            if (moreMenu && !e.target.closest('.nav-more-dropdown')) {
+                moreMenu.classList.remove('show');
+                moreMenu.style.display = 'none';
+            }
+        });
+        const moreLinks = document.querySelectorAll('.nav-more-dropdown > a');
+        moreLinks.forEach(link => {
+            link.addEventListener('click', function() {
+                const menu = document.getElementById('adminMoreMenu');
+                if (menu) menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
+            });
+        });
         // Toggle dropdowns
         const dropdowns = [
             { btn: 'notifications-btn', menu: 'notifications-dropdown' },

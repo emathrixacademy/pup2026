@@ -1,0 +1,102 @@
+{% extends 'base.html' %}
+
+{% block title %}Attendance Overview - Sangrenes LMS Portal{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1><i class="fas fa-calendar-check"></i> Attendance Overview</h1>
+        <p>Monitor instructor and student attendance across all institutions</p>
+    </div>
+</div>
+
+<!-- Instructor Attendance -->
+<div style="background:white;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.06);overflow:hidden;margin-bottom:24px;">
+    <div style="padding:16px 20px;border-bottom:1px solid #E2E8F0;">
+        <h3 style="margin:0;font-size:1rem;"><i class="fas fa-chalkboard-teacher" style="color:#3B82F6;"></i> Instructor Attendance (This Month)</h3>
+    </div>
+    {% if instructor_attendance %}
+    <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;">
+            <thead>
+                <tr style="background:#F8FAFC;">
+                    <th style="padding:10px 14px;text-align:left;font-size:0.8rem;color:#64748B;">Instructor</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.8rem;color:#64748B;">Employee ID</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.8rem;color:#64748B;">Present</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.8rem;color:#64748B;">Late</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.8rem;color:#64748B;">Absent</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.8rem;color:#64748B;">Total Hours</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.8rem;color:#64748B;">Today</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for a in instructor_attendance %}
+                <tr style="border-bottom:1px solid #F1F5F9;">
+                    <td style="padding:10px 14px;font-weight:600;">{{ a.full_name }}</td>
+                    <td style="padding:10px 14px;text-align:center;font-size:0.85rem;color:#64748B;">{{ a.employee_id or '-' }}</td>
+                    <td style="padding:10px 14px;text-align:center;font-weight:600;color:#10B981;">{{ a.present or 0 }}</td>
+                    <td style="padding:10px 14px;text-align:center;font-weight:600;color:#F59E0B;">{{ a.late or 0 }}</td>
+                    <td style="padding:10px 14px;text-align:center;font-weight:600;color:#EF4444;">{{ a.absent or 0 }}</td>
+                    <td style="padding:10px 14px;text-align:center;font-weight:600;color:#3B82F6;">{{ "%.1f"|format(a.total_hours or 0) }}h</td>
+                    <td style="padding:10px 14px;text-align:center;">
+                        {% if a.today_in and a.today_out %}
+                        <span style="background:#D1FAE5;color:#065F46;padding:2px 10px;border-radius:12px;font-size:0.75rem;">Done</span>
+                        {% elif a.today_in %}
+                        <span style="background:#DBEAFE;color:#1E40AF;padding:2px 10px;border-radius:12px;font-size:0.75rem;">Working</span>
+                        {% else %}
+                        <span style="background:#F1F5F9;color:#64748B;padding:2px 10px;border-radius:12px;font-size:0.75rem;">Not In</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div style="padding:40px;text-align:center;color:#94A3B8;"><p>No instructor attendance records this month.</p></div>
+    {% endif %}
+</div>
+
+<!-- Student Attendance by Subject -->
+<div style="background:white;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.06);overflow:hidden;">
+    <div style="padding:16px 20px;border-bottom:1px solid #E2E8F0;">
+        <h3 style="margin:0;font-size:1rem;"><i class="fas fa-user-graduate" style="color:#8B5CF6;"></i> Student Attendance Summary</h3>
+    </div>
+    {% if student_attendance %}
+    <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;">
+            <thead>
+                <tr style="background:#F8FAFC;">
+                    <th style="padding:10px 14px;text-align:left;font-size:0.8rem;color:#64748B;">Date</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.8rem;color:#64748B;">Subject</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.8rem;color:#64748B;">Present</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.8rem;color:#64748B;">Late</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.8rem;color:#64748B;">Absent</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.8rem;color:#64748B;">Total</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.8rem;color:#64748B;">Rate</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for sa in student_attendance %}
+                <tr style="border-bottom:1px solid #F1F5F9;">
+                    <td style="padding:10px 14px;font-weight:600;font-size:0.85rem;">{{ sa.date }}</td>
+                    <td style="padding:10px 14px;text-align:center;"><span style="background:#EDE9FE;color:#7C3AED;padding:2px 10px;border-radius:12px;font-size:0.75rem;">{{ sa.subject_code }} {{ sa.section }}</span></td>
+                    <td style="padding:10px 14px;text-align:center;font-weight:600;color:#10B981;">{{ sa.present }}</td>
+                    <td style="padding:10px 14px;text-align:center;font-weight:600;color:#F59E0B;">{{ sa.late }}</td>
+                    <td style="padding:10px 14px;text-align:center;font-weight:600;color:#EF4444;">{{ sa.absent }}</td>
+                    <td style="padding:10px 14px;text-align:center;font-size:0.85rem;color:#64748B;">{{ sa.total }}</td>
+                    <td style="padding:10px 14px;text-align:center;font-weight:600;color:#3B82F6;">{% if sa.total > 0 %}{{ "%.0f"|format((sa.present + sa.late) / sa.total * 100) }}%{% else %}0%{% endif %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div style="padding:40px;text-align:center;color:#94A3B8;">
+        <i class="fas fa-calendar-check" style="font-size:3rem;margin-bottom:16px;color:#CBD5E1;"></i>
+        <h3 style="color:#64748B;">No student attendance records</h3>
+        <p>Student attendance can be recorded by instructors during class sessions.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
