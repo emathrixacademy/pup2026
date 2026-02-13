@@ -1,0 +1,74 @@
+{% extends 'base.html' %}
+{% block title %}Quizzes & Exams - Sangrenes LMS{% endblock %}
+{% block content %}
+<h1 style="font-size:1.2rem;font-weight:700;margin:0 0 16px;"><i class="fas fa-question-circle" style="color:#8B5CF6;"></i> Quizzes & Exams</h1>
+
+<div class="tab-bar">
+    <button class="active" data-tab-btn="qe" onclick="switchTab('qe','tab-quizzes')"><i class="fas fa-question-circle"></i> Quizzes</button>
+    <button data-tab-btn="qe" onclick="switchTab('qe','tab-exams')"><i class="fas fa-file-alt"></i> Exams</button>
+</div>
+
+<div id="tab-quizzes" class="tab-panel active" data-tab-group="qe">
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;">
+        {% if quizzes %}
+        <div style="overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;">
+                <thead><tr style="background:#F8FAFC;">
+                    <th style="padding:10px 14px;text-align:left;font-size:0.78rem;color:var(--muted);">Quiz</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.78rem;color:var(--muted);">Subject</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.78rem;color:var(--muted);">Session</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.78rem;color:var(--muted);">Questions</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.78rem;color:var(--muted);">Attempts</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.78rem;color:var(--muted);">Time Limit</th>
+                </tr></thead>
+                <tbody>
+                {% for q in quizzes %}
+                <tr style="border-bottom:1px solid #F1F5F9;">
+                    <td style="padding:10px 14px;font-size:0.85rem;font-weight:600;">{{ q.title }}</td>
+                    <td style="padding:10px 14px;text-align:center;"><span style="background:var(--primary-light);color:var(--primary);padding:2px 10px;border-radius:12px;font-size:0.72rem;">{{ q.code }} {{ q.section }}</span></td>
+                    <td style="padding:10px 14px;text-align:center;font-size:0.82rem;color:var(--muted);">Session {{ q.session_number }}</td>
+                    <td style="padding:10px 14px;text-align:center;font-size:0.85rem;font-weight:600;">{{ q.question_count }}</td>
+                    <td style="padding:10px 14px;text-align:center;font-size:0.85rem;color:#10B981;font-weight:600;">{{ q.attempt_count }}</td>
+                    <td style="padding:10px 14px;text-align:center;font-size:0.82rem;color:var(--muted);">{{ q.time_limit or 0 }} min</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div style="padding:50px;text-align:center;color:var(--muted);"><div>No quizzes created yet.</div></div>
+        {% endif %}
+    </div>
+</div>
+
+<div id="tab-exams" class="tab-panel" data-tab-group="qe">
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;">
+        {% if exams %}
+        <div style="overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;">
+                <thead><tr style="background:#F8FAFC;">
+                    <th style="padding:10px 14px;text-align:left;font-size:0.78rem;color:var(--muted);">Exam</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.78rem;color:var(--muted);">Subject</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.78rem;color:var(--muted);">Type</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.78rem;color:var(--muted);">Questions</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.78rem;color:var(--muted);">Attempts</th>
+                </tr></thead>
+                <tbody>
+                {% for e in exams %}
+                <tr style="border-bottom:1px solid #F1F5F9;">
+                    <td style="padding:10px 14px;font-size:0.85rem;font-weight:600;">{{ e.title }}</td>
+                    <td style="padding:10px 14px;text-align:center;"><span style="background:var(--primary-light);color:var(--primary);padding:2px 10px;border-radius:12px;font-size:0.72rem;">{{ e.code }} {{ e.section }}</span></td>
+                    <td style="padding:10px 14px;text-align:center;font-size:0.82rem;color:var(--muted);">{{ e.exam_type or 'Exam' }}</td>
+                    <td style="padding:10px 14px;text-align:center;font-size:0.85rem;font-weight:600;">{{ e.question_count }}</td>
+                    <td style="padding:10px 14px;text-align:center;font-size:0.85rem;color:#10B981;font-weight:600;">{{ e.attempt_count }}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div style="padding:50px;text-align:center;color:var(--muted);"><div>No exams created yet.</div></div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

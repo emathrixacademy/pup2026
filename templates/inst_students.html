@@ -1,0 +1,118 @@
+{% extends 'base.html' %}
+{% block title %}Students - Sangrenes LMS{% endblock %}
+{% block content %}
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+    <h1 style="font-size:1.2rem;font-weight:700;margin:0;"><i class="fas fa-users" style="color:#10B981;"></i> My Students</h1>
+    <button onclick="openModal('addStudentModal')" style="padding:8px 16px;border:none;border-radius:8px;background:var(--primary);color:white;font-size:0.82rem;font-weight:600;cursor:pointer;"><i class="fas fa-plus"></i> Add Student</button>
+</div>
+
+<div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
+    <input id="searchStudent" onkeyup="filterStudents()" placeholder="Search students..." style="padding:8px 14px;border:1px solid var(--border);border-radius:8px;font-size:0.82rem;width:200px;">
+    <select id="filterSection" onchange="filterStudents()" style="padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:0.82rem;">
+        <option value="">All Sections</option>
+        {% for sec in sections %}<option value="{{ sec }}">{{ sec }}</option>{% endfor %}
+    </select>
+</div>
+
+<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;">
+    {% if students %}
+    <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;">
+            <thead><tr style="background:#F8FAFC;">
+                <th style="padding:10px 14px;text-align:left;font-size:0.78rem;color:var(--muted);">Student</th>
+                <th style="padding:10px 14px;text-align:center;font-size:0.78rem;color:var(--muted);">Student ID</th>
+                <th style="padding:10px 14px;text-align:center;font-size:0.78rem;color:var(--muted);">Section</th>
+                <th style="padding:10px 14px;text-align:center;font-size:0.78rem;color:var(--muted);">Enrolled</th>
+                <th style="padding:10px 14px;text-align:center;font-size:0.78rem;color:var(--muted);">Status</th>
+                <th style="padding:10px 14px;text-align:right;font-size:0.78rem;color:var(--muted);">Actions</th>
+            </tr></thead>
+            <tbody>
+            {% for s in students %}
+            <tr class="stu-row" data-name="{{ s.full_name|lower }}" data-section="{{ s.section or '' }}" style="border-bottom:1px solid #F1F5F9;">
+                <td style="padding:10px 14px;"><div style="display:flex;align-items:center;gap:10px;">
+                    <img src="{{ url_for('static', filename='uploads/photos/' + (s.photo or 'default.png')) }}" onerror="this.src='https://ui-avatars.com/api/?name={{ s.full_name }}&background=10B981&color=fff&size=32'" style="width:32px;height:32px;border-radius:50%;object-fit:cover;">
+                    <div><div style="font-size:0.85rem;font-weight:600;">{{ s.full_name }}</div><div style="font-size:0.72rem;color:var(--muted);">{{ s.email or s.username }}</div></div>
+                </div></td>
+                <td style="padding:10px 14px;text-align:center;font-size:0.82rem;color:var(--muted);">{{ s.student_id or '-' }}</td>
+                <td style="padding:10px 14px;text-align:center;"><span style="background:var(--primary-light);color:var(--primary);padding:2px 10px;border-radius:12px;font-size:0.72rem;">{{ s.section or '-' }}</span></td>
+                <td style="padding:10px 14px;text-align:center;font-size:0.82rem;">{{ enrollment_map.get(s.id, 0) }} subjects</td>
+                <td style="padding:10px 14px;text-align:center;">{% if s.is_approved %}<span style="background:#D1FAE5;color:#065F46;padding:2px 10px;border-radius:12px;font-size:0.72rem;">Active</span>{% else %}<span style="background:#FEF3C7;color:#92400E;padding:2px 10px;border-radius:12px;font-size:0.72rem;">Pending</span>{% endif %}</td>
+                <td style="padding:10px 14px;text-align:right;">
+                    <button onclick='editStudent({{ s|tojson }})' style="padding:4px 10px;font-size:0.72rem;background:#DBEAFE;color:#1E40AF;border:none;border-radius:6px;cursor:pointer;"><i class="fas fa-edit"></i></button>
+                    <button onclick="deleteStudent({{ s.id }})" style="padding:4px 10px;font-size:0.72rem;background:#FEE2E2;color:#991B1B;border:none;border-radius:6px;cursor:pointer;"><i class="fas fa-trash"></i></button>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div style="padding:50px;text-align:center;color:var(--muted);"><i class="fas fa-users" style="font-size:2rem;color:#CBD5E1;display:block;margin-bottom:8px;"></i><div>No students yet. Add your first student.</div></div>
+    {% endif %}
+</div>
+
+<!-- Add/Edit Student Modal -->
+<div id="addStudentModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1000;">
+    <div style="background:white;border-radius:16px;padding:30px;max-width:500px;width:90%;margin:auto;position:relative;top:50%;transform:translateY(-50%);">
+        <h3 style="margin:0 0 20px;" id="studentModalTitle"><i class="fas fa-plus-circle" style="color:#10B981;"></i> Add Student</h3>
+        <input type="hidden" id="editStudentId">
+        <div style="display:flex;flex-direction:column;gap:12px;">
+            <div><label style="font-size:0.8rem;color:var(--muted);">Full Name *</label><input type="text" id="sName" style="padding:10px;border:1px solid var(--border);border-radius:8px;width:100%;box-sizing:border-box;"></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div><label style="font-size:0.8rem;color:var(--muted);">Username *</label><input type="text" id="sUsername" style="padding:10px;border:1px solid var(--border);border-radius:8px;width:100%;box-sizing:border-box;"></div>
+                <div><label style="font-size:0.8rem;color:var(--muted);">Password</label><input type="text" id="sPassword" placeholder="Default: student123" style="padding:10px;border:1px solid var(--border);border-radius:8px;width:100%;box-sizing:border-box;"></div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div><label style="font-size:0.8rem;color:var(--muted);">Student ID</label><input type="text" id="sStudentId" style="padding:10px;border:1px solid var(--border);border-radius:8px;width:100%;box-sizing:border-box;"></div>
+                <div><label style="font-size:0.8rem;color:var(--muted);">Section</label><input type="text" id="sSection" style="padding:10px;border:1px solid var(--border);border-radius:8px;width:100%;box-sizing:border-box;"></div>
+            </div>
+            <div><label style="font-size:0.8rem;color:var(--muted);">Email</label><input type="email" id="sEmail" style="padding:10px;border:1px solid var(--border);border-radius:8px;width:100%;box-sizing:border-box;"></div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end;">
+            <button onclick="closeModal('addStudentModal')" style="padding:8px 20px;border:1px solid var(--border);border-radius:8px;background:white;cursor:pointer;">Cancel</button>
+            <button onclick="saveStudent()" style="padding:8px 20px;border:none;border-radius:8px;background:#10B981;color:white;cursor:pointer;font-weight:600;">Save</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script>
+function filterStudents() {
+    const q = document.getElementById('searchStudent').value.toLowerCase();
+    const sec = document.getElementById('filterSection').value;
+    document.querySelectorAll('.stu-row').forEach(r => {
+        r.style.display = r.dataset.name.includes(q) && (!sec || r.dataset.section === sec) ? '' : 'none';
+    });
+}
+function editStudent(s) {
+    document.getElementById('editStudentId').value = s.id;
+    document.getElementById('studentModalTitle').innerHTML = '<i class="fas fa-edit" style="color:#10B981;"></i> Edit Student';
+    document.getElementById('sName').value = s.full_name || '';
+    document.getElementById('sUsername').value = s.username || '';
+    document.getElementById('sStudentId').value = s.student_id || '';
+    document.getElementById('sSection').value = s.section || '';
+    document.getElementById('sEmail').value = s.email || '';
+    document.getElementById('sPassword').value = '';
+    openModal('addStudentModal');
+}
+function saveStudent() {
+    const id = document.getElementById('editStudentId').value;
+    const data = {
+        full_name: document.getElementById('sName').value,
+        username: document.getElementById('sUsername').value,
+        student_id: document.getElementById('sStudentId').value,
+        section: document.getElementById('sSection').value,
+        email: document.getElementById('sEmail').value,
+        password: document.getElementById('sPassword').value
+    };
+    const url = id ? `/api/institution/students/${id}` : '/api/institution/students';
+    fetch(url, { method: id ? 'PUT' : 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) })
+        .then(r => r.json()).then(d => { if (d.success) location.reload(); else alert(d.error || 'Failed'); });
+}
+function deleteStudent(id) {
+    if (!confirm('Delete this student?')) return;
+    fetch(`/api/institution/students/${id}`, { method: 'DELETE' })
+        .then(r => r.json()).then(d => { if (d.success) location.reload(); });
+}
+</script>
+{% endblock %}

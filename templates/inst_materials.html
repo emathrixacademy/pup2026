@@ -1,0 +1,70 @@
+{% extends 'base.html' %}
+{% block title %}Materials - Sangrenes LMS{% endblock %}
+{% block content %}
+<h1 style="font-size:1.2rem;font-weight:700;margin:0 0 16px;"><i class="fas fa-book-reader" style="color:var(--primary);"></i> Materials & Resources</h1>
+
+<div class="tab-bar">
+    <button class="active" data-tab-btn="mat" onclick="switchTab('mat','tab-files')"><i class="fas fa-folder"></i> Uploaded Files</button>
+    <button data-tab-btn="mat" onclick="switchTab('mat','tab-reading')"><i class="fas fa-book"></i> Session Materials</button>
+</div>
+
+<div id="tab-files" class="tab-panel active" data-tab-group="mat">
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;">
+        {% if files %}
+        <div style="overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;">
+                <thead><tr style="background:#F8FAFC;">
+                    <th style="padding:10px 14px;text-align:left;font-size:0.78rem;color:var(--muted);">File</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.78rem;color:var(--muted);">Category</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.78rem;color:var(--muted);">Subject</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.78rem;color:var(--muted);">Uploaded By</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.78rem;color:var(--muted);">Size</th>
+                </tr></thead>
+                <tbody>
+                {% for f in files %}
+                <tr style="border-bottom:1px solid #F1F5F9;">
+                    <td style="padding:10px 14px;font-size:0.85rem;font-weight:600;">{{ f.original_name }}</td>
+                    <td style="padding:10px 14px;text-align:center;"><span style="background:var(--primary-light);color:var(--primary);padding:2px 10px;border-radius:12px;font-size:0.72rem;">{{ f.category }}</span></td>
+                    <td style="padding:10px 14px;text-align:center;font-size:0.82rem;color:var(--muted);">{{ f.subject_code or '-' }}</td>
+                    <td style="padding:10px 14px;text-align:center;font-size:0.82rem;color:var(--muted);">{{ f.uploader_name or '-' }}</td>
+                    <td style="padding:10px 14px;text-align:center;font-size:0.82rem;color:var(--muted);">{% if f.file_size > 1048576 %}{{ "%.1f"|format(f.file_size / 1048576) }} MB{% else %}{{ "%.1f"|format((f.file_size or 0) / 1024) }} KB{% endif %}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div style="padding:50px;text-align:center;color:var(--muted);"><i class="fas fa-folder-open" style="font-size:2rem;color:#CBD5E1;display:block;margin-bottom:8px;"></i><div>No uploaded files yet.</div></div>
+        {% endif %}
+    </div>
+</div>
+
+<div id="tab-reading" class="tab-panel" data-tab-group="mat">
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;">
+        {% if session_materials %}
+        <div style="overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;">
+                <thead><tr style="background:#F8FAFC;">
+                    <th style="padding:10px 14px;text-align:left;font-size:0.78rem;color:var(--muted);">Session</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.78rem;color:var(--muted);">Subject</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.78rem;color:var(--muted);">Video</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.78rem;color:var(--muted);">Reading</th>
+                </tr></thead>
+                <tbody>
+                {% for m in session_materials %}
+                <tr style="border-bottom:1px solid #F1F5F9;">
+                    <td style="padding:10px 14px;font-size:0.85rem;">Session {{ m.session_number }}: {{ m.title }}</td>
+                    <td style="padding:10px 14px;text-align:center;"><span style="background:var(--primary-light);color:var(--primary);padding:2px 10px;border-radius:12px;font-size:0.72rem;">{{ m.code }} {{ m.section }}</span></td>
+                    <td style="padding:10px 14px;text-align:center;">{% if m.youtube_url %}<i class="fas fa-check-circle" style="color:#10B981;"></i>{% else %}<i class="fas fa-minus" style="color:#CBD5E1;"></i>{% endif %}</td>
+                    <td style="padding:10px 14px;text-align:center;">{% if m.reading_materials %}<i class="fas fa-check-circle" style="color:#10B981;"></i>{% else %}<i class="fas fa-minus" style="color:#CBD5E1;"></i>{% endif %}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div style="padding:50px;text-align:center;color:var(--muted);"><i class="fas fa-book" style="font-size:2rem;color:#CBD5E1;display:block;margin-bottom:8px;"></i><div>No session materials yet.</div></div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

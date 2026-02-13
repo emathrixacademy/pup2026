@@ -117,6 +117,23 @@
                         <a href="{{ url_for('admin_ai_rules') }}"><i class="fas fa-cog"></i> AI Rules</a>
                     </div>
                 </div>
+            {% elif current_user.role == 'institution' %}
+                <a href="{{ url_for('inst_dashboard') }}" class="{% if request.endpoint == 'inst_dashboard' %}active{% endif %}"><i class="fas fa-building"></i> <span class="label">Dashboard</span></a>
+                <a href="{{ url_for('inst_teachers') }}" class="{% if request.endpoint == 'inst_teachers' %}active{% endif %}"><i class="fas fa-chalkboard-teacher"></i> <span class="label">Teachers</span></a>
+                <a href="{{ url_for('inst_students') }}" class="{% if request.endpoint == 'inst_students' %}active{% endif %}"><i class="fas fa-users"></i> <span class="label">Students</span></a>
+                <a href="{{ url_for('inst_subjects') }}" class="{% if request.endpoint == 'inst_subjects' %}active{% endif %}"><i class="fas fa-book-open"></i> <span class="label">Subjects</span></a>
+                <div class="tn-drop">
+                    <span onclick="toggleDrop('instMore')" class="{% if request.endpoint in ['inst_materials','inst_quizzes','inst_grades','inst_payments','inst_salary','inst_schedules'] %}active{% endif %}"><i class="fas fa-grid"></i> <span class="label">More</span> <i class="fas fa-chevron-down" style="font-size:0.6rem;"></i></span>
+                    <div class="tn-drop-menu" id="instMore">
+                        <a href="{{ url_for('inst_materials') }}"><i class="fas fa-book-reader"></i> Materials</a>
+                        <a href="{{ url_for('inst_quizzes') }}"><i class="fas fa-question-circle"></i> Quizzes</a>
+                        <a href="{{ url_for('inst_grades') }}"><i class="fas fa-chart-line"></i> Grades</a>
+                        <div class="tn-sep"></div>
+                        <a href="{{ url_for('inst_payments') }}"><i class="fas fa-receipt"></i> Payments</a>
+                        <a href="{{ url_for('inst_salary') }}"><i class="fas fa-money-check"></i> Teacher Salary</a>
+                        <a href="{{ url_for('inst_schedules') }}"><i class="fas fa-calendar-alt"></i> Schedules</a>
+                    </div>
+                </div>
             {% elif current_user.role == 'instructor' %}
                 <a href="{{ url_for('dashboard') }}" class="{% if request.endpoint in ['dashboard', 'instructor_monitoring'] %}active{% endif %}"><i class="fas fa-home"></i> <span class="label">Dashboard</span></a>
                 <a href="{{ url_for('enrollments') }}" class="{% if request.endpoint == 'enrollments' %}active{% endif %}"><i class="fas fa-user-check"></i> <span class="label">Enrollments</span></a>
@@ -127,7 +144,7 @@
                 <a href="{{ url_for('student_peer_reviews') }}" class="{% if 'peer_review' in request.endpoint %}active{% endif %}"><i class="fas fa-user-friends"></i> <span class="label">Peer Reviews</span></a>
                 <a href="{{ url_for('my_grades') }}" class="{% if request.endpoint == 'my_grades' %}active{% endif %}"><i class="fas fa-chart-bar"></i> <span class="label">My Grades</span></a>
             {% endif %}
-            {% if current_user.role != 'admin' %}
+            {% if current_user.role not in ('admin', 'institution') %}
             <a href="{{ url_for('games_hub') }}" class="{% if request.endpoint in ['games_hub', 'typing_game', 'quiz_journey', 'quiz_journey_subject', 'quiz_journey_session', 'start_quiz_journey_game', 'student_performance'] %}active{% endif %}"><i class="fas fa-gamepad"></i> <span class="label">Games</span></a>
             {% endif %}
         </div>

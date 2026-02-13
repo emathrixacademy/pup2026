@@ -693,6 +693,49 @@ def init_db():
         )
     ''')
 
+    # Schedules table (for institution/instructor to set class schedules)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS schedules (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            institution_id INTEGER,
+            subject_id INTEGER,
+            instructor_id INTEGER,
+            title TEXT NOT NULL,
+            day_of_week TEXT NOT NULL,
+            start_time TEXT NOT NULL,
+            end_time TEXT NOT NULL,
+            room TEXT,
+            schedule_type TEXT DEFAULT 'class',
+            is_active INTEGER DEFAULT 1,
+            created_by INTEGER,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (institution_id) REFERENCES institutions (id),
+            FOREIGN KEY (subject_id) REFERENCES subjects (id),
+            FOREIGN KEY (instructor_id) REFERENCES users (id),
+            FOREIGN KEY (created_by) REFERENCES users (id)
+        )
+    ''')
+
+    # Payment reminders table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS payment_reminders (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            institution_id INTEGER,
+            student_id INTEGER,
+            payment_id INTEGER,
+            reminder_date DATE NOT NULL,
+            message TEXT,
+            is_sent INTEGER DEFAULT 0,
+            sent_at TIMESTAMP,
+            created_by INTEGER,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (institution_id) REFERENCES institutions (id),
+            FOREIGN KEY (student_id) REFERENCES users (id),
+            FOREIGN KEY (payment_id) REFERENCES student_payments (id),
+            FOREIGN KEY (created_by) REFERENCES users (id)
+        )
+    ''')
+
     conn.commit()
 
     # Migration: Add new columns to existing tables if they don't exist
@@ -956,6 +999,22 @@ def init_db():
                 VALUES (?, ?, ?, ?, ?, ?, ?)
             ''', (rule_name, rule_type, cond_field, cond_op, cond_val, action_type, action_params))
     conn.commit()
+
+    # Seed default institution account (linked to PUP)
+    cursor.execute('SELECT id FROM institutions WHERE short_name = ?', ('PUP',))
+    pup_inst = cursor.fetchone()
+    if pup_inst:
+        try:
+            cursor.execute('''
+                INSERT INTO users (username, password_hash, full_name, role, is_approved, profile_completed, institution_id)
+                VALUES (?, ?, ?, ?, 1, 1, ?)
+            ''', ('institution', generate_password_hash('institution123'), 'PUP Institution Admin', 'institution', pup_inst['id']))
+            conn.commit()
+        except sqlite3.IntegrityError:
+            pass
+        # Ensure institution users are approved
+        cursor.execute('UPDATE users SET is_approved = 1, profile_completed = 1 WHERE role = "institution"')
+        conn.commit()
 
     # Seed default platform settings
     default_settings = [

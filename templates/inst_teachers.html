@@ -1,0 +1,100 @@
+{% extends 'base.html' %}
+{% block title %}Teachers - Sangrenes LMS{% endblock %}
+{% block content %}
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+    <h1 style="font-size:1.2rem;font-weight:700;margin:0;"><i class="fas fa-chalkboard-teacher" style="color:var(--primary);"></i> My Teachers</h1>
+    <button onclick="openModal('addTeacherModal')" style="padding:8px 16px;border:none;border-radius:8px;background:var(--primary);color:white;font-size:0.82rem;font-weight:600;cursor:pointer;"><i class="fas fa-plus"></i> Add Teacher</button>
+</div>
+<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;">
+    {% if teachers %}
+    <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;">
+            <thead><tr style="background:#F8FAFC;">
+                <th style="padding:10px 14px;text-align:left;font-size:0.78rem;color:var(--muted);">Teacher</th>
+                <th style="padding:10px 14px;text-align:center;font-size:0.78rem;color:var(--muted);">Contract</th>
+                <th style="padding:10px 14px;text-align:center;font-size:0.78rem;color:var(--muted);">Salary</th>
+                <th style="padding:10px 14px;text-align:center;font-size:0.78rem;color:var(--muted);">Subjects</th>
+                <th style="padding:10px 14px;text-align:right;font-size:0.78rem;color:var(--muted);">Actions</th>
+            </tr></thead>
+            <tbody>
+            {% for t in teachers %}
+            <tr style="border-bottom:1px solid #F1F5F9;">
+                <td style="padding:10px 14px;"><div style="display:flex;align-items:center;gap:10px;">
+                    <img src="{{ url_for('static', filename='uploads/photos/' + (t.photo or 'default.png')) }}" onerror="this.src='https://ui-avatars.com/api/?name={{ t.full_name }}&background=6366F1&color=fff&size=32'" style="width:32px;height:32px;border-radius:50%;object-fit:cover;">
+                    <div><div style="font-size:0.85rem;font-weight:600;">{{ t.full_name }}</div><div style="font-size:0.72rem;color:var(--muted);">{{ t.email or t.username }}</div></div>
+                </div></td>
+                <td style="padding:10px 14px;text-align:center;"><span style="background:var(--primary-light);color:var(--primary);padding:2px 10px;border-radius:12px;font-size:0.72rem;">{{ t.contract_type or 'Full-Time' }}</span></td>
+                <td style="padding:10px 14px;text-align:center;font-weight:600;color:var(--primary);">P{{ "{:,.0f}".format(t.salary_rate or 0) }}</td>
+                <td style="padding:10px 14px;text-align:center;font-size:0.85rem;">{{ t.subject_count }}</td>
+                <td style="padding:10px 14px;text-align:right;">
+                    <button onclick='editTeacher({{ t|tojson }})' style="padding:4px 10px;font-size:0.72rem;background:#DBEAFE;color:#1E40AF;border:none;border-radius:6px;cursor:pointer;"><i class="fas fa-edit"></i></button>
+                    <button onclick="deleteTeacher({{ t.id }})" style="padding:4px 10px;font-size:0.72rem;background:#FEE2E2;color:#991B1B;border:none;border-radius:6px;cursor:pointer;"><i class="fas fa-trash"></i></button>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div style="padding:50px;text-align:center;color:var(--muted);"><i class="fas fa-chalkboard-teacher" style="font-size:2rem;color:#CBD5E1;display:block;margin-bottom:8px;"></i><div>No teachers yet. Add your first teacher.</div></div>
+    {% endif %}
+</div>
+
+<!-- Add/Edit Teacher Modal -->
+<div id="addTeacherModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1000;">
+    <div style="background:white;border-radius:16px;padding:30px;max-width:500px;width:90%;margin:auto;position:relative;top:50%;transform:translateY(-50%);">
+        <h3 style="margin:0 0 20px;" id="teacherModalTitle"><i class="fas fa-plus-circle" style="color:var(--primary);"></i> Add Teacher</h3>
+        <input type="hidden" id="editTeacherId">
+        <div style="display:flex;flex-direction:column;gap:12px;">
+            <div><label style="font-size:0.8rem;color:var(--muted);">Full Name *</label><input type="text" id="tName" style="padding:10px;border:1px solid var(--border);border-radius:8px;width:100%;box-sizing:border-box;"></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div><label style="font-size:0.8rem;color:var(--muted);">Username *</label><input type="text" id="tUsername" style="padding:10px;border:1px solid var(--border);border-radius:8px;width:100%;box-sizing:border-box;"></div>
+                <div><label style="font-size:0.8rem;color:var(--muted);">Password</label><input type="text" id="tPassword" placeholder="Default: teacher123" style="padding:10px;border:1px solid var(--border);border-radius:8px;width:100%;box-sizing:border-box;"></div>
+            </div>
+            <div><label style="font-size:0.8rem;color:var(--muted);">Email</label><input type="email" id="tEmail" style="padding:10px;border:1px solid var(--border);border-radius:8px;width:100%;box-sizing:border-box;"></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div><label style="font-size:0.8rem;color:var(--muted);">Monthly Salary (PHP)</label><input type="number" id="tSalary" value="0" style="padding:10px;border:1px solid var(--border);border-radius:8px;width:100%;box-sizing:border-box;"></div>
+                <div><label style="font-size:0.8rem;color:var(--muted);">Contract</label><select id="tContract" style="padding:10px;border:1px solid var(--border);border-radius:8px;width:100%;"><option>Full-Time</option><option>Part-Time</option><option>Contract</option></select></div>
+            </div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end;">
+            <button onclick="closeModal('addTeacherModal')" style="padding:8px 20px;border:1px solid var(--border);border-radius:8px;background:white;cursor:pointer;">Cancel</button>
+            <button onclick="saveTeacher()" style="padding:8px 20px;border:none;border-radius:8px;background:var(--primary);color:white;cursor:pointer;font-weight:600;">Save</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script>
+function editTeacher(t) {
+    document.getElementById('editTeacherId').value = t.id;
+    document.getElementById('teacherModalTitle').innerHTML = '<i class="fas fa-edit" style="color:var(--primary);"></i> Edit Teacher';
+    document.getElementById('tName').value = t.full_name || '';
+    document.getElementById('tUsername').value = t.username || '';
+    document.getElementById('tEmail').value = t.email || '';
+    document.getElementById('tSalary').value = t.salary_rate || 0;
+    document.getElementById('tContract').value = t.contract_type || 'Full-Time';
+    document.getElementById('tPassword').value = '';
+    openModal('addTeacherModal');
+}
+function saveTeacher() {
+    const id = document.getElementById('editTeacherId').value;
+    const data = {
+        full_name: document.getElementById('tName').value,
+        username: document.getElementById('tUsername').value,
+        email: document.getElementById('tEmail').value,
+        salary_rate: parseFloat(document.getElementById('tSalary').value) || 0,
+        contract_type: document.getElementById('tContract').value,
+        password: document.getElementById('tPassword').value
+    };
+    const url = id ? `/api/institution/teachers/${id}` : '/api/institution/teachers';
+    fetch(url, { method: id ? 'PUT' : 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) })
+        .then(r => r.json()).then(d => { if (d.success) location.reload(); else alert(d.error || 'Failed'); });
+}
+function deleteTeacher(id) {
+    if (!confirm('Delete this teacher?')) return;
+    fetch(`/api/institution/teachers/${id}`, { method: 'DELETE' })
+        .then(r => r.json()).then(d => { if (d.success) location.reload(); });
+}
+</script>
+{% endblock %}

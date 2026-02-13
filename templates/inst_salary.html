@@ -1,0 +1,138 @@
+{% extends 'base.html' %}
+{% block title %}Teacher Salary - Sangrenes LMS{% endblock %}
+{% block content %}
+<h1 style="font-size:1.2rem;font-weight:700;margin:0 0 16px;"><i class="fas fa-money-check" style="color:var(--primary);"></i> Teacher Salary Management</h1>
+
+<div style="background:linear-gradient(135deg,var(--primary),#4F46E5);border-radius:12px;padding:20px;color:white;margin-bottom:20px;">
+    <div style="font-size:0.82rem;opacity:0.85;">Total Salary Paid</div>
+    <div style="font-size:2.2rem;font-weight:800;">P{{ "{:,.2f}".format(total_paid) }}</div>
+</div>
+
+<div class="tab-bar">
+    <button class="active" data-tab-btn="sal" onclick="switchTab('sal','tab-teachers')"><i class="fas fa-users"></i> Teachers & Rates</button>
+    <button data-tab-btn="sal" onclick="switchTab('sal','tab-payroll')"><i class="fas fa-receipt"></i> Payroll History</button>
+</div>
+
+<div id="tab-teachers" class="tab-panel active" data-tab-group="sal">
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;">
+        {% if teachers %}
+        <div style="overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;">
+                <thead><tr style="background:#F8FAFC;">
+                    <th style="padding:10px 14px;text-align:left;font-size:0.78rem;color:var(--muted);">Teacher</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.78rem;color:var(--muted);">Contract</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.78rem;color:var(--muted);">Monthly Salary</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.78rem;color:var(--muted);">Days Present</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.78rem;color:var(--muted);">Hours (Month)</th>
+                    <th style="padding:10px 14px;text-align:right;font-size:0.78rem;color:var(--muted);">Action</th>
+                </tr></thead>
+                <tbody>
+                {% for t in teachers %}
+                <tr style="border-bottom:1px solid #F1F5F9;">
+                    <td style="padding:10px 14px;font-size:0.85rem;font-weight:600;">{{ t.full_name }}<div style="font-size:0.7rem;color:var(--muted);">{{ t.email or '' }}</div></td>
+                    <td style="padding:10px 14px;text-align:center;"><span style="background:var(--primary-light);color:var(--primary);padding:2px 10px;border-radius:12px;font-size:0.72rem;">{{ t.contract_type or 'Full-Time' }}</span></td>
+                    <td style="padding:10px 14px;text-align:center;font-weight:700;color:var(--primary);font-size:0.92rem;">P{{ "{:,.0f}".format(t.salary_rate or 0) }}</td>
+                    <td style="padding:10px 14px;text-align:center;font-size:0.85rem;">{{ t.days_present or 0 }}</td>
+                    <td style="padding:10px 14px;text-align:center;font-size:0.85rem;color:var(--muted);">{{ "%.1f"|format(t.hours_this_month or 0) }}h</td>
+                    <td style="padding:10px 14px;text-align:right;">
+                        <button onclick="editSalary({{ t.id }}, '{{ t.full_name }}', {{ t.salary_rate or 0 }}, '{{ t.contract_type or 'Full-Time' }}')" style="padding:4px 10px;font-size:0.72rem;background:#DBEAFE;color:#1E40AF;border:none;border-radius:6px;cursor:pointer;"><i class="fas fa-edit"></i> Set</button>
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div style="padding:50px;text-align:center;color:var(--muted);">No teachers yet.</div>
+        {% endif %}
+    </div>
+
+    <div style="margin-top:16px;display:flex;gap:10px;">
+        <button onclick="openModal('genPayrollModal')" style="padding:8px 16px;border:none;border-radius:8px;background:#10B981;color:white;font-size:0.82rem;font-weight:600;cursor:pointer;"><i class="fas fa-calculator"></i> Generate Payroll</button>
+    </div>
+</div>
+
+<div id="tab-payroll" class="tab-panel" data-tab-group="sal">
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;">
+        {% if payrolls %}
+        <div style="overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;">
+                <thead><tr style="background:#F8FAFC;">
+                    <th style="padding:10px 14px;text-align:left;font-size:0.78rem;color:var(--muted);">Teacher</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.78rem;color:var(--muted);">Period</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.78rem;color:var(--muted);">Base Salary</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.78rem;color:var(--muted);">Net Pay</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.78rem;color:var(--muted);">Status</th>
+                </tr></thead>
+                <tbody>
+                {% for p in payrolls %}
+                <tr style="border-bottom:1px solid #F1F5F9;">
+                    <td style="padding:10px 14px;font-size:0.85rem;font-weight:600;">{{ p.teacher_name }}</td>
+                    <td style="padding:10px 14px;text-align:center;font-size:0.78rem;color:var(--muted);">{{ p.period_start }} to {{ p.period_end }}</td>
+                    <td style="padding:10px 14px;text-align:center;font-size:0.82rem;">P{{ "{:,.2f}".format(p.base_salary or 0) }}</td>
+                    <td style="padding:10px 14px;text-align:center;font-weight:700;color:var(--primary);">P{{ "{:,.2f}".format(p.net_pay or 0) }}</td>
+                    <td style="padding:10px 14px;text-align:center;"><span style="padding:2px 10px;border-radius:12px;font-size:0.72rem;{% if p.status == 'paid' %}background:#D1FAE5;color:#065F46;{% else %}background:#FEF3C7;color:#92400E;{% endif %}">{{ (p.status or 'pending')|capitalize }}</span></td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div style="padding:50px;text-align:center;color:var(--muted);">No payroll records yet. Generate payroll first.</div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Edit Salary Modal -->
+<div id="editSalaryModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1000;">
+    <div style="background:white;border-radius:16px;padding:30px;max-width:400px;width:90%;margin:auto;position:relative;top:50%;transform:translateY(-50%);">
+        <h3 style="margin:0 0 20px;" id="salaryTitle"><i class="fas fa-edit" style="color:var(--primary);"></i> Set Salary</h3>
+        <input type="hidden" id="salaryUserId">
+        <div style="display:flex;flex-direction:column;gap:12px;">
+            <div><label style="font-size:0.8rem;color:var(--muted);">Monthly Salary (PHP)</label><input type="number" id="salaryRate" step="0.01" style="padding:10px;border:1px solid var(--border);border-radius:8px;width:100%;box-sizing:border-box;"></div>
+            <div><label style="font-size:0.8rem;color:var(--muted);">Contract Type</label><select id="salaryContract" style="padding:10px;border:1px solid var(--border);border-radius:8px;width:100%;"><option>Full-Time</option><option>Part-Time</option><option>Contract</option></select></div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end;">
+            <button onclick="closeModal('editSalaryModal')" style="padding:8px 20px;border:1px solid var(--border);border-radius:8px;background:white;cursor:pointer;">Cancel</button>
+            <button onclick="saveSalary()" style="padding:8px 20px;border:none;border-radius:8px;background:var(--primary);color:white;cursor:pointer;font-weight:600;">Save</button>
+        </div>
+    </div>
+</div>
+
+<!-- Generate Payroll Modal -->
+<div id="genPayrollModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1000;">
+    <div style="background:white;border-radius:16px;padding:30px;max-width:400px;width:90%;margin:auto;position:relative;top:50%;transform:translateY(-50%);">
+        <h3 style="margin:0 0 20px;"><i class="fas fa-calculator" style="color:#10B981;"></i> Generate Payroll</h3>
+        <div style="display:flex;flex-direction:column;gap:12px;">
+            <div><label style="font-size:0.8rem;color:var(--muted);">Period Start *</label><input type="date" id="payrollStart" style="padding:10px;border:1px solid var(--border);border-radius:8px;width:100%;box-sizing:border-box;"></div>
+            <div><label style="font-size:0.8rem;color:var(--muted);">Period End *</label><input type="date" id="payrollEnd" style="padding:10px;border:1px solid var(--border);border-radius:8px;width:100%;box-sizing:border-box;"></div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end;">
+            <button onclick="closeModal('genPayrollModal')" style="padding:8px 20px;border:1px solid var(--border);border-radius:8px;background:white;cursor:pointer;">Cancel</button>
+            <button onclick="genPayroll()" style="padding:8px 20px;border:none;border-radius:8px;background:#10B981;color:white;cursor:pointer;font-weight:600;">Generate</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script>
+function editSalary(id, name, rate, contract) {
+    document.getElementById('salaryUserId').value = id;
+    document.getElementById('salaryTitle').innerHTML = '<i class="fas fa-edit" style="color:var(--primary);"></i> Set Salary - ' + name;
+    document.getElementById('salaryRate').value = rate;
+    document.getElementById('salaryContract').value = contract;
+    openModal('editSalaryModal');
+}
+function saveSalary() {
+    const id = document.getElementById('salaryUserId').value;
+    fetch(`/api/institution/salary/${id}`, { method: 'PUT', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ salary_rate: parseFloat(document.getElementById('salaryRate').value) || 0, contract_type: document.getElementById('salaryContract').value })
+    }).then(r => r.json()).then(d => { if (d.success) location.reload(); });
+}
+function genPayroll() {
+    fetch('/api/institution/payroll/generate', { method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ period_start: document.getElementById('payrollStart').value, period_end: document.getElementById('payrollEnd').value })
+    }).then(r => r.json()).then(d => { if (d.success) { alert('Payroll generated!'); location.reload(); } });
+}
+</script>
+{% endblock %}

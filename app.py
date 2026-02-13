@@ -408,7 +408,11 @@ def build_guidance_message(activity_avg, quiz_avg, sessions_behind, subject_code
 @app.route('/')
 def index():
     if current_user.is_authenticated:
-        if current_user.role == 'instructor':
+        if current_user.role == 'admin':
+            return redirect(url_for('admin_dashboard'))
+        elif current_user.role == 'institution':
+            return redirect(url_for('inst_dashboard'))
+        elif current_user.role == 'instructor':
             return redirect(url_for('dashboard'))
         return redirect(url_for('student_dashboard'))
     return redirect(url_for('login'))
@@ -445,6 +449,8 @@ def login():
             flash('Logged in successfully!', 'success')
             if user['role'] == 'admin':
                 return redirect(url_for('admin_dashboard'))
+            elif user['role'] == 'institution':
+                return redirect(url_for('inst_dashboard'))
             elif user['role'] == 'instructor':
                 return redirect(url_for('dashboard'))
             return redirect(url_for('student_dashboard'))
@@ -6560,6 +6566,817 @@ def instructor_work():
     return render_template('instructor_work.html',
         attendance=attendance_records, today_record=today_record,
         summary=summary, today=today, payrolls=payrolls, profile=profile)
+
+
+# ============== INSTITUTION MANAGEMENT ==============
+
+def inst_required(f):
+    """Decorator: require institution role"""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not current_user.is_authenticated or current_user.role != 'institution':
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated
+
+@app.route('/institution/dashboard')
+@login_required
+def inst_dashboard():
+    if current_user.role != 'institution':
+        return redirect(url_for('index'))
+    conn = get_db()
+    cursor = conn.cursor()
+    inst_id = current_user.institution_id
+
+    cursor.execute('SELECT * FROM institutions WHERE id = ?', (inst_id,))
+    institution = cursor.fetchone()
+
+    cursor.execute('SELECT COUNT(*) as c FROM users WHERE role = "instructor" AND institution_id = ?', (inst_id,))
+    teacher_count = cursor.fetchone()['c']
+    cursor.execute('SELECT COUNT(*) as c FROM users WHERE role = "student" AND institution_id = ?', (inst_id,))
+    student_count = cursor.fetchone()['c']
+    cursor.execute('SELECT COUNT(*) as c FROM subjects WHERE institution_id = ?', (inst_id,))
+    subject_count = cursor.fetchone()['c']
+    cursor.execute('SELECT COUNT(*) as c FROM sessions s JOIN subjects sub ON s.subject_id = sub.id WHERE sub.institution_id = ?', (inst_id,))
+    session_count = cursor.fetchone()['c']
+    cursor.execute('SELECT COUNT(*) as c FROM activities a JOIN sessions s ON a.session_id = s.id JOIN subjects sub ON s.subject_id = sub.id WHERE sub.institution_id = ?', (inst_id,))
+    activity_count = cursor.fetchone()['c']
+
+    # Revenue
+    cursor.execute('SELECT COALESCE(SUM(amount_paid), 0) as total FROM student_payments WHERE institution_id = ? AND status = "paid"', (inst_id,))
+    total_revenue = cursor.fetchone()['total']
+    cursor.execute('SELECT COALESCE(SUM(balance), 0) as total FROM student_payments WHERE institution_id = ? AND status != "paid"', (inst_id,))
+    total_pending = cursor.fetchone()['total']
+
+    # Recent teachers
+    cursor.execute('SELECT * FROM users WHERE role = "instructor" AND institution_id = ? ORDER BY created_at DESC LIMIT 5', (inst_id,))
+    recent_teachers = cursor.fetchall()
+
+    # Recent students
+    cursor.execute('SELECT * FROM users WHERE role = "student" AND institution_id = ? ORDER BY created_at DESC LIMIT 5', (inst_id,))
+    recent_students = cursor.fetchall()
+
+    conn.close()
+    return render_template('inst_dashboard.html', institution=institution,
+        teacher_count=teacher_count, student_count=student_count, subject_count=subject_count,
+        session_count=session_count, activity_count=activity_count,
+        total_revenue=total_revenue, total_pending=total_pending,
+        recent_teachers=recent_teachers, recent_students=recent_students)
+
+
+@app.route('/institution/teachers')
+@login_required
+def inst_teachers():
+    if current_user.role != 'institution':
+        return redirect(url_for('index'))
+    conn = get_db()
+    cursor = conn.cursor()
+    inst_id = current_user.institution_id
+
+    cursor.execute('''
+        SELECT u.*, ip.salary_rate, ip.contract_type, ip.hire_date,
+               (SELECT COUNT(*) FROM subjects WHERE instructor_id = u.id AND institution_id = ?) as subject_count
+        FROM users u
+        LEFT JOIN instructor_profiles ip ON ip.user_id = u.id
+        WHERE u.role = 'instructor' AND u.institution_id = ?
+        ORDER BY u.full_name
+    ''', (inst_id, inst_id))
+    teachers = [dict(r) for r in cursor.fetchall()]
+
+    cursor.execute('SELECT * FROM subjects WHERE institution_id = ? ORDER BY code', (inst_id,))
+    subjects = cursor.fetchall()
+
+    conn.close()
+    return render_template('inst_teachers.html', teachers=teachers, subjects=subjects)
+
+
+@app.route('/api/institution/teachers', methods=['POST'])
+@login_required
+def api_inst_add_teacher():
+    if current_user.role != 'institution':
+        return jsonify({'error': 'Unauthorized'}), 403
+    data = request.json
+    inst_id = current_user.institution_id
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute('''
+            INSERT INTO users (username, password_hash, full_name, role, email, institution_id, is_approved, profile_completed)
+            VALUES (?, ?, ?, 'instructor', ?, ?, 1, 1)
+        ''', (data['username'], generate_password_hash(data.get('password', 'teacher123')),
+              data['full_name'], data.get('email', ''), inst_id))
+        user_id = cursor.lastrowid
+        cursor.execute('''
+            INSERT INTO instructor_profiles (user_id, institution_id, salary_rate, contract_type, hire_date)
+            VALUES (?, ?, ?, ?, date('now'))
+        ''', (user_id, inst_id, data.get('salary_rate', 0), data.get('contract_type', 'Full-Time')))
+        conn.commit()
+        return jsonify({'success': True, 'id': user_id})
+    except sqlite3.IntegrityError:
+        return jsonify({'error': 'Username already exists'})
+    finally:
+        conn.close()
+
+
+@app.route('/api/institution/teachers/<int:user_id>', methods=['PUT'])
+@login_required
+def api_inst_update_teacher(user_id):
+    if current_user.role != 'institution':
+        return jsonify({'error': 'Unauthorized'}), 403
+    data = request.json
+    inst_id = current_user.institution_id
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('UPDATE users SET full_name=?, email=? WHERE id=? AND institution_id=?',
+        (data['full_name'], data.get('email', ''), user_id, inst_id))
+    if data.get('password'):
+        cursor.execute('UPDATE users SET password_hash=? WHERE id=? AND institution_id=?',
+            (generate_password_hash(data['password']), user_id, inst_id))
+    cursor.execute('SELECT id FROM instructor_profiles WHERE user_id=?', (user_id,))
+    if cursor.fetchone():
+        cursor.execute('UPDATE instructor_profiles SET salary_rate=?, contract_type=? WHERE user_id=?',
+            (data.get('salary_rate', 0), data.get('contract_type', 'Full-Time'), user_id))
+    else:
+        cursor.execute('INSERT INTO instructor_profiles (user_id, institution_id, salary_rate, contract_type, hire_date) VALUES (?,?,?,?,date("now"))',
+            (user_id, inst_id, data.get('salary_rate', 0), data.get('contract_type', 'Full-Time')))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+
+
+@app.route('/api/institution/teachers/<int:user_id>', methods=['DELETE'])
+@login_required
+def api_inst_delete_teacher(user_id):
+    if current_user.role != 'institution':
+        return jsonify({'error': 'Unauthorized'}), 403
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('DELETE FROM instructor_profiles WHERE user_id=?', (user_id,))
+    cursor.execute('DELETE FROM users WHERE id=? AND institution_id=? AND role="instructor"', (user_id, current_user.institution_id))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+
+
+@app.route('/institution/students')
+@login_required
+def inst_students():
+    if current_user.role != 'institution':
+        return redirect(url_for('index'))
+    conn = get_db()
+    cursor = conn.cursor()
+    inst_id = current_user.institution_id
+
+    cursor.execute('SELECT * FROM users WHERE role = "student" AND institution_id = ? ORDER BY full_name', (inst_id,))
+    students = [dict(r) for r in cursor.fetchall()]
+
+    cursor.execute('SELECT DISTINCT section FROM users WHERE role = "student" AND institution_id = ? AND section IS NOT NULL ORDER BY section', (inst_id,))
+    sections = [r['section'] for r in cursor.fetchall()]
+
+    cursor.execute('''
+        SELECT e.student_id, COUNT(*) as subject_count
+        FROM enrollments e JOIN subjects s ON e.subject_id = s.id
+        WHERE s.institution_id = ? GROUP BY e.student_id
+    ''', (inst_id,))
+    enrollment_map = {r['student_id']: r['subject_count'] for r in cursor.fetchall()}
+
+    cursor.execute('SELECT * FROM subjects WHERE institution_id = ? ORDER BY code, section', (inst_id,))
+    subjects = cursor.fetchall()
+
+    conn.close()
+    return render_template('inst_students.html', students=students, sections=sections,
+        enrollment_map=enrollment_map, subjects=subjects)
+
+
+@app.route('/api/institution/students', methods=['POST'])
+@login_required
+def api_inst_add_student():
+    if current_user.role != 'institution':
+        return jsonify({'error': 'Unauthorized'}), 403
+    data = request.json
+    inst_id = current_user.institution_id
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute('''
+            INSERT INTO users (username, password_hash, full_name, role, student_id, section, email, institution_id, is_approved, profile_completed)
+            VALUES (?, ?, ?, 'student', ?, ?, ?, ?, 1, 1)
+        ''', (data['username'], generate_password_hash(data.get('password', 'student123')),
+              data['full_name'], data.get('student_id', ''), data.get('section', ''),
+              data.get('email', ''), inst_id))
+        user_id = cursor.lastrowid
+        # Auto-enroll in subjects if specified
+        for sid in data.get('subject_ids', []):
+            try:
+                cursor.execute('INSERT INTO enrollments (student_id, subject_id) VALUES (?, ?)', (user_id, int(sid)))
+            except sqlite3.IntegrityError:
+                pass
+        conn.commit()
+        return jsonify({'success': True, 'id': user_id})
+    except sqlite3.IntegrityError:
+        return jsonify({'error': 'Username already exists'})
+    finally:
+        conn.close()
+
+
+@app.route('/api/institution/students/<int:user_id>', methods=['PUT'])
+@login_required
+def api_inst_update_student(user_id):
+    if current_user.role != 'institution':
+        return jsonify({'error': 'Unauthorized'}), 403
+    data = request.json
+    inst_id = current_user.institution_id
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('UPDATE users SET full_name=?, email=?, section=?, student_id=? WHERE id=? AND institution_id=?',
+        (data['full_name'], data.get('email', ''), data.get('section', ''), data.get('student_id', ''), user_id, inst_id))
+    if data.get('password'):
+        cursor.execute('UPDATE users SET password_hash=? WHERE id=? AND institution_id=?',
+            (generate_password_hash(data['password']), user_id, inst_id))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+
+
+@app.route('/api/institution/students/<int:user_id>', methods=['DELETE'])
+@login_required
+def api_inst_delete_student(user_id):
+    if current_user.role != 'institution':
+        return jsonify({'error': 'Unauthorized'}), 403
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('DELETE FROM enrollments WHERE student_id=?', (user_id,))
+    cursor.execute('DELETE FROM users WHERE id=? AND institution_id=? AND role="student"', (user_id, current_user.institution_id))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+
+
+@app.route('/institution/subjects')
+@login_required
+def inst_subjects():
+    if current_user.role != 'institution':
+        return redirect(url_for('index'))
+    conn = get_db()
+    cursor = conn.cursor()
+    inst_id = current_user.institution_id
+
+    cursor.execute('''
+        SELECT s.*, u.full_name as instructor_name,
+               (SELECT COUNT(*) FROM enrollments WHERE subject_id = s.id) as enrolled,
+               (SELECT COUNT(*) FROM sessions WHERE subject_id = s.id) as session_count
+        FROM subjects s
+        LEFT JOIN users u ON s.instructor_id = u.id
+        WHERE s.institution_id = ?
+        ORDER BY s.code, s.section
+    ''', (inst_id,))
+    subjects = [dict(r) for r in cursor.fetchall()]
+
+    cursor.execute('SELECT id, full_name FROM users WHERE role = "instructor" AND institution_id = ? ORDER BY full_name', (inst_id,))
+    teachers = cursor.fetchall()
+
+    conn.close()
+    return render_template('inst_subjects.html', subjects=subjects, teachers=teachers)
+
+
+@app.route('/api/institution/subjects', methods=['POST'])
+@login_required
+def api_inst_add_subject():
+    if current_user.role != 'institution':
+        return jsonify({'error': 'Unauthorized'}), 403
+    data = request.json
+    inst_id = current_user.institution_id
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT INTO subjects (code, name, description, section, day, time_schedule, instructor_id, room, credits, max_students, institution_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (data['code'], data['name'], data.get('description', ''), data.get('section', ''),
+          data.get('day', ''), data.get('time_schedule', ''), data.get('instructor_id') or None,
+          data.get('room', ''), data.get('credits', 3), data.get('max_students', 50), inst_id))
+    subject_id = cursor.lastrowid
+    # Create default sessions
+    for i in range(1, 17):
+        title = f"Session {i}: {'Lesson' if i <= 12 else 'Project'}"
+        cursor.execute('INSERT INTO sessions (subject_id, session_number, title) VALUES (?, ?, ?)', (subject_id, i, title))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True, 'id': subject_id})
+
+
+@app.route('/api/institution/subjects/<int:subject_id>', methods=['PUT'])
+@login_required
+def api_inst_update_subject(subject_id):
+    if current_user.role != 'institution':
+        return jsonify({'error': 'Unauthorized'}), 403
+    data = request.json
+    inst_id = current_user.institution_id
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('''
+        UPDATE subjects SET code=?, name=?, description=?, section=?, day=?, time_schedule=?,
+        instructor_id=?, room=?, credits=?, max_students=?
+        WHERE id=? AND institution_id=?
+    ''', (data['code'], data['name'], data.get('description', ''), data.get('section', ''),
+          data.get('day', ''), data.get('time_schedule', ''), data.get('instructor_id') or None,
+          data.get('room', ''), data.get('credits', 3), data.get('max_students', 50), subject_id, inst_id))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+
+
+@app.route('/api/institution/subjects/<int:subject_id>', methods=['DELETE'])
+@login_required
+def api_inst_delete_subject(subject_id):
+    if current_user.role != 'institution':
+        return jsonify({'error': 'Unauthorized'}), 403
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('DELETE FROM enrollments WHERE subject_id=?', (subject_id,))
+    cursor.execute('DELETE FROM sessions WHERE subject_id=?', (subject_id,))
+    cursor.execute('DELETE FROM subjects WHERE id=? AND institution_id=?', (subject_id, current_user.institution_id))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+
+
+@app.route('/institution/materials')
+@login_required
+def inst_materials():
+    if current_user.role != 'institution':
+        return redirect(url_for('index'))
+    conn = get_db()
+    cursor = conn.cursor()
+    inst_id = current_user.institution_id
+    cursor.execute('''
+        SELECT f.*, u.full_name as uploader_name, s.code as subject_code
+        FROM file_storage f
+        LEFT JOIN users u ON f.uploaded_by = u.id
+        LEFT JOIN subjects s ON f.subject_id = s.id
+        WHERE f.institution_id = ?
+        ORDER BY f.created_at DESC
+    ''', (inst_id,))
+    files = cursor.fetchall()
+    cursor.execute('SELECT * FROM subjects WHERE institution_id = ? ORDER BY code', (inst_id,))
+    subjects = cursor.fetchall()
+    # Reading materials from sessions
+    cursor.execute('''
+        SELECT ses.id, ses.session_number, ses.title, ses.reading_materials, ses.youtube_url,
+               sub.code, sub.section
+        FROM sessions ses
+        JOIN subjects sub ON ses.subject_id = sub.id
+        WHERE sub.institution_id = ? AND (ses.reading_materials IS NOT NULL OR ses.youtube_url IS NOT NULL)
+        ORDER BY sub.code, ses.session_number
+    ''', (inst_id,))
+    session_materials = cursor.fetchall()
+    conn.close()
+    return render_template('inst_materials.html', files=files, subjects=subjects, session_materials=session_materials)
+
+
+@app.route('/institution/quizzes')
+@login_required
+def inst_quizzes():
+    if current_user.role != 'institution':
+        return redirect(url_for('index'))
+    conn = get_db()
+    cursor = conn.cursor()
+    inst_id = current_user.institution_id
+    cursor.execute('''
+        SELECT q.*, ses.session_number, sub.code, sub.section,
+               (SELECT COUNT(*) FROM quiz_questions WHERE quiz_id = q.id) as question_count,
+               (SELECT COUNT(*) FROM quiz_attempts WHERE quiz_id = q.id) as attempt_count
+        FROM quizzes q
+        JOIN sessions ses ON q.session_id = ses.id
+        JOIN subjects sub ON ses.subject_id = sub.id
+        WHERE sub.institution_id = ?
+        ORDER BY sub.code, ses.session_number
+    ''', (inst_id,))
+    quizzes = cursor.fetchall()
+    cursor.execute('''
+        SELECT e.*, sub.code, sub.section,
+               (SELECT COUNT(*) FROM exam_questions WHERE exam_id = e.id) as question_count,
+               (SELECT COUNT(*) FROM exam_attempts WHERE exam_id = e.id) as attempt_count
+        FROM exams e
+        JOIN subjects sub ON e.subject_id = sub.id
+        WHERE sub.institution_id = ?
+        ORDER BY sub.code
+    ''', (inst_id,))
+    exams = cursor.fetchall()
+    conn.close()
+    return render_template('inst_quizzes.html', quizzes=quizzes, exams=exams)
+
+
+@app.route('/institution/grades')
+@login_required
+def inst_grades():
+    if current_user.role != 'institution':
+        return redirect(url_for('index'))
+    conn = get_db()
+    cursor = conn.cursor()
+    inst_id = current_user.institution_id
+    cursor.execute('''
+        SELECT s.id, s.code, s.name, s.section, u.full_name as instructor_name,
+               (SELECT COUNT(*) FROM enrollments WHERE subject_id = s.id) as enrolled
+        FROM subjects s
+        LEFT JOIN users u ON s.instructor_id = u.id
+        WHERE s.institution_id = ?
+        ORDER BY s.code, s.section
+    ''', (inst_id,))
+    subjects = cursor.fetchall()
+
+    # Get top students
+    top_students = []
+    cursor.execute('SELECT id, code, section FROM subjects WHERE institution_id = ?', (inst_id,))
+    for subj in cursor.fetchall():
+        cursor.execute('''
+            SELECT u.id, u.full_name, u.student_id, u.section FROM users u
+            JOIN enrollments e ON u.id = e.student_id WHERE e.subject_id = ?
+        ''', (subj['id'],))
+        for student in cursor.fetchall():
+            grade = compute_weighted_grade(cursor, subj['id'], student['id'])
+            if grade and grade >= 90:
+                top_students.append({'name': student['full_name'], 'subject': subj['code'], 'grade': grade})
+
+    conn.close()
+    return render_template('inst_grades.html', subjects=subjects, top_students=top_students[:10])
+
+
+@app.route('/institution/payments')
+@login_required
+def inst_payments():
+    if current_user.role != 'institution':
+        return redirect(url_for('index'))
+    conn = get_db()
+    cursor = conn.cursor()
+    inst_id = current_user.institution_id
+
+    cursor.execute('''
+        SELECT p.*, u.full_name as student_name, u.student_id as sid
+        FROM student_payments p
+        JOIN users u ON p.student_id = u.id
+        WHERE p.institution_id = ?
+        ORDER BY p.due_date DESC
+    ''', (inst_id,))
+    payments = [dict(r) for r in cursor.fetchall()]
+
+    cursor.execute('SELECT * FROM tuition_plans WHERE institution_id = ? ORDER BY name', (inst_id,))
+    plans = [dict(r) for r in cursor.fetchall()]
+
+    cursor.execute('SELECT COALESCE(SUM(amount_paid), 0) as total FROM student_payments WHERE institution_id = ? AND status = "paid"', (inst_id,))
+    total_paid = cursor.fetchone()['total']
+    cursor.execute('SELECT COALESCE(SUM(balance), 0) as total FROM student_payments WHERE institution_id = ? AND status != "paid"', (inst_id,))
+    total_pending = cursor.fetchone()['total']
+
+    cursor.execute('SELECT id, full_name, student_id FROM users WHERE role = "student" AND institution_id = ? ORDER BY full_name', (inst_id,))
+    students = cursor.fetchall()
+
+    cursor.execute('''
+        SELECT pr.*, u.full_name as student_name
+        FROM payment_reminders pr
+        JOIN users u ON pr.student_id = u.id
+        WHERE pr.institution_id = ?
+        ORDER BY pr.reminder_date DESC LIMIT 20
+    ''', (inst_id,))
+    reminders = cursor.fetchall()
+
+    conn.close()
+    return render_template('inst_payments.html', payments=payments, plans=plans,
+        total_paid=total_paid, total_pending=total_pending, students=students, reminders=reminders)
+
+
+@app.route('/api/institution/payments', methods=['POST'])
+@login_required
+def api_inst_add_payment():
+    if current_user.role != 'institution':
+        return jsonify({'error': 'Unauthorized'}), 403
+    data = request.json
+    inst_id = current_user.institution_id
+    conn = get_db()
+    cursor = conn.cursor()
+    amount = float(data.get('amount', 0))
+    amount_paid = float(data.get('amount_paid', 0))
+    cursor.execute('''
+        INSERT INTO student_payments (student_id, institution_id, payment_type, description, amount, amount_paid, balance, due_date, status, created_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (data['student_id'], inst_id, data.get('payment_type', 'tuition'), data.get('description', ''),
+          amount, amount_paid, amount - amount_paid, data.get('due_date', ''), 'paid' if amount_paid >= amount else 'pending', current_user.id))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+
+
+@app.route('/api/institution/payments/<int:payment_id>/pay', methods=['POST'])
+@login_required
+def api_inst_pay_payment(payment_id):
+    if current_user.role != 'institution':
+        return jsonify({'error': 'Unauthorized'}), 403
+    data = request.json
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM student_payments WHERE id = ? AND institution_id = ?', (payment_id, current_user.institution_id))
+    payment = cursor.fetchone()
+    if not payment:
+        conn.close()
+        return jsonify({'error': 'Not found'}), 404
+    new_paid = (payment['amount_paid'] or 0) + float(data.get('amount', 0))
+    new_balance = payment['amount'] - new_paid
+    status = 'paid' if new_balance <= 0 else 'partial'
+    cursor.execute('UPDATE student_payments SET amount_paid=?, balance=?, status=?, payment_method=?, paid_at=datetime("now") WHERE id=?',
+        (new_paid, max(0, new_balance), status, data.get('method', 'cash'), payment_id))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+
+
+@app.route('/api/institution/payment-reminders', methods=['POST'])
+@login_required
+def api_inst_add_reminder():
+    if current_user.role != 'institution':
+        return jsonify({'error': 'Unauthorized'}), 403
+    data = request.json
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT INTO payment_reminders (institution_id, student_id, payment_id, reminder_date, message, created_by)
+        VALUES (?, ?, ?, ?, ?, ?)
+    ''', (current_user.institution_id, data['student_id'], data.get('payment_id'), data['reminder_date'], data.get('message', ''), current_user.id))
+    # Also send notification to the student
+    cursor.execute('''
+        INSERT INTO notifications (user_id, type, icon, message, link, is_read)
+        VALUES (?, 'payment_reminder', 'fa-receipt', ?, '/student/my-grades', 0)
+    ''', (data['student_id'], data.get('message', 'Payment reminder: Please check your pending payments.')))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+
+
+@app.route('/api/institution/tuition-plans', methods=['POST'])
+@login_required
+def api_inst_add_plan():
+    if current_user.role != 'institution':
+        return jsonify({'error': 'Unauthorized'}), 403
+    data = request.json
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT INTO tuition_plans (institution_id, name, amount, frequency, description, is_active)
+        VALUES (?, ?, ?, ?, ?, 1)
+    ''', (current_user.institution_id, data['name'], data.get('amount', 0), data.get('frequency', 'semester'), data.get('description', '')))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+
+
+@app.route('/institution/salary')
+@login_required
+def inst_salary():
+    if current_user.role != 'institution':
+        return redirect(url_for('index'))
+    conn = get_db()
+    cursor = conn.cursor()
+    inst_id = current_user.institution_id
+
+    cursor.execute('''
+        SELECT u.id, u.full_name, u.email, ip.salary_rate, ip.contract_type, ip.hire_date,
+               (SELECT COUNT(*) FROM instructor_attendance WHERE instructor_id = u.id AND status = 'present'
+                AND date >= date('now', 'start of month')) as days_present,
+               (SELECT SUM(hours_worked) FROM instructor_attendance WHERE instructor_id = u.id
+                AND date >= date('now', 'start of month')) as hours_this_month
+        FROM users u
+        LEFT JOIN instructor_profiles ip ON ip.user_id = u.id
+        WHERE u.role = 'instructor' AND u.institution_id = ?
+        ORDER BY u.full_name
+    ''', (inst_id,))
+    teachers = [dict(r) for r in cursor.fetchall()]
+
+    cursor.execute('''
+        SELECT p.*, u.full_name as teacher_name
+        FROM instructor_payroll p
+        JOIN users u ON p.instructor_id = u.id
+        WHERE p.institution_id = ?
+        ORDER BY p.period_end DESC LIMIT 20
+    ''', (inst_id,))
+    payrolls = [dict(r) for r in cursor.fetchall()]
+
+    cursor.execute('SELECT COALESCE(SUM(net_pay), 0) as total FROM instructor_payroll WHERE institution_id = ? AND status = "paid"', (inst_id,))
+    total_paid = cursor.fetchone()['total']
+
+    conn.close()
+    return render_template('inst_salary.html', teachers=teachers, payrolls=payrolls, total_paid=total_paid)
+
+
+@app.route('/api/institution/salary/<int:user_id>', methods=['PUT'])
+@login_required
+def api_inst_update_salary(user_id):
+    if current_user.role != 'institution':
+        return jsonify({'error': 'Unauthorized'}), 403
+    data = request.json
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('SELECT id FROM instructor_profiles WHERE user_id=?', (user_id,))
+    if cursor.fetchone():
+        cursor.execute('UPDATE instructor_profiles SET salary_rate=?, contract_type=? WHERE user_id=?',
+            (data.get('salary_rate', 0), data.get('contract_type', 'Full-Time'), user_id))
+    else:
+        cursor.execute('INSERT INTO instructor_profiles (user_id, institution_id, salary_rate, contract_type, hire_date) VALUES (?,?,?,?,date("now"))',
+            (user_id, current_user.institution_id, data.get('salary_rate', 0), data.get('contract_type', 'Full-Time')))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+
+
+@app.route('/api/institution/payroll/generate', methods=['POST'])
+@login_required
+def api_inst_generate_payroll():
+    if current_user.role != 'institution':
+        return jsonify({'error': 'Unauthorized'}), 403
+    data = request.json
+    inst_id = current_user.institution_id
+    conn = get_db()
+    cursor = conn.cursor()
+    period_start = data.get('period_start')
+    period_end = data.get('period_end')
+
+    cursor.execute('''
+        SELECT u.id, ip.salary_rate FROM users u
+        JOIN instructor_profiles ip ON ip.user_id = u.id
+        WHERE u.role = 'instructor' AND u.institution_id = ?
+    ''', (inst_id,))
+    for teacher in cursor.fetchall():
+        cursor.execute('''
+            SELECT COUNT(*) as present, SUM(hours_worked) as hours
+            FROM instructor_attendance
+            WHERE instructor_id = ? AND date BETWEEN ? AND ? AND status = 'present'
+        ''', (teacher['id'], period_start, period_end))
+        att = cursor.fetchone()
+        base = teacher['salary_rate'] or 0
+        hours = att['hours'] or 0
+        cursor.execute('''
+            INSERT INTO instructor_payroll (instructor_id, institution_id, period_start, period_end,
+                base_salary, days_present, total_hours, gross_pay, net_pay, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+        ''', (teacher['id'], inst_id, period_start, period_end, base, att['present'] or 0, hours, base, base))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+
+
+@app.route('/institution/schedules')
+@login_required
+def inst_schedules():
+    if current_user.role != 'institution':
+        return redirect(url_for('index'))
+    conn = get_db()
+    cursor = conn.cursor()
+    inst_id = current_user.institution_id
+
+    cursor.execute('''
+        SELECT sch.*, sub.code as subject_code, sub.name as subject_name, sub.section,
+               u.full_name as instructor_name
+        FROM schedules sch
+        LEFT JOIN subjects sub ON sch.subject_id = sub.id
+        LEFT JOIN users u ON sch.instructor_id = u.id
+        WHERE sch.institution_id = ?
+        ORDER BY CASE sch.day_of_week
+            WHEN 'Monday' THEN 1 WHEN 'Tuesday' THEN 2 WHEN 'Wednesday' THEN 3
+            WHEN 'Thursday' THEN 4 WHEN 'Friday' THEN 5 WHEN 'Saturday' THEN 6 ELSE 7 END,
+            sch.start_time
+    ''', (inst_id,))
+    schedules = cursor.fetchall()
+
+    # Also show subject schedules from subjects table
+    cursor.execute('''
+        SELECT s.id, s.code, s.name, s.section, s.day, s.time_schedule, s.room,
+               u.full_name as instructor_name
+        FROM subjects s
+        LEFT JOIN users u ON s.instructor_id = u.id
+        WHERE s.institution_id = ?
+        ORDER BY s.day, s.time_schedule
+    ''', (inst_id,))
+    subject_schedules = cursor.fetchall()
+
+    cursor.execute('SELECT id, code, name, section FROM subjects WHERE institution_id = ? ORDER BY code', (inst_id,))
+    subjects = cursor.fetchall()
+    cursor.execute('SELECT id, full_name FROM users WHERE role = "instructor" AND institution_id = ? ORDER BY full_name', (inst_id,))
+    teachers = cursor.fetchall()
+
+    conn.close()
+    return render_template('inst_schedules.html', schedules=schedules, subject_schedules=subject_schedules,
+        subjects=subjects, teachers=teachers)
+
+
+@app.route('/api/institution/schedules', methods=['POST'])
+@login_required
+def api_inst_add_schedule():
+    if current_user.role != 'institution':
+        return jsonify({'error': 'Unauthorized'}), 403
+    data = request.json
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT INTO schedules (institution_id, subject_id, instructor_id, title, day_of_week, start_time, end_time, room, schedule_type, created_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (current_user.institution_id, data.get('subject_id') or None, data.get('instructor_id') or None,
+          data['title'], data['day_of_week'], data['start_time'], data['end_time'],
+          data.get('room', ''), data.get('schedule_type', 'class'), current_user.id))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+
+
+@app.route('/api/institution/schedules/<int:schedule_id>', methods=['DELETE'])
+@login_required
+def api_inst_delete_schedule(schedule_id):
+    if current_user.role != 'institution':
+        return jsonify({'error': 'Unauthorized'}), 403
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('DELETE FROM schedules WHERE id=? AND institution_id=?', (schedule_id, current_user.institution_id))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+
+
+# ============== INSTRUCTOR CRUD (Individual Teacher) ==============
+
+@app.route('/instructor/my-subjects')
+@login_required
+def instructor_my_subjects():
+    """Instructor manages their own subjects."""
+    if current_user.role != 'instructor':
+        return redirect(url_for('index'))
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT s.*, (SELECT COUNT(*) FROM enrollments WHERE subject_id = s.id) as enrolled,
+               (SELECT COUNT(*) FROM sessions WHERE subject_id = s.id) as session_count
+        FROM subjects s WHERE s.instructor_id = ?
+        ORDER BY s.code, s.section
+    ''', (current_user.id,))
+    subjects = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+    return render_template('instructor_my_subjects.html', subjects=subjects)
+
+
+@app.route('/api/instructor/subjects', methods=['POST'])
+@login_required
+def api_instructor_add_subject():
+    if current_user.role != 'instructor':
+        return jsonify({'error': 'Unauthorized'}), 403
+    data = request.json
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT INTO subjects (code, name, description, section, day, time_schedule, instructor_id, room, credits, max_students, institution_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (data['code'], data['name'], data.get('description', ''), data.get('section', ''),
+          data.get('day', ''), data.get('time_schedule', ''), current_user.id,
+          data.get('room', ''), data.get('credits', 3), data.get('max_students', 50), current_user.institution_id))
+    subject_id = cursor.lastrowid
+    for i in range(1, 17):
+        title = f"Session {i}: {'Lesson' if i <= 12 else 'Project'}"
+        cursor.execute('INSERT INTO sessions (subject_id, session_number, title) VALUES (?, ?, ?)', (subject_id, i, title))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True, 'id': subject_id})
+
+
+@app.route('/api/instructor/subjects/<int:subject_id>', methods=['PUT'])
+@login_required
+def api_instructor_update_subject(subject_id):
+    if current_user.role != 'instructor':
+        return jsonify({'error': 'Unauthorized'}), 403
+    data = request.json
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('''
+        UPDATE subjects SET code=?, name=?, description=?, section=?, day=?, time_schedule=?, room=?, credits=?, max_students=?
+        WHERE id=? AND instructor_id=?
+    ''', (data['code'], data['name'], data.get('description', ''), data.get('section', ''),
+          data.get('day', ''), data.get('time_schedule', ''), data.get('room', ''),
+          data.get('credits', 3), data.get('max_students', 50), subject_id, current_user.id))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+
+
+@app.route('/api/instructor/subjects/<int:subject_id>', methods=['DELETE'])
+@login_required
+def api_instructor_delete_subject(subject_id):
+    if current_user.role != 'instructor':
+        return jsonify({'error': 'Unauthorized'}), 403
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('SELECT id FROM subjects WHERE id=? AND instructor_id=?', (subject_id, current_user.id))
+    if not cursor.fetchone():
+        conn.close()
+        return jsonify({'error': 'Not found'}), 404
+    cursor.execute('DELETE FROM enrollments WHERE subject_id=?', (subject_id,))
+    cursor.execute('DELETE FROM sessions WHERE subject_id=?', (subject_id,))
+    cursor.execute('DELETE FROM subjects WHERE id=?', (subject_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
 
 
 # ============== AI ADMIN AGENT ==============

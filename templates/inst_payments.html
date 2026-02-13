@@ -1,0 +1,220 @@
+{% extends 'base.html' %}
+{% block title %}Payments - Sangrenes LMS{% endblock %}
+{% block content %}
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+    <h1 style="font-size:1.2rem;font-weight:700;margin:0;"><i class="fas fa-receipt" style="color:#10B981;"></i> Payments & Billing</h1>
+    <div style="display:flex;gap:8px;">
+        <button onclick="openModal('addPaymentModal')" style="padding:8px 16px;border:none;border-radius:8px;background:var(--primary);color:white;font-size:0.82rem;font-weight:600;cursor:pointer;"><i class="fas fa-plus"></i> New Payment</button>
+        <button onclick="openModal('reminderModal')" style="padding:8px 16px;border:none;border-radius:8px;background:#F59E0B;color:white;font-size:0.82rem;font-weight:600;cursor:pointer;"><i class="fas fa-bell"></i> Reminder</button>
+    </div>
+</div>
+
+<!-- Revenue Stats -->
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px;">
+    <div style="background:linear-gradient(135deg,#10B981,#059669);border-radius:12px;padding:20px;color:white;">
+        <div style="font-size:0.8rem;opacity:0.85;">Total Collected</div>
+        <div style="font-size:2rem;font-weight:800;">P{{ "{:,.2f}".format(total_paid) }}</div>
+    </div>
+    <div style="background:linear-gradient(135deg,#F59E0B,#D97706);border-radius:12px;padding:20px;color:white;">
+        <div style="font-size:0.8rem;opacity:0.85;">Pending Balance</div>
+        <div style="font-size:2rem;font-weight:800;">P{{ "{:,.2f}".format(total_pending) }}</div>
+    </div>
+</div>
+
+<div class="tab-bar">
+    <button class="active" data-tab-btn="pay" onclick="switchTab('pay','tab-payments')"><i class="fas fa-list"></i> Payments</button>
+    <button data-tab-btn="pay" onclick="switchTab('pay','tab-plans')"><i class="fas fa-tags"></i> Tuition Plans</button>
+    <button data-tab-btn="pay" onclick="switchTab('pay','tab-reminders')"><i class="fas fa-bell"></i> Reminders</button>
+</div>
+
+<div id="tab-payments" class="tab-panel active" data-tab-group="pay">
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;">
+        {% if payments %}
+        <div style="overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;">
+                <thead><tr style="background:#F8FAFC;">
+                    <th style="padding:10px 14px;text-align:left;font-size:0.78rem;color:var(--muted);">Student</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.78rem;color:var(--muted);">Type</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.78rem;color:var(--muted);">Amount</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.78rem;color:var(--muted);">Paid</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.78rem;color:var(--muted);">Balance</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.78rem;color:var(--muted);">Due</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.78rem;color:var(--muted);">Status</th>
+                    <th style="padding:10px 14px;text-align:right;font-size:0.78rem;color:var(--muted);">Action</th>
+                </tr></thead>
+                <tbody>
+                {% for p in payments %}
+                <tr style="border-bottom:1px solid #F1F5F9;">
+                    <td style="padding:10px 14px;font-size:0.85rem;font-weight:600;">{{ p.student_name }}<div style="font-size:0.7rem;color:var(--muted);">{{ p.sid }}</div></td>
+                    <td style="padding:10px 14px;text-align:center;font-size:0.78rem;">{{ p.payment_type }}</td>
+                    <td style="padding:10px 14px;text-align:center;font-weight:600;">P{{ "{:,.2f}".format(p.amount or 0) }}</td>
+                    <td style="padding:10px 14px;text-align:center;color:#10B981;font-weight:600;">P{{ "{:,.2f}".format(p.amount_paid or 0) }}</td>
+                    <td style="padding:10px 14px;text-align:center;color:#EF4444;font-weight:600;">P{{ "{:,.2f}".format(p.balance or 0) }}</td>
+                    <td style="padding:10px 14px;text-align:center;font-size:0.78rem;color:var(--muted);">{{ p.due_date or '-' }}</td>
+                    <td style="padding:10px 14px;text-align:center;"><span style="padding:2px 10px;border-radius:12px;font-size:0.72rem;{% if p.status == 'paid' %}background:#D1FAE5;color:#065F46;{% elif p.status == 'partial' %}background:#FEF3C7;color:#92400E;{% else %}background:#FEE2E2;color:#991B1B;{% endif %}">{{ (p.status or 'pending')|capitalize }}</span></td>
+                    <td style="padding:10px 14px;text-align:right;">
+                        {% if p.status != 'paid' %}<button onclick="payPayment({{ p.id }}, {{ p.balance or 0 }})" style="padding:4px 10px;font-size:0.72rem;background:#D1FAE5;color:#065F46;border:none;border-radius:6px;cursor:pointer;"><i class="fas fa-check"></i> Pay</button>{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div style="padding:50px;text-align:center;color:var(--muted);">No payment records yet.</div>
+        {% endif %}
+    </div>
+</div>
+
+<div id="tab-plans" class="tab-panel" data-tab-group="pay">
+    <div style="display:flex;justify-content:flex-end;margin-bottom:12px;">
+        <button onclick="openModal('addPlanModal')" style="padding:7px 14px;border:none;border-radius:8px;background:var(--primary);color:white;font-size:0.78rem;cursor:pointer;"><i class="fas fa-plus"></i> Add Plan</button>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;">
+        {% for p in plans %}
+        <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;text-align:center;">
+            <div style="font-size:1rem;font-weight:700;">{{ p.name }}</div>
+            <div style="font-size:2rem;font-weight:800;color:var(--primary);margin:8px 0;">P{{ "{:,.0f}".format(p.amount or 0) }}</div>
+            <div style="font-size:0.78rem;color:var(--muted);">{{ p.frequency or 'semester' }} &middot; {{ p.description or '' }}</div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<div id="tab-reminders" class="tab-panel" data-tab-group="pay">
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;">
+        {% if reminders %}
+        <div style="overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;">
+                <thead><tr style="background:#F8FAFC;">
+                    <th style="padding:10px 14px;text-align:left;font-size:0.78rem;color:var(--muted);">Student</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.78rem;color:var(--muted);">Date</th>
+                    <th style="padding:10px 14px;text-align:left;font-size:0.78rem;color:var(--muted);">Message</th>
+                    <th style="padding:10px 14px;text-align:center;font-size:0.78rem;color:var(--muted);">Sent</th>
+                </tr></thead>
+                <tbody>
+                {% for r in reminders %}
+                <tr style="border-bottom:1px solid #F1F5F9;">
+                    <td style="padding:10px 14px;font-size:0.85rem;font-weight:600;">{{ r.student_name }}</td>
+                    <td style="padding:10px 14px;text-align:center;font-size:0.82rem;">{{ r.reminder_date }}</td>
+                    <td style="padding:10px 14px;font-size:0.82rem;color:var(--muted);">{{ r.message or '-' }}</td>
+                    <td style="padding:10px 14px;text-align:center;">{% if r.is_sent %}<i class="fas fa-check-circle" style="color:#10B981;"></i>{% else %}<i class="fas fa-clock" style="color:#F59E0B;"></i>{% endif %}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div style="padding:40px;text-align:center;color:var(--muted);">No reminders scheduled.</div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Add Payment Modal -->
+<div id="addPaymentModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1000;">
+    <div style="background:white;border-radius:16px;padding:30px;max-width:450px;width:90%;margin:auto;position:relative;top:50%;transform:translateY(-50%);">
+        <h3 style="margin:0 0 20px;"><i class="fas fa-plus-circle" style="color:#10B981;"></i> New Payment Record</h3>
+        <div style="display:flex;flex-direction:column;gap:12px;">
+            <div><label style="font-size:0.8rem;color:var(--muted);">Student *</label>
+                <select id="payStudent" style="padding:10px;border:1px solid var(--border);border-radius:8px;width:100%;">
+                    {% for s in students %}<option value="{{ s.id }}">{{ s.full_name }} ({{ s.student_id }})</option>{% endfor %}
+                </select></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div><label style="font-size:0.8rem;color:var(--muted);">Type</label>
+                    <select id="payType" style="padding:10px;border:1px solid var(--border);border-radius:8px;width:100%;">
+                        <option value="tuition">Tuition</option><option value="miscellaneous">Miscellaneous</option><option value="lab">Lab Fee</option><option value="other">Other</option>
+                    </select></div>
+                <div><label style="font-size:0.8rem;color:var(--muted);">Due Date</label><input type="date" id="payDue" style="padding:10px;border:1px solid var(--border);border-radius:8px;width:100%;box-sizing:border-box;"></div>
+            </div>
+            <div><label style="font-size:0.8rem;color:var(--muted);">Description</label><input type="text" id="payDesc" style="padding:10px;border:1px solid var(--border);border-radius:8px;width:100%;box-sizing:border-box;"></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div><label style="font-size:0.8rem;color:var(--muted);">Amount (PHP) *</label><input type="number" id="payAmount" step="0.01" style="padding:10px;border:1px solid var(--border);border-radius:8px;width:100%;box-sizing:border-box;"></div>
+                <div><label style="font-size:0.8rem;color:var(--muted);">Amount Paid</label><input type="number" id="payPaid" step="0.01" value="0" style="padding:10px;border:1px solid var(--border);border-radius:8px;width:100%;box-sizing:border-box;"></div>
+            </div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end;">
+            <button onclick="closeModal('addPaymentModal')" style="padding:8px 20px;border:1px solid var(--border);border-radius:8px;background:white;cursor:pointer;">Cancel</button>
+            <button onclick="savePayment()" style="padding:8px 20px;border:none;border-radius:8px;background:#10B981;color:white;cursor:pointer;font-weight:600;">Save</button>
+        </div>
+    </div>
+</div>
+
+<!-- Reminder Modal -->
+<div id="reminderModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1000;">
+    <div style="background:white;border-radius:16px;padding:30px;max-width:400px;width:90%;margin:auto;position:relative;top:50%;transform:translateY(-50%);">
+        <h3 style="margin:0 0 20px;"><i class="fas fa-bell" style="color:#F59E0B;"></i> Schedule Reminder</h3>
+        <div style="display:flex;flex-direction:column;gap:12px;">
+            <div><label style="font-size:0.8rem;color:var(--muted);">Student *</label>
+                <select id="remStudent" style="padding:10px;border:1px solid var(--border);border-radius:8px;width:100%;">
+                    {% for s in students %}<option value="{{ s.id }}">{{ s.full_name }}</option>{% endfor %}
+                </select></div>
+            <div><label style="font-size:0.8rem;color:var(--muted);">Reminder Date *</label><input type="date" id="remDate" style="padding:10px;border:1px solid var(--border);border-radius:8px;width:100%;box-sizing:border-box;"></div>
+            <div><label style="font-size:0.8rem;color:var(--muted);">Message</label><input type="text" id="remMsg" placeholder="Payment reminder message..." style="padding:10px;border:1px solid var(--border);border-radius:8px;width:100%;box-sizing:border-box;"></div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end;">
+            <button onclick="closeModal('reminderModal')" style="padding:8px 20px;border:1px solid var(--border);border-radius:8px;background:white;cursor:pointer;">Cancel</button>
+            <button onclick="saveReminder()" style="padding:8px 20px;border:none;border-radius:8px;background:#F59E0B;color:white;cursor:pointer;font-weight:600;">Send</button>
+        </div>
+    </div>
+</div>
+
+<!-- Add Plan Modal -->
+<div id="addPlanModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1000;">
+    <div style="background:white;border-radius:16px;padding:30px;max-width:400px;width:90%;margin:auto;position:relative;top:50%;transform:translateY(-50%);">
+        <h3 style="margin:0 0 20px;"><i class="fas fa-tags" style="color:var(--primary);"></i> Add Tuition Plan</h3>
+        <div style="display:flex;flex-direction:column;gap:12px;">
+            <div><label style="font-size:0.8rem;color:var(--muted);">Plan Name *</label><input type="text" id="planName" style="padding:10px;border:1px solid var(--border);border-radius:8px;width:100%;box-sizing:border-box;"></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div><label style="font-size:0.8rem;color:var(--muted);">Amount (PHP)</label><input type="number" id="planAmount" step="0.01" style="padding:10px;border:1px solid var(--border);border-radius:8px;width:100%;box-sizing:border-box;"></div>
+                <div><label style="font-size:0.8rem;color:var(--muted);">Frequency</label><select id="planFreq" style="padding:10px;border:1px solid var(--border);border-radius:8px;width:100%;"><option>semester</option><option>monthly</option><option>yearly</option><option>one-time</option></select></div>
+            </div>
+            <div><label style="font-size:0.8rem;color:var(--muted);">Description</label><input type="text" id="planDesc" style="padding:10px;border:1px solid var(--border);border-radius:8px;width:100%;box-sizing:border-box;"></div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end;">
+            <button onclick="closeModal('addPlanModal')" style="padding:8px 20px;border:1px solid var(--border);border-radius:8px;background:white;cursor:pointer;">Cancel</button>
+            <button onclick="savePlan()" style="padding:8px 20px;border:none;border-radius:8px;background:var(--primary);color:white;cursor:pointer;font-weight:600;">Save</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script>
+function savePayment() {
+    const data = {
+        student_id: document.getElementById('payStudent').value,
+        payment_type: document.getElementById('payType').value,
+        description: document.getElementById('payDesc').value,
+        amount: parseFloat(document.getElementById('payAmount').value) || 0,
+        amount_paid: parseFloat(document.getElementById('payPaid').value) || 0,
+        due_date: document.getElementById('payDue').value
+    };
+    fetch('/api/institution/payments', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) })
+        .then(r => r.json()).then(d => { if (d.success) location.reload(); else alert(d.error || 'Failed'); });
+}
+function payPayment(id, balance) {
+    const amount = prompt('Enter payment amount (Balance: P' + balance.toFixed(2) + '):', balance.toFixed(2));
+    if (!amount) return;
+    fetch(`/api/institution/payments/${id}/pay`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({amount: parseFloat(amount), method: 'cash'}) })
+        .then(r => r.json()).then(d => { if (d.success) location.reload(); });
+}
+function saveReminder() {
+    const data = {
+        student_id: document.getElementById('remStudent').value,
+        reminder_date: document.getElementById('remDate').value,
+        message: document.getElementById('remMsg').value || 'Payment reminder: Please check your pending payments.'
+    };
+    fetch('/api/institution/payment-reminders', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) })
+        .then(r => r.json()).then(d => { if (d.success) { alert('Reminder sent!'); location.reload(); } });
+}
+function savePlan() {
+    const data = {
+        name: document.getElementById('planName').value,
+        amount: parseFloat(document.getElementById('planAmount').value) || 0,
+        frequency: document.getElementById('planFreq').value,
+        description: document.getElementById('planDesc').value
+    };
+    fetch('/api/institution/tuition-plans', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) })
+        .then(r => r.json()).then(d => { if (d.success) location.reload(); });
+}
+</script>
+{% endblock %}
