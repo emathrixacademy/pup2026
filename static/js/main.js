@@ -2,13 +2,19 @@
 
 // On page load: close all modals and ensure page is interactive
 document.addEventListener('DOMContentLoaded', function() {
-    // Close all modals on page load - remove all modal classes and inline styles
+    // Close class-based modals (.modal)
     document.querySelectorAll('.modal').forEach(modal => {
         modal.classList.remove('active', 'show');
-        modal.removeAttribute('style');
     });
 
-    // Ensure body is scrollable
+    // Close inline-style modals (position:fixed overlays used in admin/institution pages)
+    document.querySelectorAll('[id$="Modal"],[id$="modal"]').forEach(el => {
+        if (el.style.position === 'fixed' || getComputedStyle(el).position === 'fixed') {
+            el.style.display = 'none';
+        }
+    });
+
+    // Ensure body is scrollable and interactive
     document.body.style.overflow = '';
     document.body.style.pointerEvents = '';
 
@@ -63,47 +69,35 @@ async function bulkVisibility(activityId, makeVisible) {
     }
 }
 
-// Modal functions - using class-based approach for reliability
-function openModal(modalId) {
-    const modal = document.getElementById(modalId);
-    if (modal) {
-        // Close any other open modals first
-        document.querySelectorAll('.modal.active').forEach(m => {
-            m.classList.remove('active');
-        });
-        modal.classList.add('active');
-        document.body.style.overflow = 'hidden';
-    }
-}
-
-function closeModal(modalId) {
-    const modal = document.getElementById(modalId);
-    if (modal) {
-        modal.classList.remove('active');
-        document.body.style.overflow = '';
-    }
-}
-
-// Close all modals
-function closeAllModals() {
-    document.querySelectorAll('.modal').forEach(modal => {
-        modal.classList.remove('active');
-    });
-    document.body.style.overflow = '';
-}
+// Note: openModal/closeModal are defined in base.html inline script
+// These helpers handle backdrop clicks and Escape key for all modal types
 
 // Close modal when clicking on the backdrop (outside modal content)
 window.addEventListener('click', function(event) {
-    if (event.target.classList.contains('modal') && event.target.classList.contains('active')) {
-        event.target.classList.remove('active');
+    const el = event.target;
+    // Class-based modals (.modal.active)
+    if (el.classList.contains('modal') && el.classList.contains('active')) {
+        el.classList.remove('active');
         document.body.style.overflow = '';
+    }
+    // Inline-style modals (position:fixed overlays) - click on backdrop closes
+    if (el.style.display === 'flex' && el.style.position === 'fixed' && el.style.width === '100%') {
+        el.style.display = 'none';
     }
 });
 
-// Close modal on Escape key
+// Close all modals on Escape key
 document.addEventListener('keydown', function(event) {
     if (event.key === 'Escape') {
-        closeAllModals();
+        // Class-based modals
+        document.querySelectorAll('.modal.active').forEach(m => m.classList.remove('active'));
+        // Inline-style modals
+        document.querySelectorAll('[id$="Modal"],[id$="modal"]').forEach(el => {
+            if (el.style.display === 'flex' && el.style.position === 'fixed') {
+                el.style.display = 'none';
+            }
+        });
+        document.body.style.overflow = '';
     }
 });
 
