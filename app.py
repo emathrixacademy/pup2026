@@ -419,7 +419,7 @@ def index():
         elif current_user.role == 'instructor':
             return redirect(url_for('dashboard'))
         return redirect(url_for('student_dashboard'))
-    return redirect(url_for('login'))
+    return render_template('landing.html')
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():

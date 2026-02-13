@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sangrenes LMS - Modern Learning Management System</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+    *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+    :root {
+        --purple: #8B5CF6; --purple-dark: #6D28D9; --purple-deeper: #4C1D95;
+        --indigo: #6366F1; --green: #10B981; --amber: #F59E0B; --red: #EF4444;
+        --blue: #3B82F6; --slate-50: #F8FAFC; --slate-100: #F1F5F9;
+        --slate-200: #E2E8F0; --slate-400: #94A3B8; --slate-500: #64748B;
+        --slate-700: #334155; --slate-800: #1E293B; --slate-900: #0F172A;
+    }
+    html { scroll-behavior: smooth; }
+    body { font-family: 'Inter', -apple-system, sans-serif; color: var(--slate-800); background: #fff; overflow-x: hidden; }
+
+    /* ===== NAVBAR ===== */
+    .nav { position: fixed; top: 0; left: 0; right: 0; z-index: 100; padding: 16px 0; transition: all 0.3s; }
+    .nav.scrolled { background: rgba(255,255,255,0.95); backdrop-filter: blur(20px); box-shadow: 0 1px 3px rgba(0,0,0,0.08); padding: 10px 0; }
+    .nav-inner { max-width: 1200px; margin: 0 auto; padding: 0 24px; display: flex; align-items: center; justify-content: space-between; }
+    .nav-brand { display: flex; align-items: center; gap: 10px; text-decoration: none; font-weight: 800; font-size: 1.25rem; color: white; transition: color 0.3s; }
+    .nav.scrolled .nav-brand { color: var(--purple-dark); }
+    .nav-brand i { font-size: 1.4rem; }
+    .nav-links { display: flex; align-items: center; gap: 6px; }
+    .nav-links a { padding: 8px 16px; font-size: 0.88rem; font-weight: 500; color: rgba(255,255,255,0.85); text-decoration: none; border-radius: 8px; transition: all 0.2s; }
+    .nav.scrolled .nav-links a { color: var(--slate-500); }
+    .nav-links a:hover { background: rgba(255,255,255,0.15); color: white; }
+    .nav.scrolled .nav-links a:hover { background: var(--slate-100); color: var(--purple); }
+    .nav-btn { padding: 8px 20px; font-size: 0.88rem; font-weight: 600; border: 2px solid rgba(255,255,255,0.4); color: white; background: transparent; border-radius: 10px; cursor: pointer; text-decoration: none; transition: all 0.2s; }
+    .nav-btn:hover { background: white; color: var(--purple-dark); border-color: white; }
+    .nav.scrolled .nav-btn { border-color: var(--purple); color: var(--purple); }
+    .nav.scrolled .nav-btn:hover { background: var(--purple); color: white; }
+    .nav-btn-fill { background: white; color: var(--purple-dark); border-color: white; margin-left: 6px; }
+    .nav.scrolled .nav-btn-fill { background: var(--purple); color: white; border-color: var(--purple); }
+    .nav.scrolled .nav-btn-fill:hover { background: var(--purple-dark); border-color: var(--purple-dark); }
+
+    /* ===== HERO ===== */
+    .hero { min-height: 100vh; background: linear-gradient(135deg, var(--purple) 0%, var(--purple-dark) 40%, var(--purple-deeper) 100%); position: relative; display: flex; align-items: center; overflow: hidden; }
+    .hero::before { content: ''; position: absolute; inset: 0; background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none'%3E%3Cg fill='%23ffffff' fill-opacity='0.04'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E"); pointer-events: none; }
+    .hero-inner { max-width: 1200px; margin: 0 auto; padding: 120px 24px 80px; display: grid; grid-template-columns: 1fr 1fr; gap: 60px; align-items: center; width: 100%; position: relative; z-index: 1; }
+    .hero-text h1 { font-size: 3.5rem; font-weight: 900; color: white; line-height: 1.1; margin-bottom: 20px; }
+    .hero-text h1 span { background: linear-gradient(135deg, #FDE68A, #F59E0B); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    .hero-text p { font-size: 1.15rem; color: rgba(255,255,255,0.8); line-height: 1.7; margin-bottom: 32px; max-width: 500px; }
+    .hero-buttons { display: flex; gap: 14px; flex-wrap: wrap; }
+    .btn-hero { padding: 14px 32px; font-size: 1rem; font-weight: 700; border-radius: 12px; border: none; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; transition: all 0.2s; }
+    .btn-hero-primary { background: white; color: var(--purple-dark); box-shadow: 0 4px 15px rgba(0,0,0,0.15); }
+    .btn-hero-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(0,0,0,0.2); }
+    .btn-hero-outline { background: transparent; color: white; border: 2px solid rgba(255,255,255,0.4); }
+    .btn-hero-outline:hover { background: rgba(255,255,255,0.1); border-color: white; }
+    .hero-stats { display: flex; gap: 30px; margin-top: 40px; }
+    .hero-stat { text-align: center; }
+    .hero-stat .num { font-size: 2rem; font-weight: 800; color: white; }
+    .hero-stat .lbl { font-size: 0.78rem; color: rgba(255,255,255,0.65); margin-top: 2px; }
+
+    /* Hero illustration - animated floating icons */
+    .hero-visual { position: relative; height: 480px; }
+    .float-icon { position: absolute; display: flex; align-items: center; justify-content: center; border-radius: 20px; color: white; font-size: 1.5rem; box-shadow: 0 20px 40px rgba(0,0,0,0.15); animation: float 6s ease-in-out infinite; }
+    .float-icon:nth-child(1) { width: 90px; height: 90px; background: linear-gradient(135deg, #6366F1, #4F46E5); top: 10%; left: 15%; animation-delay: 0s; font-size: 2rem; }
+    .float-icon:nth-child(2) { width: 75px; height: 75px; background: linear-gradient(135deg, #10B981, #059669); top: 5%; right: 15%; animation-delay: 1s; }
+    .float-icon:nth-child(3) { width: 100px; height: 100px; background: linear-gradient(135deg, #F59E0B, #D97706); top: 35%; left: 5%; animation-delay: 2s; font-size: 2.2rem; }
+    .float-icon:nth-child(4) { width: 80px; height: 80px; background: linear-gradient(135deg, #EF4444, #DC2626); top: 30%; right: 5%; animation-delay: 0.5s; font-size: 1.8rem; }
+    .float-icon:nth-child(5) { width: 110px; height: 110px; background: linear-gradient(135deg, #8B5CF6, #7C3AED); top: 50%; left: 30%; animation-delay: 1.5s; font-size: 2.5rem; }
+    .float-icon:nth-child(6) { width: 70px; height: 70px; background: linear-gradient(135deg, #3B82F6, #2563EB); top: 65%; right: 20%; animation-delay: 3s; font-size: 1.4rem; }
+    .float-icon:nth-child(7) { width: 65px; height: 65px; background: linear-gradient(135deg, #EC4899, #DB2777); top: 75%; left: 10%; animation-delay: 2.5s; font-size: 1.3rem; }
+    .float-icon:nth-child(8) { width: 85px; height: 85px; background: linear-gradient(135deg, #14B8A6, #0D9488); top: 80%; right: 35%; animation-delay: 4s; font-size: 1.8rem; }
+
+    /* Connector lines between icons */
+    .hero-visual::before { content: ''; position: absolute; top: 20%; left: 25%; width: 200px; height: 200px; border: 2px dashed rgba(255,255,255,0.1); border-radius: 50%; animation: spin 20s linear infinite; }
+    .hero-visual::after { content: ''; position: absolute; top: 40%; right: 15%; width: 150px; height: 150px; border: 2px dashed rgba(255,255,255,0.08); border-radius: 50%; animation: spin 15s linear infinite reverse; }
+
+    @keyframes float {
+        0%, 100% { transform: translateY(0) rotate(0deg); }
+        25% { transform: translateY(-15px) rotate(3deg); }
+        50% { transform: translateY(-8px) rotate(-2deg); }
+        75% { transform: translateY(-20px) rotate(2deg); }
+    }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    @keyframes fadeUp { from { opacity:0; transform:translateY(30px); } to { opacity:1; transform:translateY(0); } }
+    @keyframes pulse { 0%,100% { transform:scale(1); } 50% { transform:scale(1.05); } }
+
+    /* ===== SECTION BASE ===== */
+    .section { padding: 100px 24px; }
+    .section-inner { max-width: 1100px; margin: 0 auto; }
+    .section-header { text-align: center; margin-bottom: 60px; }
+    .section-header .badge { display: inline-block; padding: 6px 16px; font-size: 0.78rem; font-weight: 600; color: var(--purple); background: #F5F3FF; border-radius: 50px; margin-bottom: 14px; letter-spacing: 0.5px; text-transform: uppercase; }
+    .section-header h2 { font-size: 2.5rem; font-weight: 800; color: var(--slate-900); margin-bottom: 14px; line-height: 1.2; }
+    .section-header p { font-size: 1.05rem; color: var(--slate-500); max-width: 600px; margin: 0 auto; line-height: 1.7; }
+
+    /* ===== FEATURES ===== */
+    .features-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+    .feature-card { background: white; border: 1px solid var(--slate-200); border-radius: 16px; padding: 32px 28px; transition: all 0.3s; position: relative; overflow: hidden; }
+    .feature-card:hover { transform: translateY(-4px); box-shadow: 0 20px 40px rgba(0,0,0,0.08); border-color: transparent; }
+    .feature-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, var(--purple), var(--indigo)); opacity: 0; transition: opacity 0.3s; }
+    .feature-card:hover::before { opacity: 1; }
+    .feature-icon { width: 52px; height: 52px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; color: white; margin-bottom: 18px; }
+    .feature-card h3 { font-size: 1.05rem; font-weight: 700; margin-bottom: 8px; color: var(--slate-800); }
+    .feature-card p { font-size: 0.88rem; color: var(--slate-500); line-height: 1.65; }
+
+    /* ===== ABOUT US ===== */
+    .about-bg { background: var(--slate-50); }
+    .about-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 60px; align-items: center; }
+    .about-visual { position: relative; }
+    .about-card-stack { position: relative; height: 400px; }
+    .about-float { position: absolute; background: white; border-radius: 16px; padding: 24px; box-shadow: 0 15px 35px rgba(0,0,0,0.08); border: 1px solid var(--slate-100); }
+    .about-float:nth-child(1) { top: 0; left: 0; width: 260px; animation: float 5s ease-in-out infinite; }
+    .about-float:nth-child(2) { top: 80px; right: 0; width: 240px; animation: float 5s ease-in-out infinite 1.5s; }
+    .about-float:nth-child(3) { bottom: 20px; left: 40px; width: 280px; animation: float 5s ease-in-out infinite 3s; }
+    .about-float .af-icon { width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; color: white; margin-bottom: 12px; }
+    .about-float h4 { font-size: 0.95rem; font-weight: 700; color: var(--slate-800); margin-bottom: 4px; }
+    .about-float p { font-size: 0.82rem; color: var(--slate-500); line-height: 1.5; }
+    .about-content h2 { font-size: 2.2rem; font-weight: 800; color: var(--slate-900); margin-bottom: 18px; line-height: 1.2; }
+    .about-content > p { font-size: 1rem; color: var(--slate-500); line-height: 1.75; margin-bottom: 24px; }
+    .about-values { display: flex; flex-direction: column; gap: 16px; }
+    .about-val { display: flex; align-items: flex-start; gap: 14px; }
+    .about-val i { width: 36px; height: 36px; min-width: 36px; background: #F5F3FF; color: var(--purple); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 0.9rem; margin-top: 2px; }
+    .about-val div h4 { font-size: 0.92rem; font-weight: 700; color: var(--slate-800); margin-bottom: 2px; }
+    .about-val div p { font-size: 0.85rem; color: var(--slate-500); line-height: 1.5; }
+
+    /* ===== PRICING ===== */
+    .pricing-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 28px; max-width: 800px; margin: 0 auto; }
+    .price-card { background: white; border: 2px solid var(--slate-200); border-radius: 20px; padding: 40px 32px; text-align: center; transition: all 0.3s; position: relative; }
+    .price-card:hover { transform: translateY(-4px); box-shadow: 0 20px 50px rgba(0,0,0,0.1); }
+    .price-card.popular { border-color: var(--purple); background: linear-gradient(180deg, #FAFAFE 0%, white 100%); }
+    .price-card.popular::before { content: 'Most Popular'; position: absolute; top: -14px; left: 50%; transform: translateX(-50%); background: linear-gradient(135deg, var(--purple), var(--indigo)); color: white; padding: 5px 20px; border-radius: 50px; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.3px; }
+    .price-card .plan-icon { width: 64px; height: 64px; border-radius: 18px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; color: white; margin: 0 auto 18px; }
+    .price-card h3 { font-size: 1.2rem; font-weight: 700; color: var(--slate-800); margin-bottom: 6px; }
+    .price-card .plan-desc { font-size: 0.85rem; color: var(--slate-400); margin-bottom: 20px; }
+    .price-amount { margin-bottom: 24px; }
+    .price-amount .currency { font-size: 1.2rem; font-weight: 700; color: var(--slate-400); vertical-align: top; }
+    .price-amount .amount { font-size: 3.2rem; font-weight: 900; color: var(--slate-900); }
+    .price-amount .period { font-size: 0.9rem; color: var(--slate-400); }
+    .price-card .addon { display: inline-block; padding: 6px 14px; background: #FEF3C7; color: #92400E; border-radius: 8px; font-size: 0.8rem; font-weight: 600; margin-bottom: 24px; }
+    .price-features { list-style: none; text-align: left; margin-bottom: 28px; }
+    .price-features li { padding: 8px 0; font-size: 0.88rem; color: var(--slate-700); display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--slate-100); }
+    .price-features li:last-child { border-bottom: none; }
+    .price-features li i { color: var(--green); font-size: 0.82rem; min-width: 18px; }
+    .btn-price { display: block; width: 100%; padding: 14px; font-size: 0.95rem; font-weight: 700; border-radius: 12px; border: none; cursor: pointer; transition: all 0.2s; text-decoration: none; text-align: center; }
+    .btn-price-outline { background: white; color: var(--purple); border: 2px solid var(--purple); }
+    .btn-price-outline:hover { background: #F5F3FF; }
+    .btn-price-fill { background: linear-gradient(135deg, var(--purple), var(--indigo)); color: white; border: 2px solid transparent; }
+    .btn-price-fill:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(99,102,241,0.4); }
+
+    /* ===== CTA ===== */
+    .cta { background: linear-gradient(135deg, var(--purple) 0%, var(--purple-dark) 50%, var(--purple-deeper) 100%); padding: 80px 24px; text-align: center; position: relative; overflow: hidden; }
+    .cta::before { content: ''; position: absolute; inset: 0; background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none'%3E%3Cg fill='%23ffffff' fill-opacity='0.04'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E"); pointer-events: none; }
+    .cta h2 { font-size: 2.2rem; font-weight: 800; color: white; margin-bottom: 14px; position: relative; }
+    .cta p { font-size: 1.05rem; color: rgba(255,255,255,0.75); margin-bottom: 32px; position: relative; }
+    .cta .btn-hero { position: relative; }
+
+    /* ===== FOOTER ===== */
+    .footer { background: var(--slate-900); padding: 60px 24px 30px; color: var(--slate-400); }
+    .footer-inner { max-width: 1100px; margin: 0 auto; }
+    .footer-grid { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 40px; margin-bottom: 40px; }
+    .footer-brand { font-size: 1.15rem; font-weight: 800; color: white; display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+    .footer-brand i { color: var(--purple); }
+    .footer p.footer-desc { font-size: 0.85rem; line-height: 1.7; max-width: 300px; }
+    .footer h4 { color: white; font-size: 0.88rem; font-weight: 700; margin-bottom: 16px; }
+    .footer ul { list-style: none; }
+    .footer ul li { margin-bottom: 10px; }
+    .footer ul li a { color: var(--slate-400); text-decoration: none; font-size: 0.85rem; transition: color 0.2s; }
+    .footer ul li a:hover { color: var(--purple); }
+    .footer-bottom { border-top: 1px solid var(--slate-700); padding-top: 24px; display: flex; justify-content: space-between; align-items: center; font-size: 0.82rem; }
+    .footer-social { display: flex; gap: 12px; }
+    .footer-social a { width: 36px; height: 36px; border-radius: 10px; background: var(--slate-800); color: var(--slate-400); display: flex; align-items: center; justify-content: center; text-decoration: none; transition: all 0.2s; }
+    .footer-social a:hover { background: var(--purple); color: white; }
+
+    /* ===== RESPONSIVE ===== */
+    @media (max-width: 900px) {
+        .hero-inner { grid-template-columns: 1fr; text-align: center; }
+        .hero-text h1 { font-size: 2.5rem; }
+        .hero-text p { margin: 0 auto 32px; }
+        .hero-buttons { justify-content: center; }
+        .hero-stats { justify-content: center; }
+        .hero-visual { display: none; }
+        .features-grid { grid-template-columns: 1fr; max-width: 420px; margin: 0 auto; }
+        .about-grid { grid-template-columns: 1fr; }
+        .about-visual { order: -1; }
+        .about-card-stack { height: 300px; }
+        .pricing-grid { grid-template-columns: 1fr; max-width: 420px; margin: 0 auto; }
+        .footer-grid { grid-template-columns: 1fr 1fr; }
+        .section-header h2 { font-size: 2rem; }
+    }
+    @media (max-width: 600px) {
+        .hero-text h1 { font-size: 2rem; }
+        .nav-links a:not(.nav-btn):not(.nav-btn-fill) { display: none; }
+        .footer-grid { grid-template-columns: 1fr; }
+        .footer-bottom { flex-direction: column; gap: 12px; text-align: center; }
+    }
+
+    /* ===== MOBILE HAMBURGER ===== */
+    .nav-toggle { display: none; background: none; border: none; color: white; font-size: 1.3rem; cursor: pointer; padding: 8px; }
+    .nav.scrolled .nav-toggle { color: var(--slate-700); }
+    @media (max-width: 600px) {
+        .nav-toggle { display: block; }
+    }
+    </style>
+</head>
+<body>
+
+<!-- NAVBAR -->
+<nav class="nav" id="navbar">
+    <div class="nav-inner">
+        <a href="#" class="nav-brand"><i class="fas fa-graduation-cap"></i> Sangrenes LMS</a>
+        <div class="nav-links">
+            <a href="#features">Features</a>
+            <a href="#about">About</a>
+            <a href="#pricing">Pricing</a>
+            <a href="{{ url_for('login') }}" class="nav-btn">Sign In</a>
+            <a href="{{ url_for('register') }}" class="nav-btn nav-btn-fill">Get Started</a>
+        </div>
+    </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+    <div class="hero-inner">
+        <div class="hero-text">
+            <h1>Transform Education with <span>Smart Learning</span></h1>
+            <p>A powerful, all-in-one Learning Management System designed for schools, teachers, and students. Manage classes, track progress, and deliver engaging education — all in one place.</p>
+            <div class="hero-buttons">
+                <a href="{{ url_for('register') }}" class="btn-hero btn-hero-primary"><i class="fas fa-rocket"></i> Start Free Trial</a>
+                <a href="#features" class="btn-hero btn-hero-outline"><i class="fas fa-play-circle"></i> Learn More</a>
+            </div>
+            <div class="hero-stats">
+                <div class="hero-stat"><div class="num">100+</div><div class="lbl">Schools</div></div>
+                <div class="hero-stat"><div class="num">5,000+</div><div class="lbl">Students</div></div>
+                <div class="hero-stat"><div class="num">500+</div><div class="lbl">Teachers</div></div>
+            </div>
+        </div>
+        <div class="hero-visual">
+            <div class="float-icon"><i class="fas fa-book-open"></i></div>
+            <div class="float-icon"><i class="fas fa-graduation-cap"></i></div>
+            <div class="float-icon"><i class="fas fa-chalkboard-teacher"></i></div>
+            <div class="float-icon"><i class="fas fa-brain"></i></div>
+            <div class="float-icon"><i class="fas fa-laptop-code"></i></div>
+            <div class="float-icon"><i class="fas fa-chart-line"></i></div>
+            <div class="float-icon"><i class="fas fa-users"></i></div>
+            <div class="float-icon"><i class="fas fa-award"></i></div>
+        </div>
+    </div>
+</section>
+
+<!-- FEATURES -->
+<section class="section" id="features">
+    <div class="section-inner">
+        <div class="section-header">
+            <div class="badge"><i class="fas fa-star"></i> Features</div>
+            <h2>Everything You Need to Teach & Learn</h2>
+            <p>From classroom management to advanced analytics, our platform gives educators and institutions the tools to succeed.</p>
+        </div>
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="feature-icon" style="background:linear-gradient(135deg,#6366F1,#4F46E5);"><i class="fas fa-building"></i></div>
+                <h3>Multi-Institution Support</h3>
+                <p>Manage multiple schools under one platform. Each institution gets its own programs, departments, teachers, and students.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon" style="background:linear-gradient(135deg,#10B981,#059669);"><i class="fas fa-book-open"></i></div>
+                <h3>Subject & Session Management</h3>
+                <p>Create subjects, organize sessions, upload materials, and deliver structured learning content with ease.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon" style="background:linear-gradient(135deg,#F59E0B,#D97706);"><i class="fas fa-question-circle"></i></div>
+                <h3>Quizzes & Exams</h3>
+                <p>Build quizzes with multiple question types, set time limits, enable auto-grading, and track scores in real time.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon" style="background:linear-gradient(135deg,#EF4444,#DC2626);"><i class="fas fa-chart-bar"></i></div>
+                <h3>Grades & Analytics</h3>
+                <p>Comprehensive gradebook with automatic calculations, performance tracking, and exportable reports.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon" style="background:linear-gradient(135deg,#8B5CF6,#7C3AED);"><i class="fas fa-calendar-check"></i></div>
+                <h3>Attendance Tracking</h3>
+                <p>Take attendance digitally, track participation, and generate attendance reports for every session.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon" style="background:linear-gradient(135deg,#3B82F6,#2563EB);"><i class="fas fa-gamepad"></i></div>
+                <h3>Gamified Learning</h3>
+                <p>Engage students with interactive typing games, quiz journeys, leaderboards, and achievement badges.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ABOUT US -->
+<section class="section about-bg" id="about">
+    <div class="section-inner">
+        <div class="about-grid">
+            <div class="about-visual">
+                <div class="about-card-stack">
+                    <div class="about-float">
+                        <div class="af-icon" style="background:linear-gradient(135deg,#8B5CF6,#6D28D9);"><i class="fas fa-lightbulb"></i></div>
+                        <h4>Innovation First</h4>
+                        <p>We leverage modern technology to make learning accessible and engaging for everyone.</p>
+                    </div>
+                    <div class="about-float">
+                        <div class="af-icon" style="background:linear-gradient(135deg,#10B981,#059669);"><i class="fas fa-hands-helping"></i></div>
+                        <h4>Community Driven</h4>
+                        <p>Built with feedback from real teachers and students across the Philippines.</p>
+                    </div>
+                    <div class="about-float">
+                        <div class="af-icon" style="background:linear-gradient(135deg,#F59E0B,#D97706);"><i class="fas fa-shield-alt"></i></div>
+                        <h4>Reliable & Secure</h4>
+                        <p>Your data is protected with enterprise-grade security and 99.9% uptime.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="about-content">
+                <div class="badge" style="margin-bottom:14px;"><i class="fas fa-heart"></i> About Us</div>
+                <h2>Empowering Filipino Education Through Technology</h2>
+                <p>Sangrenes LMS was born from a simple idea: make quality education management tools accessible to every school in the Philippines. Whether you're a solo teacher running classes independently or a large university managing thousands of students, our platform scales with you.</p>
+                <div class="about-values">
+                    <div class="about-val">
+                        <i class="fas fa-check"></i>
+                        <div>
+                            <h4>Built for Philippine Schools</h4>
+                            <p>Designed around the Philippine education system with programs, sections, and year levels built in.</p>
+                        </div>
+                    </div>
+                    <div class="about-val">
+                        <i class="fas fa-check"></i>
+                        <div>
+                            <h4>Teacher-Friendly</h4>
+                            <p>Intuitive interface that teachers can learn in minutes, not hours. No technical expertise needed.</p>
+                        </div>
+                    </div>
+                    <div class="about-val">
+                        <i class="fas fa-check"></i>
+                        <div>
+                            <h4>All-in-One Platform</h4>
+                            <p>Subjects, quizzes, grades, attendance, materials, payments, and payroll — everything in one place.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- PRICING -->
+<section class="section" id="pricing">
+    <div class="section-inner">
+        <div class="section-header">
+            <div class="badge"><i class="fas fa-tag"></i> Pricing</div>
+            <h2>Simple, Transparent Pricing</h2>
+            <p>Choose the plan that works for you. No hidden fees, no surprise charges. Start teaching today.</p>
+        </div>
+        <div class="pricing-grid">
+            <!-- Individual Teacher -->
+            <div class="price-card">
+                <div class="plan-icon" style="background:linear-gradient(135deg,#6366F1,#4F46E5);"><i class="fas fa-chalkboard-teacher"></i></div>
+                <h3>Individual Teacher</h3>
+                <p class="plan-desc">Perfect for independent teachers and tutors</p>
+                <div class="price-amount">
+                    <span class="currency">&#8369;</span><span class="amount">500</span><span class="period">/month</span>
+                </div>
+                <ul class="price-features">
+                    <li><i class="fas fa-check-circle"></i> Unlimited subjects & sessions</li>
+                    <li><i class="fas fa-check-circle"></i> Unlimited students</li>
+                    <li><i class="fas fa-check-circle"></i> Quizzes, exams & auto-grading</li>
+                    <li><i class="fas fa-check-circle"></i> Materials & file uploads</li>
+                    <li><i class="fas fa-check-circle"></i> Attendance tracking</li>
+                    <li><i class="fas fa-check-circle"></i> Gradebook & analytics</li>
+                    <li><i class="fas fa-check-circle"></i> Gamified learning tools</li>
+                </ul>
+                <a href="{{ url_for('register') }}" class="btn-price btn-price-outline">Get Started</a>
+            </div>
+            <!-- Institution -->
+            <div class="price-card popular">
+                <div class="plan-icon" style="background:linear-gradient(135deg,#8B5CF6,#6D28D9);"><i class="fas fa-building"></i></div>
+                <h3>Institution</h3>
+                <p class="plan-desc">For schools, colleges, and universities</p>
+                <div class="price-amount">
+                    <span class="currency">&#8369;</span><span class="amount">2,000</span><span class="period">/month</span>
+                </div>
+                <div class="addon"><i class="fas fa-plus-circle"></i> &#8369;500 per extra teacher beyond 6</div>
+                <ul class="price-features">
+                    <li><i class="fas fa-check-circle"></i> <strong>6 teachers included</strong></li>
+                    <li><i class="fas fa-check-circle"></i> Unlimited students & subjects</li>
+                    <li><i class="fas fa-check-circle"></i> Program & section management</li>
+                    <li><i class="fas fa-check-circle"></i> Department organization</li>
+                    <li><i class="fas fa-check-circle"></i> Centralized admin dashboard</li>
+                    <li><i class="fas fa-check-circle"></i> Payment & payroll tracking</li>
+                    <li><i class="fas fa-check-circle"></i> All teacher plan features</li>
+                </ul>
+                <a href="{{ url_for('register') }}" class="btn-price btn-price-fill">Get Started</a>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- CTA -->
+<section class="cta">
+    <h2>Ready to Transform Your Classroom?</h2>
+    <p>Join hundreds of schools and thousands of teachers already using Sangrenes LMS.</p>
+    <a href="{{ url_for('register') }}" class="btn-hero btn-hero-primary"><i class="fas fa-rocket"></i> Start Your Free Trial</a>
+</section>
+
+<!-- FOOTER -->
+<footer class="footer">
+    <div class="footer-inner">
+        <div class="footer-grid">
+            <div>
+                <div class="footer-brand"><i class="fas fa-graduation-cap"></i> Sangrenes LMS</div>
+                <p class="footer-desc">A modern learning management system built for Philippine schools, teachers, and students. Empowering education through technology.</p>
+            </div>
+            <div>
+                <h4>Platform</h4>
+                <ul>
+                    <li><a href="#features">Features</a></li>
+                    <li><a href="#pricing">Pricing</a></li>
+                    <li><a href="{{ url_for('register') }}">Register</a></li>
+                    <li><a href="{{ url_for('login') }}">Sign In</a></li>
+                </ul>
+            </div>
+            <div>
+                <h4>Resources</h4>
+                <ul>
+                    <li><a href="#about">About Us</a></li>
+                    <li><a href="#features">For Teachers</a></li>
+                    <li><a href="#features">For Schools</a></li>
+                    <li><a href="#pricing">Plans</a></li>
+                </ul>
+            </div>
+            <div>
+                <h4>Contact</h4>
+                <ul>
+                    <li><a href="mailto:support@sangreneslms.com"><i class="fas fa-envelope"></i> support@sangreneslms.com</a></li>
+                    <li><a href="#"><i class="fas fa-map-marker-alt"></i> Philippines</a></li>
+                </ul>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <span>&copy; 2026 Sangrenes LMS. All rights reserved.</span>
+            <div class="footer-social">
+                <a href="#"><i class="fab fa-facebook-f"></i></a>
+                <a href="#"><i class="fab fa-twitter"></i></a>
+                <a href="#"><i class="fab fa-linkedin-in"></i></a>
+                <a href="#"><i class="fab fa-github"></i></a>
+            </div>
+        </div>
+    </div>
+</footer>
+
+<script>
+// Navbar scroll effect
+window.addEventListener('scroll', function() {
+    document.getElementById('navbar').classList.toggle('scrolled', window.scrollY > 50);
+});
+
+// Smooth scroll for anchor links
+document.querySelectorAll('a[href^="#"]').forEach(a => {
+    a.addEventListener('click', function(e) {
+        const target = document.querySelector(this.getAttribute('href'));
+        if (target) { e.preventDefault(); target.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+    });
+});
+
+// Animate elements on scroll
+const observer = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+        if (entry.isIntersecting) {
+            entry.target.style.animation = 'fadeUp 0.6s ease forwards';
+            entry.target.style.opacity = '1';
+            observer.unobserve(entry.target);
+        }
+    });
+}, { threshold: 0.1 });
+document.querySelectorAll('.feature-card, .price-card, .about-float, .about-val').forEach(el => {
+    el.style.opacity = '0';
+    observer.observe(el);
+});
+</script>
+</body>
+</html>
