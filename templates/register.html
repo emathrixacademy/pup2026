@@ -13,12 +13,11 @@
             border-radius: 20px;
             box-shadow: 0 25px 50px rgba(0, 0, 0, 0.35);
             width: 100%;
-            max-width: 500px;
+            max-width: 520px;
             position: relative;
             z-index: 1;
             border: 1px solid rgba(255, 255, 255, 0.1);
         }
-
         .register-box h1 {
             text-align: center;
             background: linear-gradient(135deg, #8B5CF6, #6D28D9);
@@ -29,30 +28,21 @@
             font-size: 1.75rem;
             font-weight: 700;
         }
-
         .register-box .subtitle {
             text-align: center;
             color: var(--text-gray);
             margin-bottom: 1.5rem;
             font-size: 0.9rem;
         }
-
         .form-row {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 1rem;
         }
-
         @media (max-width: 500px) {
-            .form-row {
-                grid-template-columns: 1fr;
-            }
+            .form-row { grid-template-columns: 1fr; }
         }
-
-        .section-select {
-            position: relative;
-        }
-
+        .section-select { position: relative; }
         .section-select select {
             width: 100%;
             padding: 0.75rem 1rem;
@@ -63,47 +53,35 @@
             cursor: pointer;
             appearance: none;
         }
-
         .section-select::after {
             content: '\f078';
             font-family: 'Font Awesome 6 Free';
             font-weight: 900;
             position: absolute;
             right: 1rem;
-            top: 50%;
-            transform: translateY(-50%);
+            bottom: 0.85rem;
             color: var(--text-gray);
             pointer-events: none;
+            font-size: 0.75rem;
         }
-
         .password-requirements {
             font-size: 0.75rem;
             color: var(--text-gray);
             margin-top: 0.25rem;
         }
-
         .login-link {
             text-align: center;
             margin-top: 1.5rem;
             padding-top: 1.5rem;
             border-top: 1px solid var(--border-gray);
         }
-
         .login-link a {
             color: #8B5CF6;
             text-decoration: none;
             font-weight: 600;
         }
-
-        .login-link a:hover {
-            text-decoration: underline;
-        }
-
-        .icon-header {
-            text-align: center;
-            margin-bottom: 1.5rem;
-        }
-
+        .login-link a:hover { text-decoration: underline; }
+        .icon-header { text-align: center; margin-bottom: 1.5rem; }
         .icon-header i {
             font-size: 3rem;
             background: linear-gradient(135deg, #8B5CF6, #6D28D9);
@@ -111,6 +89,34 @@
             -webkit-text-fill-color: transparent;
             background-clip: text;
         }
+        /* Role toggle */
+        .role-toggle {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 1.2rem;
+        }
+        .role-card {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 12px;
+            border: 2px solid var(--border-gray);
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 0.88rem;
+            font-weight: 600;
+            transition: all 0.2s;
+            color: #64748B;
+        }
+        .role-card:hover { border-color: #8B5CF6; color: #8B5CF6; }
+        .role-card.active {
+            border-color: #8B5CF6;
+            background: linear-gradient(135deg, #F5F3FF, #EDE9FE);
+            color: #6D28D9;
+        }
+        .role-card input[type="radio"] { display: none; }
     </style>
 </head>
 <body class="login-container">
@@ -118,7 +124,7 @@
         <div class="icon-header">
             <i class="fas fa-user-plus"></i>
         </div>
-        <h1>Student Registration</h1>
+        <h1 id="regTitle">Registration</h1>
         <p class="subtitle">Create your account to access the LMS</p>
 
         {% with messages = get_flashed_messages(with_categories=true) %}
@@ -132,45 +138,82 @@
             {% endif %}
         {% endwith %}
 
-        <form method="POST" action="{{ url_for('register') }}">
+        <form method="POST" action="{{ url_for('register') }}" id="registerForm">
+            <!-- Role Toggle -->
+            <div class="role-toggle">
+                <label class="role-card active" id="roleStudent" onclick="selectRole('student')">
+                    <input type="radio" name="role" value="student" checked>
+                    <i class="fas fa-user-graduate"></i> Student
+                </label>
+                <label class="role-card" id="roleTeacher" onclick="selectRole('instructor')">
+                    <input type="radio" name="role" value="instructor">
+                    <i class="fas fa-chalkboard-teacher"></i> Teacher
+                </label>
+            </div>
+
+            <!-- Full Name -->
             <div class="form-group">
                 <label for="full_name"><i class="fas fa-user"></i> Full Name</label>
                 <input type="text" id="full_name" name="full_name" placeholder="e.g., Dela Cruz, Juan A." required>
                 <p class="password-requirements">Format: Last Name, First Name, Middle Initial</p>
             </div>
 
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="student_id"><i class="fas fa-id-card"></i> Student ID</label>
-                    <input type="text" id="student_id" name="student_id" placeholder="e.g., 2024-00001" required>
+            <!-- Institution -->
+            <div class="form-group section-select">
+                <label><i class="fas fa-university"></i> Institution</label>
+                <select id="institution_id" name="institution_id" required onchange="onInstitutionChange()">
+                    <option value="">Select Institution</option>
+                </select>
+            </div>
+
+            <!-- STUDENT FIELDS -->
+            <div id="studentFields">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="student_id"><i class="fas fa-id-card"></i> Student ID</label>
+                        <input type="text" id="student_id" name="student_id" placeholder="e.g., 2024-00001">
+                    </div>
+                    <div class="form-group section-select">
+                        <label><i class="fas fa-graduation-cap"></i> Program</label>
+                        <select id="program_id" name="program_id" onchange="onProgramChange()">
+                            <option value="">Select Program</option>
+                        </select>
+                    </div>
                 </div>
+                <div class="form-row">
+                    <div class="form-group section-select">
+                        <label><i class="fas fa-layer-group"></i> Year Level</label>
+                        <select id="year_level" name="year_level" onchange="onYearChange()">
+                            <option value="">Select Year</option>
+                        </select>
+                    </div>
+                    <div class="form-group section-select">
+                        <label><i class="fas fa-users"></i> Section</label>
+                        <select id="section_id" name="section_id">
+                            <option value="">Select Section</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TEACHER FIELDS -->
+            <div id="teacherFields" style="display:none;">
                 <div class="form-group section-select">
-                    <label for="section"><i class="fas fa-users"></i> Section</label>
-                    <select id="section" name="section" required>
-                        <option value="">Select Section</option>
-                        <optgroup label="BSIT-SR 3rd Year">
-                            <option value="BSIT-SR 3-1">BSIT-SR 3-1</option>
-                            <option value="BSIT-SR 3-2">BSIT-SR 3-2</option>
-                        </optgroup>
-                        <optgroup label="BSIT-SR 2nd Year">
-                            <option value="BSIT-SR 2-1">BSIT-SR 2-1</option>
-                            <option value="BSIT-SR 2-2">BSIT-SR 2-2</option>
-                            <option value="BSIT-SR 2-3">BSIT-SR 2-3</option>
-                        </optgroup>
-                        <optgroup label="BSCPE-BN">
-                            <option value="BSCPE-BN 3-1">BSCPE-BN 3-1</option>
-                            <option value="BSCPE-BN 4-1">BSCPE-BN 4-1</option>
-                        </optgroup>
+                    <label><i class="fas fa-sitemap"></i> Department</label>
+                    <select id="department_id" name="department_id">
+                        <option value="">Select Department (Optional)</option>
                     </select>
                 </div>
             </div>
 
+            <!-- Email -->
             <div class="form-group">
                 <label for="email"><i class="fas fa-envelope"></i> Email Address</label>
                 <input type="email" id="email" name="email" placeholder="e.g., juan.delacruz@example.com" required>
                 <p class="password-requirements">Use your school or personal email address</p>
             </div>
 
+            <!-- Password -->
             <div class="form-row">
                 <div class="form-group">
                     <label for="password"><i class="fas fa-lock"></i> Password</label>
@@ -181,7 +224,7 @@
                     <input type="password" id="confirm_password" name="confirm_password" placeholder="Confirm password" required minlength="6">
                 </div>
             </div>
-            <p class="password-requirements" style="margin-top: -0.5rem; margin-bottom: 1rem;">Password must be at least 6 characters</p>
+            <p class="password-requirements" style="margin-top:-0.5rem;margin-bottom:1rem;">Password must be at least 6 characters</p>
 
             <button type="submit" class="btn btn-primary btn-lg btn-full">
                 <i class="fas fa-user-plus"></i> Create Account
@@ -191,36 +234,138 @@
         <div class="login-link">
             <p>Already have an account? <a href="{{ url_for('login') }}">Sign In</a></p>
         </div>
-
-        <div style="text-align: center; margin-top: 1rem; color: var(--text-gray); font-size: 0.8rem;">
+        <div style="text-align:center;margin-top:1rem;color:var(--text-gray);font-size:0.8rem;">
             <p><i class="fas fa-university"></i> Sangrenes Educational Institution</p>
         </div>
     </div>
 
     <script>
-        // Convert email to lowercase
-        document.getElementById('email').addEventListener('input', function() {
-            this.value = this.value.toLowerCase();
-        });
+    // Load institutions on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        fetch('/api/public/institutions')
+            .then(r => r.json())
+            .then(data => {
+                const sel = document.getElementById('institution_id');
+                data.forEach(inst => {
+                    const opt = document.createElement('option');
+                    opt.value = inst.id;
+                    opt.textContent = inst.short_name ? inst.name + ' (' + inst.short_name + ')' : inst.name;
+                    sel.appendChild(opt);
+                });
+            });
+    });
 
-        // Password match validation
-        document.querySelector('form').addEventListener('submit', function(e) {
-            const password = document.getElementById('password').value;
-            const confirmPassword = document.getElementById('confirm_password').value;
-            const email = document.getElementById('email').value;
+    function selectRole(role) {
+        document.getElementById('studentFields').style.display = role === 'student' ? '' : 'none';
+        document.getElementById('teacherFields').style.display = role === 'instructor' ? '' : 'none';
+        document.getElementById('roleStudent').classList.toggle('active', role === 'student');
+        document.getElementById('roleTeacher').classList.toggle('active', role === 'instructor');
+        document.getElementById('regTitle').textContent = role === 'student' ? 'Student Registration' : 'Teacher Registration';
+        // Toggle required for student fields
+        document.getElementById('student_id').required = role === 'student';
+        document.getElementById('section_id').required = role === 'student';
+        // Re-trigger institution dropdown if already selected
+        onInstitutionChange();
+    }
 
-            if (password !== confirmPassword) {
-                e.preventDefault();
-                alert('Passwords do not match!');
-                return;
-            }
+    function onInstitutionChange() {
+        const instId = document.getElementById('institution_id').value;
+        const role = document.querySelector('input[name="role"]:checked').value;
+        resetSelect('program_id', 'Select Program');
+        resetSelect('year_level', 'Select Year');
+        resetSelect('section_id', 'Select Section');
+        resetSelect('department_id', 'Select Department (Optional)');
+        if (!instId) return;
 
-            // Basic email validation
-            if (!email.includes('@') || !email.includes('.')) {
-                e.preventDefault();
-                alert('Please enter a valid email address!');
-            }
-        });
+        if (role === 'student') {
+            fetch('/api/public/institutions/' + instId + '/programs')
+                .then(r => r.json())
+                .then(data => {
+                    const sel = document.getElementById('program_id');
+                    data.forEach(p => {
+                        const opt = document.createElement('option');
+                        opt.value = p.id;
+                        opt.textContent = p.code + ' - ' + p.name;
+                        opt.dataset.yearCount = p.year_count;
+                        sel.appendChild(opt);
+                    });
+                });
+        } else {
+            fetch('/api/public/institutions/' + instId + '/departments')
+                .then(r => r.json())
+                .then(data => {
+                    const sel = document.getElementById('department_id');
+                    data.forEach(d => {
+                        const opt = document.createElement('option');
+                        opt.value = d.id;
+                        opt.textContent = d.code ? d.code + ' - ' + d.name : d.name;
+                        sel.appendChild(opt);
+                    });
+                });
+        }
+    }
+
+    function onProgramChange() {
+        resetSelect('year_level', 'Select Year');
+        resetSelect('section_id', 'Select Section');
+        const programSel = document.getElementById('program_id');
+        const selected = programSel.options[programSel.selectedIndex];
+        if (!selected || !selected.value) return;
+        const yearCount = parseInt(selected.dataset.yearCount) || 4;
+        const yearSel = document.getElementById('year_level');
+        for (let i = 1; i <= yearCount; i++) {
+            const opt = document.createElement('option');
+            opt.value = i;
+            const suffix = i === 1 ? 'st' : i === 2 ? 'nd' : i === 3 ? 'rd' : 'th';
+            opt.textContent = i + suffix + ' Year';
+            yearSel.appendChild(opt);
+        }
+    }
+
+    function onYearChange() {
+        resetSelect('section_id', 'Select Section');
+        const programId = document.getElementById('program_id').value;
+        const yearLevel = document.getElementById('year_level').value;
+        if (!programId || !yearLevel) return;
+        fetch('/api/public/programs/' + programId + '/sections?year_level=' + yearLevel)
+            .then(r => r.json())
+            .then(data => {
+                const sel = document.getElementById('section_id');
+                data.forEach(s => {
+                    const opt = document.createElement('option');
+                    opt.value = s.id;
+                    opt.textContent = s.label;
+                    sel.appendChild(opt);
+                });
+            });
+    }
+
+    function resetSelect(id, placeholder) {
+        const sel = document.getElementById(id);
+        if (!sel) return;
+        sel.innerHTML = '<option value="">' + placeholder + '</option>';
+    }
+
+    // Convert email to lowercase
+    document.getElementById('email').addEventListener('input', function() {
+        this.value = this.value.toLowerCase();
+    });
+
+    // Form validation
+    document.getElementById('registerForm').addEventListener('submit', function(e) {
+        const password = document.getElementById('password').value;
+        const confirmPassword = document.getElementById('confirm_password').value;
+        const email = document.getElementById('email').value;
+        if (password !== confirmPassword) {
+            e.preventDefault();
+            alert('Passwords do not match!');
+            return;
+        }
+        if (!email.includes('@') || !email.includes('.')) {
+            e.preventDefault();
+            alert('Please enter a valid email address!');
+        }
+    });
     </script>
 </body>
 </html>

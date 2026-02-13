@@ -716,6 +716,43 @@ def init_db():
         )
     ''')
 
+    # Programs (academic programs per institution)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS programs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            institution_id INTEGER NOT NULL,
+            department_id INTEGER,
+            code TEXT NOT NULL,
+            name TEXT NOT NULL,
+            short_name TEXT,
+            description TEXT,
+            year_count INTEGER DEFAULT 4,
+            is_active INTEGER DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (institution_id) REFERENCES institutions (id),
+            FOREIGN KEY (department_id) REFERENCES departments (id),
+            UNIQUE(institution_id, code)
+        )
+    ''')
+
+    # Sections (per program, per year level)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS sections (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            program_id INTEGER NOT NULL,
+            institution_id INTEGER NOT NULL,
+            year_level INTEGER NOT NULL,
+            section_number INTEGER NOT NULL,
+            label TEXT NOT NULL,
+            min_students INTEGER DEFAULT 10,
+            is_active INTEGER DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (program_id) REFERENCES programs (id),
+            FOREIGN KEY (institution_id) REFERENCES institutions (id),
+            UNIQUE(program_id, year_level, section_number)
+        )
+    ''')
+
     # Payment reminders table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS payment_reminders (
@@ -828,6 +865,11 @@ def init_db():
         ("users", "guardian_phone", "TEXT"),
         ("users", "year_level", "TEXT"),
         ("users", "status", "TEXT DEFAULT 'active'"),
+        # School-based registration: relational section/program IDs
+        ("users", "program_id", "INTEGER"),
+        ("users", "section_id", "INTEGER"),
+        ("subjects", "section_id", "INTEGER"),
+        ("subjects", "program_id", "INTEGER"),
     ]
 
     for table, column, col_type in migrations:
@@ -1014,6 +1056,72 @@ def init_db():
             pass
         # Ensure institution users are approved
         cursor.execute('UPDATE users SET is_approved = 1, profile_completed = 1 WHERE role = "institution"')
+        conn.commit()
+
+    # Seed programs for PUP institution
+    cursor.execute('SELECT id FROM institutions WHERE short_name = ?', ('PUP',))
+    pup_for_programs = cursor.fetchone()
+    if pup_for_programs:
+        pup_programs = [
+            ('BSIT', 'Bachelor of Science in Information Technology', 'BSIT-SR', 4),
+            ('BSCPE', 'Bachelor of Science in Computer Engineering', 'BSCPE-BN', 4),
+        ]
+        for code, name, short_name, year_count in pup_programs:
+            cursor.execute('SELECT id FROM programs WHERE institution_id = ? AND code = ?',
+                           (pup_for_programs['id'], code))
+            if not cursor.fetchone():
+                cursor.execute('''
+                    INSERT INTO programs (institution_id, code, name, short_name, year_count)
+                    VALUES (?, ?, ?, ?, ?)
+                ''', (pup_for_programs['id'], code, name, short_name, year_count))
+        conn.commit()
+
+        # Seed sections for all year levels (1st-4th) for both programs
+        sections_seed = [
+            # BSIT: 2 sections per year, plus extras for 2nd & 3rd year
+            ('BSIT', 1, 1), ('BSIT', 1, 2),
+            ('BSIT', 2, 1), ('BSIT', 2, 2), ('BSIT', 2, 3),
+            ('BSIT', 3, 1), ('BSIT', 3, 2),
+            ('BSIT', 4, 1), ('BSIT', 4, 2),
+            # BSCPE: 1-2 sections per year
+            ('BSCPE', 1, 1),
+            ('BSCPE', 2, 1),
+            ('BSCPE', 3, 1),
+            ('BSCPE', 4, 1),
+        ]
+        for prog_code, year, sec_num in sections_seed:
+            cursor.execute('SELECT id, short_name FROM programs WHERE institution_id = ? AND code = ?',
+                           (pup_for_programs['id'], prog_code))
+            prog = cursor.fetchone()
+            if prog:
+                label = f"{prog['short_name']} {year}-{sec_num}"
+                cursor.execute('SELECT id FROM sections WHERE program_id = ? AND year_level = ? AND section_number = ?',
+                               (prog['id'], year, sec_num))
+                if not cursor.fetchone():
+                    cursor.execute('''
+                        INSERT INTO sections (program_id, institution_id, year_level, section_number, label)
+                        VALUES (?, ?, ?, ?, ?)
+                    ''', (prog['id'], pup_for_programs['id'], year, sec_num, label))
+        conn.commit()
+
+        # Back-fill section_id and program_id on existing users and subjects
+        cursor.execute('SELECT id, label FROM sections')
+        all_sections = cursor.fetchall()
+        for sec in all_sections:
+            cursor.execute('UPDATE users SET section_id = ? WHERE section = ? AND section_id IS NULL',
+                           (sec['id'], sec['label']))
+            cursor.execute('UPDATE subjects SET section_id = ? WHERE section = ? AND section_id IS NULL',
+                           (sec['id'], sec['label']))
+        cursor.execute('''
+            UPDATE users SET program_id = (
+                SELECT program_id FROM sections WHERE sections.id = users.section_id
+            ) WHERE section_id IS NOT NULL AND program_id IS NULL
+        ''')
+        cursor.execute('''
+            UPDATE subjects SET program_id = (
+                SELECT program_id FROM sections WHERE sections.id = subjects.section_id
+            ) WHERE section_id IS NOT NULL AND program_id IS NULL
+        ''')
         conn.commit()
 
     # Seed default platform settings

@@ -1,0 +1,168 @@
+{% extends 'base.html' %}
+{% block title %}Programs - Sangrenes LMS{% endblock %}
+{% block content %}
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+    <h1 style="font-size:1.2rem;font-weight:700;margin:0;"><i class="fas fa-graduation-cap" style="color:#8B5CF6;"></i> Programs & Sections</h1>
+    <button onclick="document.getElementById('editProgId').value='';document.getElementById('progTitle').innerHTML='<i class=\'fas fa-plus-circle\' style=\'color:#8B5CF6;\'></i> Add Program';document.getElementById('pCode').value='';document.getElementById('pName').value='';document.getElementById('pShort').value='';document.getElementById('pDesc').value='';document.getElementById('pDept').value='';document.getElementById('pYears').value='4';openModal('addProgModal')" style="padding:8px 16px;border:none;border-radius:8px;background:var(--primary);color:white;font-size:0.82rem;font-weight:600;cursor:pointer;"><i class="fas fa-plus"></i> Add Program</button>
+</div>
+
+{% if programs %}
+<div style="display:flex;flex-direction:column;gap:14px;">
+    {% set colors = ['#8B5CF6','#6366F1','#10B981','#F59E0B','#EF4444','#3B82F6'] %}
+    {% for p in programs %}
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;">
+        <div style="background:{{ colors[loop.index0 % 6] }};padding:16px 18px;color:white;display:flex;justify-content:space-between;align-items:center;">
+            <div>
+                <div style="font-size:1.05rem;font-weight:700;">{{ p.code }}{% if p.short_name and p.short_name != p.code %} ({{ p.short_name }}){% endif %}</div>
+                <div style="font-size:0.82rem;opacity:0.9;">{{ p.name }}</div>
+                <div style="font-size:0.72rem;opacity:0.8;margin-top:3px;">
+                    {{ p.year_count }} years &middot; {{ p.section_count }} sections &middot; {{ p.student_count }} students
+                    {% if p.department_name %} &middot; {{ p.department_name }}{% endif %}
+                </div>
+            </div>
+            <div style="display:flex;gap:6px;">
+                <button onclick='editProg({{ p|tojson }})' style="padding:5px 12px;font-size:0.72rem;background:rgba(255,255,255,0.2);color:white;border:none;border-radius:6px;cursor:pointer;"><i class="fas fa-edit"></i></button>
+                <button onclick="deleteProg({{ p.id }})" style="padding:5px 12px;font-size:0.72rem;background:rgba(255,255,255,0.2);color:white;border:none;border-radius:6px;cursor:pointer;"><i class="fas fa-trash"></i></button>
+            </div>
+        </div>
+        <div style="padding:14px 18px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                <div style="font-size:0.82rem;font-weight:600;color:var(--text);">Sections</div>
+                <button onclick="openAddSection({{ p.id }}, {{ p.year_count }})" style="padding:4px 12px;font-size:0.72rem;background:var(--primary-light);color:var(--primary);border:none;border-radius:6px;cursor:pointer;font-weight:500;"><i class="fas fa-plus"></i> Add Section</button>
+            </div>
+            {% if p.sections %}
+            <div style="display:flex;flex-wrap:wrap;gap:8px;">
+                {% for s in p.sections %}
+                <div style="display:flex;align-items:center;gap:6px;background:#F8FAFC;border:1px solid var(--border);border-radius:8px;padding:6px 12px;">
+                    <div>
+                        <div style="font-size:0.82rem;font-weight:600;">{{ s.label }}</div>
+                        <div style="font-size:0.68rem;color:var(--muted);">{{ s.student_count }} students &middot; min {{ s.min_students }}</div>
+                    </div>
+                    <button onclick="deleteSection({{ s.id }})" style="padding:2px 6px;font-size:0.68rem;background:#FEE2E2;color:#991B1B;border:none;border-radius:4px;cursor:pointer;"><i class="fas fa-times"></i></button>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div style="font-size:0.78rem;color:var(--muted);padding:8px 0;">No sections yet. Add sections for students to register.</div>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div style="padding:60px;text-align:center;color:var(--muted);background:var(--card);border:1px solid var(--border);border-radius:12px;">
+    <i class="fas fa-graduation-cap" style="font-size:2.5rem;color:#CBD5E1;margin-bottom:12px;display:block;"></i>
+    <div style="font-size:0.92rem;">No programs yet. Create your first program so students can register.</div>
+</div>
+{% endif %}
+
+<!-- Add/Edit Program Modal -->
+<div id="addProgModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1000;">
+    <div style="background:white;border-radius:16px;padding:30px;max-width:500px;width:90%;margin:auto;position:relative;top:50%;transform:translateY(-50%);">
+        <h3 style="margin:0 0 20px;" id="progTitle"><i class="fas fa-plus-circle" style="color:#8B5CF6;"></i> Add Program</h3>
+        <input type="hidden" id="editProgId">
+        <div style="display:flex;flex-direction:column;gap:12px;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div><label style="font-size:0.8rem;color:var(--muted);">Code *</label><input type="text" id="pCode" placeholder="e.g. BSIT" style="padding:10px;border:1px solid var(--border);border-radius:8px;width:100%;box-sizing:border-box;"></div>
+                <div><label style="font-size:0.8rem;color:var(--muted);">Short Name</label><input type="text" id="pShort" placeholder="e.g. BSIT-SR" style="padding:10px;border:1px solid var(--border);border-radius:8px;width:100%;box-sizing:border-box;"></div>
+            </div>
+            <div><label style="font-size:0.8rem;color:var(--muted);">Full Name *</label><input type="text" id="pName" placeholder="e.g. Bachelor of Science in Information Technology" style="padding:10px;border:1px solid var(--border);border-radius:8px;width:100%;box-sizing:border-box;"></div>
+            <div><label style="font-size:0.8rem;color:var(--muted);">Description</label><input type="text" id="pDesc" style="padding:10px;border:1px solid var(--border);border-radius:8px;width:100%;box-sizing:border-box;"></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div><label style="font-size:0.8rem;color:var(--muted);">Department</label>
+                    <select id="pDept" style="padding:10px;border:1px solid var(--border);border-radius:8px;width:100%;">
+                        <option value="">-- None --</option>
+                        {% for d in departments %}<option value="{{ d.id }}">{{ d.code or '' }} {{ d.name }}</option>{% endfor %}
+                    </select></div>
+                <div><label style="font-size:0.8rem;color:var(--muted);">Years</label><input type="number" id="pYears" value="4" min="1" max="8" style="padding:10px;border:1px solid var(--border);border-radius:8px;width:100%;box-sizing:border-box;"></div>
+            </div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end;">
+            <button onclick="closeModal('addProgModal')" style="padding:8px 20px;border:1px solid var(--border);border-radius:8px;background:white;cursor:pointer;">Cancel</button>
+            <button onclick="saveProg()" style="padding:8px 20px;border:none;border-radius:8px;background:var(--primary);color:white;cursor:pointer;font-weight:600;">Save</button>
+        </div>
+    </div>
+</div>
+
+<!-- Add Section Modal -->
+<div id="addSecModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1000;">
+    <div style="background:white;border-radius:16px;padding:30px;max-width:400px;width:90%;margin:auto;position:relative;top:50%;transform:translateY(-50%);">
+        <h3 style="margin:0 0 20px;"><i class="fas fa-plus-circle" style="color:#8B5CF6;"></i> Add Section</h3>
+        <input type="hidden" id="secProgId">
+        <div style="display:flex;flex-direction:column;gap:12px;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div><label style="font-size:0.8rem;color:var(--muted);">Year Level *</label>
+                    <select id="secYear" style="padding:10px;border:1px solid var(--border);border-radius:8px;width:100%;"></select>
+                </div>
+                <div><label style="font-size:0.8rem;color:var(--muted);">Section Number *</label><input type="number" id="secNum" value="1" min="1" max="20" style="padding:10px;border:1px solid var(--border);border-radius:8px;width:100%;box-sizing:border-box;"></div>
+            </div>
+            <div><label style="font-size:0.8rem;color:var(--muted);">Min Students</label><input type="number" id="secMin" value="10" min="1" style="padding:10px;border:1px solid var(--border);border-radius:8px;width:100%;box-sizing:border-box;"></div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end;">
+            <button onclick="closeModal('addSecModal')" style="padding:8px 20px;border:1px solid var(--border);border-radius:8px;background:white;cursor:pointer;">Cancel</button>
+            <button onclick="saveSec()" style="padding:8px 20px;border:none;border-radius:8px;background:#8B5CF6;color:white;cursor:pointer;font-weight:600;">Add Section</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script>
+function editProg(p) {
+    document.getElementById('editProgId').value = p.id;
+    document.getElementById('progTitle').innerHTML = '<i class="fas fa-edit" style="color:#8B5CF6;"></i> Edit Program';
+    document.getElementById('pCode').value = p.code || '';
+    document.getElementById('pName').value = p.name || '';
+    document.getElementById('pShort').value = p.short_name || '';
+    document.getElementById('pDesc').value = p.description || '';
+    document.getElementById('pDept').value = p.department_id || '';
+    document.getElementById('pYears').value = p.year_count || 4;
+    openModal('addProgModal');
+}
+function saveProg() {
+    const id = document.getElementById('editProgId').value;
+    const data = {
+        code: document.getElementById('pCode').value,
+        name: document.getElementById('pName').value,
+        short_name: document.getElementById('pShort').value,
+        description: document.getElementById('pDesc').value,
+        department_id: document.getElementById('pDept').value || null,
+        year_count: parseInt(document.getElementById('pYears').value) || 4
+    };
+    const url = id ? '/api/institution/programs/' + id : '/api/institution/programs';
+    fetch(url, { method: id ? 'PUT' : 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) })
+        .then(r => r.json()).then(d => { if (d.success) location.reload(); else alert(d.error || 'Failed'); });
+}
+function deleteProg(id) {
+    if (!confirm('Delete this program and all its sections?')) return;
+    fetch('/api/institution/programs/' + id, { method: 'DELETE' })
+        .then(r => r.json()).then(d => { if (d.success) location.reload(); else alert(d.error || 'Failed'); });
+}
+function openAddSection(progId, yearCount) {
+    document.getElementById('secProgId').value = progId;
+    const yearSel = document.getElementById('secYear');
+    yearSel.innerHTML = '';
+    for (let i = 1; i <= yearCount; i++) {
+        const suffix = i === 1 ? 'st' : i === 2 ? 'nd' : i === 3 ? 'rd' : 'th';
+        yearSel.innerHTML += '<option value="' + i + '">' + i + suffix + ' Year</option>';
+    }
+    document.getElementById('secNum').value = 1;
+    document.getElementById('secMin').value = 10;
+    openModal('addSecModal');
+}
+function saveSec() {
+    const progId = document.getElementById('secProgId').value;
+    const data = {
+        year_level: parseInt(document.getElementById('secYear').value),
+        section_number: parseInt(document.getElementById('secNum').value),
+        min_students: parseInt(document.getElementById('secMin').value) || 10
+    };
+    fetch('/api/institution/programs/' + progId + '/sections', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) })
+        .then(r => r.json()).then(d => { if (d.success) location.reload(); else alert(d.error || 'Failed'); });
+}
+function deleteSection(id) {
+    if (!confirm('Delete this section?')) return;
+    fetch('/api/institution/sections/' + id, { method: 'DELETE' })
+        .then(r => r.json()).then(d => { if (d.success) location.reload(); else alert(d.error || 'Failed'); });
+}
+</script>
+{% endblock %}

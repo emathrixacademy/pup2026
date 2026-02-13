@@ -42,7 +42,11 @@
             </div>
             <div><label style="font-size:0.8rem;color:var(--muted);">Description</label><input type="text" id="subDesc" style="padding:10px;border:1px solid var(--border);border-radius:8px;width:100%;box-sizing:border-box;"></div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-                <div><label style="font-size:0.8rem;color:var(--muted);">Section</label><input type="text" id="subSection" style="padding:10px;border:1px solid var(--border);border-radius:8px;width:100%;box-sizing:border-box;"></div>
+                <div><label style="font-size:0.8rem;color:var(--muted);">Section</label>
+                    <select id="subSection" style="padding:10px;border:1px solid var(--border);border-radius:8px;width:100%;">
+                        <option value="">-- None --</option>
+                        {% for sec in sections %}<option value="{{ sec.id }}">{{ sec.label }}</option>{% endfor %}
+                    </select></div>
                 <div><label style="font-size:0.8rem;color:var(--muted);">Assign Teacher</label>
                     <select id="subInstructor" style="padding:10px;border:1px solid var(--border);border-radius:8px;width:100%;">
                         <option value="">-- None --</option>
@@ -74,7 +78,7 @@ function editSubject(s) {
     document.getElementById('subCode').value = s.code || '';
     document.getElementById('subName').value = s.name || '';
     document.getElementById('subDesc').value = s.description || '';
-    document.getElementById('subSection').value = s.section || '';
+    document.getElementById('subSection').value = s.section_id || '';
     document.getElementById('subInstructor').value = s.instructor_id || '';
     document.getElementById('subDay').value = s.day || '';
     document.getElementById('subTime').value = s.time_schedule || '';
@@ -87,7 +91,7 @@ function saveSubject() {
         code: document.getElementById('subCode').value,
         name: document.getElementById('subName').value,
         description: document.getElementById('subDesc').value,
-        section: document.getElementById('subSection').value,
+        section_id: document.getElementById('subSection').value || null,
         instructor_id: document.getElementById('subInstructor').value || null,
         day: document.getElementById('subDay').value,
         time_schedule: document.getElementById('subTime').value,

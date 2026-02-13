@@ -188,7 +188,7 @@ class User(UserMixin):
                  profile_completed=1, is_approved=1, email=None, github_account=None, railway_account=None,
                  messenger=None, pup_id_photo=None, cor_photo=None, contact_number=None,
                  programming_languages=None, databases_known=None, hosting_platforms=None, other_tools=None,
-                 institution_id=None, department_id=None):
+                 institution_id=None, department_id=None, section_id=None, program_id=None):
         self.id = id
         self.username = username
         self.full_name = full_name
@@ -211,6 +211,8 @@ class User(UserMixin):
         self.other_tools = other_tools
         self.institution_id = institution_id
         self.department_id = department_id
+        self.section_id = section_id
+        self.program_id = program_id
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -243,7 +245,9 @@ def load_user(user_id):
             user['hosting_platforms'] if 'hosting_platforms' in keys else None,
             user['other_tools'] if 'other_tools' in keys else None,
             user['institution_id'] if 'institution_id' in keys else None,
-            user['department_id'] if 'department_id' in keys else None
+            user['department_id'] if 'department_id' in keys else None,
+            user['section_id'] if 'section_id' in keys else None,
+            user['program_id'] if 'program_id' in keys else None
         )
     return None
 
@@ -463,15 +467,26 @@ def register():
         return redirect(url_for('student_dashboard'))
 
     if request.method == 'POST':
+        role = request.form.get('role', 'student').strip()
         email = request.form.get('email', '').strip().lower()
         password = request.form.get('password', '')
         confirm_password = request.form.get('confirm_password', '')
         full_name = request.form.get('full_name', '').strip()
-        student_id = request.form.get('student_id', '').strip()
-        section = request.form.get('section', '').strip()
+        institution_id = request.form.get('institution_id', type=int)
+
+        # Student-specific
+        student_id_val = request.form.get('student_id', '').strip()
+        program_id = request.form.get('program_id', type=int)
+        year_level = request.form.get('year_level', '').strip()
+        section_id = request.form.get('section_id', type=int)
+
+        # Teacher-specific
+        department_id = request.form.get('department_id', type=int)
 
         # Validation
         errors = []
+        if role not in ('student', 'instructor'):
+            errors.append('Invalid role selected.')
         if not email or '@' not in email or '.' not in email:
             errors.append('Please enter a valid email address.')
         if not password or len(password) < 6:
@@ -480,10 +495,13 @@ def register():
             errors.append('Passwords do not match.')
         if not full_name:
             errors.append('Full name is required.')
-        if not student_id:
-            errors.append('Student ID is required.')
-        if not section:
-            errors.append('Section is required.')
+        if not institution_id:
+            errors.append('Please select an institution.')
+        if role == 'student':
+            if not student_id_val:
+                errors.append('Student ID is required.')
+            if not section_id:
+                errors.append('Please select your section.')
 
         if errors:
             for error in errors:
@@ -500,22 +518,36 @@ def register():
             conn.close()
             return render_template('register.html')
 
-        # Check if student ID already exists
-        cursor.execute('SELECT id FROM users WHERE student_id = ?', (student_id,))
-        if cursor.fetchone():
-            flash('Student ID already registered. Please contact your instructor.', 'error')
-            conn.close()
-            return render_template('register.html')
+        if role == 'student':
+            cursor.execute('SELECT id FROM users WHERE student_id = ?', (student_id_val,))
+            if cursor.fetchone():
+                flash('Student ID already registered. Please contact your instructor.', 'error')
+                conn.close()
+                return render_template('register.html')
 
-        # Create new student account (email is stored as username for login)
-        # is_approved defaults to 0, profile_completed defaults to 0
+        # Look up section label for backward compat
+        section_text = ''
+        if section_id:
+            cursor.execute('SELECT label FROM sections WHERE id = ?', (section_id,))
+            sec_row = cursor.fetchone()
+            if sec_row:
+                section_text = sec_row['label']
+
         try:
             cursor.execute('''
-                INSERT INTO users (username, password_hash, full_name, role, student_id, section, profile_completed, is_approved)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (email, generate_password_hash(password), full_name, 'student', student_id, section, 0, 0))
+                INSERT INTO users (username, password_hash, full_name, role, student_id,
+                    section, section_id, program_id, institution_id, department_id,
+                    year_level, email, profile_completed, is_approved)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)
+            ''', (email, generate_password_hash(password), full_name, role,
+                  student_id_val if role == 'student' else None,
+                  section_text, section_id, program_id, institution_id,
+                  department_id, year_level, email))
             conn.commit()
-            flash('Registration successful! Please wait for instructor approval before logging in.', 'success')
+            if role == 'student':
+                flash('Registration successful! Please wait for approval before logging in.', 'success')
+            else:
+                flash('Teacher registration submitted! Please wait for institution approval.', 'success')
             conn.close()
             return redirect(url_for('login'))
         except Exception as e:
@@ -531,6 +563,48 @@ def logout():
     logout_user()
     flash('Logged out successfully!', 'success')
     return redirect(url_for('login'))
+
+# ==================== PUBLIC API (registration dropdowns) ====================
+
+@app.route('/api/public/institutions')
+def api_public_institutions():
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('SELECT id, name, short_name, logo FROM institutions WHERE is_active = 1 ORDER BY name')
+    institutions = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+    return jsonify(institutions)
+
+@app.route('/api/public/institutions/<int:inst_id>/programs')
+def api_public_programs(inst_id):
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('SELECT id, code, name, short_name, year_count FROM programs WHERE institution_id = ? AND is_active = 1 ORDER BY code', (inst_id,))
+    programs = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+    return jsonify(programs)
+
+@app.route('/api/public/programs/<int:program_id>/sections')
+def api_public_sections(program_id):
+    year_level = request.args.get('year_level', type=int)
+    conn = get_db()
+    cursor = conn.cursor()
+    if year_level:
+        cursor.execute('SELECT id, year_level, section_number, label FROM sections WHERE program_id = ? AND year_level = ? AND is_active = 1 ORDER BY section_number', (program_id, year_level))
+    else:
+        cursor.execute('SELECT id, year_level, section_number, label FROM sections WHERE program_id = ? AND is_active = 1 ORDER BY year_level, section_number', (program_id,))
+    sections = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+    return jsonify(sections)
+
+@app.route('/api/public/institutions/<int:inst_id>/departments')
+def api_public_departments(inst_id):
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('SELECT id, name, code FROM departments WHERE institution_id = ? ORDER BY name', (inst_id,))
+    departments = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+    return jsonify(departments)
 
 # ==================== PROFILE ====================
 
@@ -2127,27 +2201,27 @@ def enrollments():
                            subjects=subjects,
                            pending_by_section=pending_by_section)
 
-def auto_enroll_student_in_matching_subjects(cursor, student_id, section):
+def auto_enroll_student_in_matching_subjects(cursor, student_id, section, section_id=None):
     """Helper function to auto-enroll a student in subjects matching their section"""
-    if not section:
-        return 0
+    matching_subjects = []
 
-    # Find all subjects that match the student's section
-    cursor.execute('SELECT id FROM subjects WHERE section = ?', (section,))
-    matching_subjects = cursor.fetchall()
+    # Prefer relational match by section_id
+    if section_id:
+        cursor.execute('SELECT id FROM subjects WHERE section_id = ?', (section_id,))
+        matching_subjects = cursor.fetchall()
+
+    # Fallback to text match
+    if not matching_subjects and section:
+        cursor.execute('SELECT id FROM subjects WHERE section = ?', (section,))
+        matching_subjects = cursor.fetchall()
 
     enrolled_count = 0
     for subject in matching_subjects:
-        # Check if already enrolled
-        cursor.execute('''
-            SELECT id FROM enrollments WHERE student_id = ? AND subject_id = ?
-        ''', (student_id, subject['id']))
+        cursor.execute('SELECT id FROM enrollments WHERE student_id = ? AND subject_id = ?',
+                       (student_id, subject['id']))
         if not cursor.fetchone():
-            # Enroll the student
-            cursor.execute('''
-                INSERT INTO enrollments (student_id, subject_id)
-                VALUES (?, ?)
-            ''', (student_id, subject['id']))
+            cursor.execute('INSERT INTO enrollments (student_id, subject_id) VALUES (?, ?)',
+                           (student_id, subject['id']))
             enrolled_count += 1
 
     return enrolled_count
@@ -2170,7 +2244,7 @@ def approve_student(student_id):
     cursor.execute('UPDATE users SET is_approved = 1 WHERE id = ? AND role = "student"', (student_id,))
 
     # Auto-enroll in matching subjects
-    enrolled_count = auto_enroll_student_in_matching_subjects(cursor, student_id, student['section'])
+    enrolled_count = auto_enroll_student_in_matching_subjects(cursor, student_id, student['section'], student['section_id'] if 'section_id' in student.keys() else None)
 
     # Create notification for the student
     notification_msg = 'Your enrollment has been approved! You can now access the system.'
@@ -2244,7 +2318,7 @@ def approve_section(section):
 
     # Auto-enroll each student and create notifications
     for student in students:
-        enrolled_count = auto_enroll_student_in_matching_subjects(cursor, student['id'], student['section'])
+        enrolled_count = auto_enroll_student_in_matching_subjects(cursor, student['id'], student['section'], student['section_id'] if 'section_id' in student.keys() else None)
 
         notification_msg = 'Your enrollment has been approved! You can now access the system.'
         if enrolled_count > 0:
@@ -2290,7 +2364,7 @@ def approve_all_students():
 
     # Auto-enroll each student and create notifications
     for student in students:
-        enrolled_count = auto_enroll_student_in_matching_subjects(cursor, student['id'], student['section'])
+        enrolled_count = auto_enroll_student_in_matching_subjects(cursor, student['id'], student['section'], student['section_id'] if 'section_id' in student.keys() else None)
 
         notification_msg = 'Your enrollment has been approved! You can now access the system.'
         if enrolled_count > 0:
@@ -2351,7 +2425,7 @@ def sync_student_subjects(student_id):
         return jsonify({'error': 'Student not found'}), 404
 
     # Auto-enroll in matching subjects
-    enrolled_count = auto_enroll_student_in_matching_subjects(cursor, student_id, student['section'])
+    enrolled_count = auto_enroll_student_in_matching_subjects(cursor, student_id, student['section'], student['section_id'] if 'section_id' in student.keys() else None)
     conn.commit()
     conn.close()
 
@@ -2387,7 +2461,7 @@ def sync_all_student_subjects():
     total_enrolled = 0
     students_updated = 0
     for student in students:
-        enrolled_count = auto_enroll_student_in_matching_subjects(cursor, student['id'], student['section'])
+        enrolled_count = auto_enroll_student_in_matching_subjects(cursor, student['id'], student['section'], student['section_id'] if 'section_id' in student.keys() else None)
         if enrolled_count > 0:
             total_enrolled += enrolled_count
             students_updated += 1
@@ -6812,6 +6886,145 @@ def api_inst_delete_student(user_id):
     return jsonify({'success': True})
 
 
+# ==================== INSTITUTION: PROGRAMS & SECTIONS ====================
+
+@app.route('/institution/programs')
+@login_required
+def inst_programs():
+    if current_user.role != 'institution':
+        return redirect(url_for('index'))
+    conn = get_db()
+    cursor = conn.cursor()
+    inst_id = current_user.institution_id
+
+    cursor.execute('''
+        SELECT p.*, d.name as department_name,
+               (SELECT COUNT(*) FROM sections WHERE program_id = p.id) as section_count,
+               (SELECT COUNT(*) FROM users WHERE program_id = p.id AND role = 'student') as student_count
+        FROM programs p
+        LEFT JOIN departments d ON p.department_id = d.id
+        WHERE p.institution_id = ?
+        ORDER BY p.code
+    ''', (inst_id,))
+    programs = [dict(r) for r in cursor.fetchall()]
+
+    for prog in programs:
+        cursor.execute('''
+            SELECT s.*, (SELECT COUNT(*) FROM users WHERE section_id = s.id) as student_count
+            FROM sections s WHERE s.program_id = ? ORDER BY s.year_level, s.section_number
+        ''', (prog['id'],))
+        prog['sections'] = [dict(r) for r in cursor.fetchall()]
+
+    cursor.execute('SELECT id, name, code FROM departments WHERE institution_id = ? ORDER BY name', (inst_id,))
+    departments = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+    return render_template('inst_programs.html', programs=programs, departments=departments)
+
+@app.route('/api/institution/programs', methods=['POST'])
+@login_required
+def api_inst_add_program():
+    if current_user.role != 'institution':
+        return jsonify({'error': 'Unauthorized'}), 403
+    data = request.json
+    inst_id = current_user.institution_id
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute('''
+            INSERT INTO programs (institution_id, department_id, code, name, short_name, description, year_count)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (inst_id, data.get('department_id') or None, data['code'], data['name'],
+              data.get('short_name') or data['code'], data.get('description', ''), data.get('year_count', 4)))
+        conn.commit()
+        conn.close()
+        return jsonify({'success': True, 'id': cursor.lastrowid})
+    except sqlite3.IntegrityError:
+        conn.close()
+        return jsonify({'error': 'Program code already exists for this institution'})
+
+@app.route('/api/institution/programs/<int:prog_id>', methods=['PUT'])
+@login_required
+def api_inst_update_program(prog_id):
+    if current_user.role != 'institution':
+        return jsonify({'error': 'Unauthorized'}), 403
+    data = request.json
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('''
+        UPDATE programs SET code=?, name=?, short_name=?, description=?, department_id=?, year_count=?, is_active=?
+        WHERE id=? AND institution_id=?
+    ''', (data['code'], data['name'], data.get('short_name') or data['code'],
+          data.get('description', ''), data.get('department_id') or None,
+          data.get('year_count', 4), data.get('is_active', 1),
+          prog_id, current_user.institution_id))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+
+@app.route('/api/institution/programs/<int:prog_id>', methods=['DELETE'])
+@login_required
+def api_inst_delete_program(prog_id):
+    if current_user.role != 'institution':
+        return jsonify({'error': 'Unauthorized'}), 403
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('SELECT COUNT(*) as c FROM users WHERE program_id = ?', (prog_id,))
+    if cursor.fetchone()['c'] > 0:
+        conn.close()
+        return jsonify({'error': 'Cannot delete: students are enrolled in this program'})
+    cursor.execute('DELETE FROM sections WHERE program_id = ? AND institution_id = ?', (prog_id, current_user.institution_id))
+    cursor.execute('DELETE FROM programs WHERE id = ? AND institution_id = ?', (prog_id, current_user.institution_id))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+
+@app.route('/api/institution/programs/<int:prog_id>/sections', methods=['POST'])
+@login_required
+def api_inst_add_section(prog_id):
+    if current_user.role != 'institution':
+        return jsonify({'error': 'Unauthorized'}), 403
+    data = request.json
+    inst_id = current_user.institution_id
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('SELECT short_name, code FROM programs WHERE id = ? AND institution_id = ?', (prog_id, inst_id))
+    prog = cursor.fetchone()
+    if not prog:
+        conn.close()
+        return jsonify({'error': 'Program not found'})
+    year_level = int(data['year_level'])
+    section_number = int(data['section_number'])
+    prefix = prog['short_name'] or prog['code']
+    label = f"{prefix} {year_level}-{section_number}"
+    try:
+        cursor.execute('''
+            INSERT INTO sections (program_id, institution_id, year_level, section_number, label, min_students)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (prog_id, inst_id, year_level, section_number, label, data.get('min_students', 10)))
+        conn.commit()
+        conn.close()
+        return jsonify({'success': True, 'id': cursor.lastrowid, 'label': label})
+    except sqlite3.IntegrityError:
+        conn.close()
+        return jsonify({'error': f'Section {label} already exists'})
+
+@app.route('/api/institution/sections/<int:sec_id>', methods=['DELETE'])
+@login_required
+def api_inst_delete_section(sec_id):
+    if current_user.role != 'institution':
+        return jsonify({'error': 'Unauthorized'}), 403
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('SELECT COUNT(*) as c FROM users WHERE section_id = ?', (sec_id,))
+    if cursor.fetchone()['c'] > 0:
+        conn.close()
+        return jsonify({'error': 'Cannot delete: students are assigned to this section'})
+    cursor.execute('DELETE FROM sections WHERE id = ? AND institution_id = ?', (sec_id, current_user.institution_id))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+
+
 @app.route('/institution/subjects')
 @login_required
 def inst_subjects():
@@ -6835,8 +7048,11 @@ def inst_subjects():
     cursor.execute('SELECT id, full_name FROM users WHERE role = "instructor" AND institution_id = ? ORDER BY full_name', (inst_id,))
     teachers = cursor.fetchall()
 
+    cursor.execute('SELECT id, label FROM sections WHERE institution_id = ? AND is_active = 1 ORDER BY label', (inst_id,))
+    sections = [dict(r) for r in cursor.fetchall()]
+
     conn.close()
-    return render_template('inst_subjects.html', subjects=subjects, teachers=teachers)
+    return render_template('inst_subjects.html', subjects=subjects, teachers=teachers, sections=sections)
 
 
 @app.route('/api/institution/subjects', methods=['POST'])
@@ -6848,10 +7064,18 @@ def api_inst_add_subject():
     inst_id = current_user.institution_id
     conn = get_db()
     cursor = conn.cursor()
+    # Resolve section_id to text label for backward compat
+    section_id = data.get('section_id') or None
+    section_text = data.get('section', '')
+    if section_id and not section_text:
+        cursor.execute('SELECT label FROM sections WHERE id = ?', (section_id,))
+        sec_row = cursor.fetchone()
+        if sec_row:
+            section_text = sec_row['label']
     cursor.execute('''
-        INSERT INTO subjects (code, name, description, section, day, time_schedule, instructor_id, room, credits, max_students, institution_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ''', (data['code'], data['name'], data.get('description', ''), data.get('section', ''),
+        INSERT INTO subjects (code, name, description, section, section_id, day, time_schedule, instructor_id, room, credits, max_students, institution_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (data['code'], data['name'], data.get('description', ''), section_text, section_id,
           data.get('day', ''), data.get('time_schedule', ''), data.get('instructor_id') or None,
           data.get('room', ''), data.get('credits', 3), data.get('max_students', 50), inst_id))
     subject_id = cursor.lastrowid
@@ -6873,11 +7097,18 @@ def api_inst_update_subject(subject_id):
     inst_id = current_user.institution_id
     conn = get_db()
     cursor = conn.cursor()
+    section_id = data.get('section_id') or None
+    section_text = data.get('section', '')
+    if section_id and not section_text:
+        cursor.execute('SELECT label FROM sections WHERE id = ?', (section_id,))
+        sec_row = cursor.fetchone()
+        if sec_row:
+            section_text = sec_row['label']
     cursor.execute('''
-        UPDATE subjects SET code=?, name=?, description=?, section=?, day=?, time_schedule=?,
+        UPDATE subjects SET code=?, name=?, description=?, section=?, section_id=?, day=?, time_schedule=?,
         instructor_id=?, room=?, credits=?, max_students=?
         WHERE id=? AND institution_id=?
-    ''', (data['code'], data['name'], data.get('description', ''), data.get('section', ''),
+    ''', (data['code'], data['name'], data.get('description', ''), section_text, section_id,
           data.get('day', ''), data.get('time_schedule', ''), data.get('instructor_id') or None,
           data.get('room', ''), data.get('credits', 3), data.get('max_students', 50), subject_id, inst_id))
     conn.commit()

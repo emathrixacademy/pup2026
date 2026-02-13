@@ -121,6 +121,7 @@
                 <a href="{{ url_for('inst_dashboard') }}" class="{% if request.endpoint == 'inst_dashboard' %}active{% endif %}"><i class="fas fa-building"></i> <span class="label">Dashboard</span></a>
                 <a href="{{ url_for('inst_teachers') }}" class="{% if request.endpoint == 'inst_teachers' %}active{% endif %}"><i class="fas fa-chalkboard-teacher"></i> <span class="label">Teachers</span></a>
                 <a href="{{ url_for('inst_students') }}" class="{% if request.endpoint == 'inst_students' %}active{% endif %}"><i class="fas fa-users"></i> <span class="label">Students</span></a>
+                <a href="{{ url_for('inst_programs') }}" class="{% if request.endpoint == 'inst_programs' %}active{% endif %}"><i class="fas fa-graduation-cap"></i> <span class="label">Programs</span></a>
                 <a href="{{ url_for('inst_subjects') }}" class="{% if request.endpoint == 'inst_subjects' %}active{% endif %}"><i class="fas fa-book-open"></i> <span class="label">Subjects</span></a>
                 <div class="tn-drop">
                     <span onclick="toggleDrop('instMore')" class="{% if request.endpoint in ['inst_materials','inst_quizzes','inst_grades','inst_payments','inst_salary','inst_schedules'] %}active{% endif %}"><i class="fas fa-grid"></i> <span class="label">More</span> <i class="fas fa-chevron-down" style="font-size:0.6rem;"></i></span>
